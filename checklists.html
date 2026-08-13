@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atana IM Good Practice Checklists</title>
+<style>
+  :root{
+    --purple:#3e0b3b;
+    --purple-dark:#280226;
+    --purple-light:#5c1a57;
+    --gold:#d5c427;
+    --gold-dark:#a99e1e;
+    --paper:#faf8f3;
+    --ink:#231822;
+    --ink-soft:#5c4f5a;
+    --line:#e4dde2;
+    --ok:#3f8b4c;
+    --shell-width: 980px;
+    font-size:16px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--gold); color:var(--purple-dark);}
+
+  /* ---------- Header ---------- */
+  header{
+    background:linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%);
+    color:#fff;
+    padding:28px 20px 22px;
+    position:relative;
+    overflow:hidden;
+  }
+  header::after{
+    content:"";
+    position:absolute; right:-60px; top:-60px;
+    width:220px; height:220px; border-radius:50%;
+    background:radial-gradient(circle, rgba(213,196,39,0.18) 0%, transparent 70%);
+  }
+  .header-inner{
+    max-width:var(--shell-width);
+    margin:0 auto;
+    position:relative;
+    z-index:1;
+  }
+  .eyebrow{
+    text-transform:uppercase;
+    letter-spacing:.14em;
+    font-size:.7rem;
+    color:var(--gold);
+    font-weight:700;
+    margin-bottom:6px;
+  }
+  h1{
+    margin:0 0 4px;
+    font-size:1.7rem;
+    font-weight:700;
+    letter-spacing:-.01em;
+  }
+  .sub{
+    color:#d8c9d6;
+    font-size:.92rem;
+    max-width:620px;
+    line-height:1.45;
+  }
+  .header-meta{
+    display:flex; gap:22px; margin-top:18px; flex-wrap:wrap;
+  }
+  .meta-ring{
+    display:flex; align-items:center; gap:10px;
+  }
+  .meta-ring svg{ transform:rotate(-90deg); }
+  .meta-ring .num{ font-size:1.05rem; font-weight:700; }
+  .meta-ring .lbl{ font-size:.72rem; color:#cdb9ca; text-transform:uppercase; letter-spacing:.06em;}
+
+  /* ---------- Shell ---------- */
+  .shell{
+    max-width:var(--shell-width);
+    margin:0 auto;
+    padding:22px 20px 80px;
+  }
+
+  /* ---------- Tabs ---------- */
+  .tabbar{
+    display:flex;
+    gap:6px;
+    overflow-x:auto;
+    padding-bottom:4px;
+    margin-bottom:20px;
+    border-bottom:2px solid var(--line);
+  }
+  .tab{
+    flex:0 0 auto;
+    display:flex; align-items:center; gap:8px;
+    padding:10px 14px;
+    background:transparent;
+    border:none;
+    border-bottom:3px solid transparent;
+    font-size:.86rem;
+    font-weight:600;
+    color:var(--ink-soft);
+    cursor:pointer;
+    white-space:nowrap;
+    transition:color .15s, border-color .15s;
+  }
+  .tab:hover{ color:var(--purple); }
+  .tab.active{
+    color:var(--purple);
+    border-bottom-color:var(--gold);
+  }
+  .tab .chip{
+    font-size:.68rem;
+    background:var(--line);
+    color:var(--ink-soft);
+    border-radius:20px;
+    padding:1px 7px;
+    font-weight:700;
+    min-width:20px;
+    text-align:center;
+  }
+  .tab.active .chip{
+    background:var(--gold);
+    color:var(--purple-dark);
+  }
+  .tab.complete .chip{
+    background:var(--ok);
+    color:#fff;
+  }
+
+  /* ---------- Panel ---------- */
+  .panel{ display:none; }
+  .panel.active{ display:block; animation:fade .18s ease; }
+  @keyframes fade{ from{opacity:0; transform:translateY(3px);} to{opacity:1; transform:none;} }
+
+  .panel-head{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    gap:16px; margin-bottom:6px; flex-wrap:wrap;
+  }
+  .panel-title{
+    font-size:1.15rem; font-weight:700; color:var(--purple-dark); margin:0 0 4px;
+  }
+  .panel-desc{
+    color:var(--ink-soft); font-size:.88rem; max-width:600px; line-height:1.5; margin:0;
+  }
+  .panel-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .btn{
+    border:1px solid var(--line);
+    background:#fff;
+    color:var(--purple-dark);
+    padding:7px 12px;
+    border-radius:7px;
+    font-size:.78rem;
+    font-weight:600;
+    cursor:pointer;
+    transition:background .15s, border-color .15s;
+  }
+  .btn:hover{ background:var(--paper); border-color:var(--purple-light); }
+  .btn.primary{
+    background:var(--purple);
+    color:#fff;
+    border-color:var(--purple);
+  }
+  .btn.primary:hover{ background:var(--purple-light); }
+  .btn.ghost{ border-color:transparent; color:var(--ink-soft); }
+
+  .progress-track{
+    height:8px; border-radius:6px; background:var(--line);
+    margin:14px 0 22px; overflow:hidden;
+  }
+  .progress-fill{
+    height:100%; border-radius:6px;
+    background:linear-gradient(90deg, var(--gold-dark), var(--gold));
+    transition:width .25s ease;
+  }
+
+  /* ---------- Groups & items ---------- */
+  .group{
+    margin-bottom:22px;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+  }
+  .group-head{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:12px 16px;
+    background:var(--paper);
+    border-bottom:1px solid var(--line);
+    cursor:pointer;
+  }
+  .group-head h3{
+    margin:0; font-size:.86rem; font-weight:700; color:var(--purple-dark);
+    text-transform:uppercase; letter-spacing:.03em;
+  }
+  .group-head .count{
+    font-size:.75rem; color:var(--ink-soft); font-weight:600;
+  }
+  .group-body{ padding:4px 0; }
+  .group.collapsed .group-body{ display:none; }
+  .group-head .caret{
+    display:inline-block; margin-right:8px; transition:transform .15s;
+    color:var(--gold-dark); font-size:.7rem;
+  }
+  .group.collapsed .caret{ transform:rotate(-90deg); }
+
+  .item{
+    display:flex;
+    align-items:flex-start;
+    gap:12px;
+    padding:10px 16px;
+    border-bottom:1px solid #f1ecef;
+  }
+  .item:last-child{ border-bottom:none; }
+  .item:hover{ background:#fdfcf9; }
+
+  .item input[type=checkbox]{
+    appearance:none;
+    -webkit-appearance:none;
+    width:19px; height:19px;
+    min-width:19px;
+    border:2px solid #c8bcc6;
+    border-radius:5px;
+    margin-top:2px;
+    cursor:pointer;
+    position:relative;
+    transition:border-color .15s, background .15s;
+  }
+  .item input[type=checkbox]:checked{
+    background:var(--purple);
+    border-color:var(--purple);
+  }
+  .item input[type=checkbox]:checked::after{
+    content:"";
+    position:absolute;
+    left:5px; top:1px;
+    width:5px; height:9px;
+    border:solid var(--gold);
+    border-width:0 2px 2px 0;
+    transform:rotate(45deg);
+  }
+  .item label{
+    font-size:.87rem;
+    line-height:1.42;
+    cursor:pointer;
+    flex:1;
+  }
+  .item.checked label{
+    color:var(--ink-soft);
+    text-decoration:line-through;
+    text-decoration-color:#c8bcc6;
+  }
+  .item .note-toggle{
+    background:none; border:none; color:#b9aeb6; cursor:pointer; font-size:.75rem;
+    padding:2px 4px; flex-shrink:0;
+  }
+  .item .note-toggle:hover{ color:var(--purple); }
+  .item-note{
+    display:none;
+    padding:0 16px 12px 47px;
+    margin-top:-6px;
+  }
+  .item-note.open{ display:block; }
+  .item-note textarea{
+    width:100%;
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:7px 9px;
+    font-size:.8rem;
+    font-family:inherit;
+    resize:vertical;
+    min-height:44px;
+    background:#fffef9;
+  }
+  .item-note textarea:focus{ outline:2px solid var(--gold); border-color:var(--gold-dark); }
+
+  .subnote{
+    font-size:.72rem;
+    color:#a99aa6;
+    padding:0 16px 10px 47px;
+    margin-top:-8px;
+  }
+
+  footer{
+    text-align:center;
+    padding:24px 20px 40px;
+    color:var(--ink-soft);
+    font-size:.75rem;
+  }
+  footer .brand{ color:var(--purple); font-weight:700; }
+  footer .brand .dot{ color:var(--gold); }
+
+  @media print{
+    header{ background:#fff !important; color:#000; }
+    header::after{ display:none; }
+    .eyebrow, .sub, .header-meta{ color:#333 !important; }
+    .tabbar{ display:none; }
+    .panel{ display:block !important; page-break-after:always; }
+    .panel-actions{ display:none; }
+    .btn{ display:none; }
+    .group{ break-inside:avoid; }
+  }
+
+  @media (max-width:560px){
+    h1{ font-size:1.35rem; }
+    .header-meta{ gap:14px; }
+    .panel-actions{ width:100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="eyebrow">Atana &middot; Information Management</div>
+    <h1>IM Good Practice Checklists</h1>
+    <div class="sub">Interactive quality-assurance checklists aligned to ISO 19650, SACAP work stages and Atana's internal BIM policy. Tick as you go &mdash; progress is saved automatically on this device.</div>
+    <div class="header-meta">
+      <div class="meta-ring">
+        <svg width="40" height="40" viewbox="0 0 40 40">
+          <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="4"/>
+          <circle id="overallRing" cx="20" cy="20" r="16" fill="none" stroke="#d5c427" stroke-width="4" stroke-linecap="round" stroke-dasharray="100.5" stroke-dashoffset="100.5"/>
+        </svg>
+        <div><div class="num" id="overallPct">0%</div><div class="lbl">Overall</div></div>
+      </div>
+      <div class="meta-ring">
+        <div><div class="num" id="overallCount">0 / 0</div><div class="lbl">Items checked</div></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="shell">
+  <div class="tabbar" id="tabbar"></div>
+  <div id="panels"></div>
+</div>
+
+<footer>
+  <span class="brand">Atana<span class="dot">&middot;</span>IM</span> &nbsp;Good Practice Checklists &nbsp;&middot;&nbsp; Data stored locally in this browser only
+</footer>
+
+<script>
+/* =========================================================
+   DATA
+   ========================================================= */
+const CHECKLISTS = [
+  {
+    id:'doc-control',
+    title:'Document & Drawing Control',
+    desc:'Core document control discipline plus the standard information every task team drawing must carry before it moves to Shared or Published status.',
+    groups:[
+      {
+        name:'Naming & Metadata',
+        items:[
+          'File name fully complies with the Atana Naming Convention (ATANA-SA-I-TIO-STN-0002)',
+          'Originator, functional breakdown and spatial breakdown codes are correct for this task team / zone',
+          'Revision code matches the CDE state (S-codes for Shared, A/B for Published)',
+          'Suitability code is correct and matches the intended use (e.g. S2 for coordination, A1/B1 for construction)',
+          'Document/drawing number sequence follows the agreed drawing type numbering',
+          'Document is placed in the correct CDE container / folder / workflow state',
+        ]
+      },
+      {
+        name:'Drawing Sheet — Standard Content',
+        items:[
+          'Project name shown correctly and consistently with the project information document',
+          'Project address / site location shown on the title block',
+          'Client logo present and correctly sized (where required by the appointment)',
+          'Atana (or relevant task team) logo present and current version used',
+          'Drawing title clearly describes the content and matches the drawing register',
+          'Drawing number in title block matches the file name exactly',
+          'Revision code and revision description shown and match the revision history table',
+          'Suitability code clearly shown in the title block',
+          'Scale bar included and graphically accurate',
+          'Stated scale(s) correct for the sheet size and consistent with any inset details',
+          'Sheet size / paper size noted (e.g. A1, A0) and matches the plot',
+          'North point shown, correctly orientated, and consistent across the drawing set',
+          'Grid lines shown and legible where relevant to the drawing type',
+          'Grid references labelled and consistent with the structural/architectural reference grid',
+          'Levels / datum reference noted (e.g. relative to site datum or geodetic datum)',
+          'Key plan / location diagram included, showing the extent of this sheet within the whole',
+          'Coordinate system / survey reference noted where applicable',
+        ]
+      },
+      {
+        name:'Drawing Sheet — Graphic Standards',
+        items:[
+          'Text style/font matches the Atana drawing standard',
+          'Text height/size complies with the standard for the stated plot scale',
+          'Line weights follow the layer/line-weight standard for the discipline',
+          'Layer naming complies with the CAD/BIM layer standard',
+          'Legend/key provided for all symbols, hatching and abbreviations used',
+          'Dimension style and units are consistent throughout the sheet',
+          'Annotation does not overlap or obscure other information',
+        ]
+      },
+      {
+        name:'Title Block & Sign-off',
+        items:[
+          'Drawing status box complete: issue date, drawn by, checked by, approved by',
+          'Author, checker and approver initials match the named individuals on the appointment / TIDP',
+          'Revision history table fully populated with description and date for every issued revision',
+          'CDE metadata (status, revision, suitability, date) matches the information embedded in the file name',
+        ]
+      },
+      {
+        name:'Issue & Approval',
+        items:[
+          'Document has passed internal QA/QC review before being moved to Shared',
+          'Approval workflow followed per the BEP / task information delivery plan',
+          'Superseded revisions archived and clearly marked as no longer current',
+          'Issue notification sent to relevant task teams per the agreed communication protocol',
+        ]
+      },
+    ]
+  },
+  {
+    id:'cde-naming',
+    title:'CDE & Naming Convention',
+    desc:'Confirms the Common Data Environment is configured correctly and that naming discipline is being followed across the project.',
+    groups:[
+      {
+        name:'CDE Structure',
+        items:[
+          'CDE folder structure matches the agreed project structure (WIP / Shared / Published / Archive)',
+          'Access permissions correctly assigned per role and task team',
+          'Workflow states configured to match agreed suitability codes',
+          'Naming convention document is accessible to all task teams',
+          'Atana Naming Tool used/referenced for generating compliant file names',
+        ]
+      },
+      {
+        name:'Ongoing Discipline',
+        items:[
+          'Spot-checks of file names carried out against the naming convention',
+          'Non-compliant file names logged and corrected before Shared status',
+          'CDE state transitions logged (WIP → Shared → Published)',
+          'Archive of superseded information maintained and not deleted',
+        ]
+      },
+    ]
+  },
+  {
+    id:'tidp-midp',
+    title:'TIDP / MIDP',
+    desc:'Checks that Task Information Delivery Plans roll up correctly into the Master Information Delivery Plan and stay current.',
+    groups:[
+      {
+        name:'TIDP Quality',
+        items:[
+          'Every task team has a current, signed-off TIDP',
+          'TIDP lists all information containers to be delivered with format, purpose and level of information need',
+          'Milestones in the TIDP align to the project programme / SACAP work stage gateways',
+          'Responsible author named for every deliverable',
+        ]
+      },
+      {
+        name:'MIDP Roll-up',
+        items:[
+          'MIDP Generator reflects the latest TIDP submissions from all task teams',
+          'Duplicate or conflicting deliverables identified and resolved across task teams',
+          'MIDP reviewed and reissued at each SACAP work stage gateway',
+          'MIDP shared with the appointing party / client as required',
+        ]
+      },
+    ]
+  },
+  {
+    id:'model-data',
+    title:'Model & Data Quality',
+    desc:'Federation, coordination and data quality checks before models move to Shared status.',
+    groups:[
+      {
+        name:'Federation & Coordination',
+        items:[
+          'Model federates correctly against the agreed shared coordinates / project base point',
+          'Clash detection run and unresolved clashes logged with owners',
+          'Model origin and units consistent with the BEP',
+          'Levels and grids in the model match the drawn output',
+        ]
+      },
+      {
+        name:'Data Quality',
+        items:[
+          'Object naming and classification follow Uniclass 2015 (or agreed classification)',
+          'Parameters/properties populated per the Employer\'s Information Requirements',
+          'Model file size and performance checked before Shared upload',
+          'Model matches the level of information need for this project stage',
+        ]
+      },
+    ]
+  },
+  {
+    id:'info-exchange',
+    title:'Information Exchange',
+    desc:'Confirms information is exchanged, received and actioned correctly between task teams and the appointing party.',
+    groups:[
+      {
+        name:'Exchange Discipline',
+        items:[
+          'Information exchange follows the format(s) agreed in the BEP',
+          'Received information logged and acknowledged',
+          'Comments/queries on issued information tracked to closure',
+          'RFIs raised through the agreed channel and logged centrally',
+        ]
+      },
+    ]
+  },
+  {
+    id:'bep-roles',
+    title:'BEP & Roles',
+    desc:'Verifies the BIM Execution Plan is current and that information management roles and responsibilities are clear.',
+    groups:[
+      {
+        name:'BEP Currency',
+        items:[
+          'Pre- or Post-appointment BEP is current and reflects the live team',
+          'Responsibility matrix lists an owner for every information deliverable',
+          'BEP technology and standards section matches the tools actually in use',
+          'Risk register reviewed and updated at each stage gateway',
+        ]
+      },
+      {
+        name:'Roles',
+        items:[
+          'Information Manager appointed and named for the project',
+          'Task Information Managers named for each task team',
+          'Competency of key roles checked against ISO 19650 requirements',
+        ]
+      },
+    ]
+  },
+];
+
+/* =========================================================
+   STATE
+   ========================================================= */
+const STORAGE_KEY = 'atanaIMChecklists_v1';
+let state = loadState();
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {checked:{}, notes:{}};
+  }catch(e){ return {checked:{}, notes:{}}; }
+}
+function saveState(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+}
+function itemKey(listId, groupIdx, itemIdx){ return listId+'::'+groupIdx+'::'+itemIdx; }
+
+/* =========================================================
+   BUILD UI
+   ========================================================= */
+const tabbar = document.getElementById('tabbar');
+const panelsEl = document.getElementById('panels');
+let activeId = CHECKLISTS[0].id;
+
+function buildAll(){
+  tabbar.innerHTML = '';
+  panelsEl.innerHTML = '';
+  CHECKLISTS.forEach(list => {
+    // tab
+    const tab = document.createElement('button');
+    tab.className = 'tab' + (list.id===activeId ? ' active' : '');
+    tab.dataset.id = list.id;
+    tab.innerHTML = `<span>${list.title}</span><span class="chip" id="chip-${list.id}">0</span>`;
+    tab.addEventListener('click', () => setActive(list.id));
+    tabbar.appendChild(tab);
+
+    // panel
+    const panel = document.createElement('div');
+    panel.className = 'panel' + (list.id===activeId ? ' active' : '');
+    panel.id = 'panel-' + list.id;
+
+    let groupsHtml = '';
+    list.groups.forEach((group, gIdx) => {
+      let itemsHtml = '';
+      group.items.forEach((text, iIdx) => {
+        const key = itemKey(list.id, gIdx, iIdx);
+        const checked = !!state.checked[key];
+        const note = state.notes[key] || '';
+        itemsHtml += `
+          <div class="item ${checked?'checked':''}" data-key="${key}">
+            <input type="checkbox" id="cb-${key}" ${checked?'checked':''}>
+            <label for="cb-${key}">${text}</label>
+            <button class="note-toggle" data-key="${key}" title="Add note">&#9998;</button>
+          </div>
+          <div class="item-note ${note ? 'open':''}" data-notekey="${key}">
+            <textarea placeholder="Note (optional)...">${note}</textarea>
+          </div>`;
+      });
+      groupsHtml += `
+        <div class="group" data-gidx="${gIdx}">
+          <div class="group-head">
+            <h3><span class="caret">&#9660;</span>${group.name}</h3>
+            <span class="count" id="gcount-${list.id}-${gIdx}">0/${group.items.length}</span>
+          </div>
+          <div class="group-body">${itemsHtml}</div>
+        </div>`;
+    });
+
+    panel.innerHTML = `
+      <div class="panel-head">
+        <div>
+          <h2 class="panel-title">${list.title}</h2>
+          <p class="panel-desc">${list.desc}</p>
+        </div>
+        <div class="panel-actions">
+          <button class="btn ghost" data-action="reset" data-list="${list.id}">Reset section</button>
+          <button class="btn" data-action="export" data-list="${list.id}">Export CSV</button>
+          <button class="btn primary" data-action="print" data-list="${list.id}">Print</button>
+        </div>
+      </div>
+      <div class="progress-track"><div class="progress-fill" id="pfill-${list.id}" style="width:0%"></div></div>
+      ${groupsHtml}
+    `;
+    panelsEl.appendChild(panel);
+  });
+
+  attachEvents();
+  refreshAllCounts();
+}
+
+function setActive(id){
+  activeId = id;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.id===id));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-'+id));
+}
+
+function attachEvents(){
+  panelsEl.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const itemEl = cb.closest('.item');
+      const key = itemEl.dataset.key;
+      state.checked[key] = cb.checked;
+      itemEl.classList.toggle('checked', cb.checked);
+      saveState();
+      refreshAllCounts();
+    });
+  });
+
+  panelsEl.querySelectorAll('.note-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.key;
+      const noteEl = panelsEl.querySelector(`.item-note[data-notekey="${key}"]`);
+      noteEl.classList.toggle('open');
+    });
+  });
+
+  panelsEl.querySelectorAll('.item-note textarea').forEach(ta => {
+    ta.addEventListener('input', () => {
+      const key = ta.closest('.item-note').dataset.notekey;
+      state.notes[key] = ta.value;
+      saveState();
+    });
+  });
+
+  panelsEl.querySelectorAll('.group-head').forEach(head => {
+    head.addEventListener('click', () => {
+      head.closest('.group').classList.toggle('collapsed');
+    });
+  });
+
+  panelsEl.querySelectorAll('[data-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.action;
+      const listId = btn.dataset.list;
+      if(action==='reset') resetList(listId);
+      if(action==='export') exportCSV(listId);
+      if(action==='print'){ setActive(listId); window.print(); }
+    });
+  });
+}
+
+function resetList(listId){
+  const list = CHECKLISTS.find(l => l.id===listId);
+  if(!confirm(`Reset all ticks and notes in "${list.title}"? This cannot be undone.`)) return;
+  list.groups.forEach((group, gIdx) => {
+    group.items.forEach((_, iIdx) => {
+      const key = itemKey(listId, gIdx, iIdx);
+      delete state.checked[key];
+      delete state.notes[key];
+    });
+  });
+  saveState();
+  buildAll();
+  setActive(listId);
+}
+
+function exportCSV(listId){
+  const list = CHECKLISTS.find(l => l.id===listId);
+  let rows = [['Section','Item','Checked','Note']];
+  list.groups.forEach((group, gIdx) => {
+    group.items.forEach((text, iIdx) => {
+      const key = itemKey(listId, gIdx, iIdx);
+      rows.push([
+        group.name,
+        text,
+        state.checked[key] ? 'Yes' : 'No',
+        (state.notes[key] || '').replace(/\n/g,' ')
+      ]);
+    });
+  });
+  const csv = rows.map(r => r.map(f => `"${String(f).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Atana-IM-Checklist-${list.id}-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function refreshAllCounts(){
+  let grandChecked = 0, grandTotal = 0;
+
+  CHECKLISTS.forEach(list => {
+    let listChecked = 0, listTotal = 0;
+    list.groups.forEach((group, gIdx) => {
+      let gChecked = 0;
+      group.items.forEach((_, iIdx) => {
+        const key = itemKey(list.id, gIdx, iIdx);
+        listTotal++;
+        if(state.checked[key]){ gChecked++; listChecked++; }
+      });
+      const gcountEl = document.getElementById(`gcount-${list.id}-${gIdx}`);
+      if(gcountEl) gcountEl.textContent = `${gChecked}/${group.items.length}`;
+    });
+
+    const chip = document.getElementById(`chip-${list.id}`);
+    if(chip) chip.textContent = `${listChecked}/${listTotal}`;
+    const tab = tabbar.querySelector(`.tab[data-id="${list.id}"]`);
+    if(tab) tab.classList.toggle('complete', listTotal>0 && listChecked===listTotal);
+
+    const pfill = document.getElementById(`pfill-${list.id}`);
+    if(pfill) pfill.style.width = (listTotal ? (listChecked/listTotal*100) : 0) + '%';
+
+    grandChecked += listChecked;
+    grandTotal += listTotal;
+  });
+
+  const pct = grandTotal ? Math.round(grandChecked/grandTotal*100) : 0;
+  document.getElementById('overallPct').textContent = pct + '%';
+  document.getElementById('overallCount').textContent = `${grandChecked} / ${grandTotal}`;
+  const ring = document.getElementById('overallRing');
+  const circumference = 2 * Math.PI * 16;
+  ring.setAttribute('stroke-dasharray', circumference);
+  ring.setAttribute('stroke-dashoffset', circumference - (pct/100)*circumference);
+}
+
+buildAll();
+</script>
+</body>
+</html>
