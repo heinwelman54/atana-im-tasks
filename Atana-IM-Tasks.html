@@ -261,15 +261,20 @@
   .ws-header-card .pc-progress-label{color:var(--gold-500);}
   .ws-header-card{padding:0;overflow:hidden;}
   .ws-header-card .ws-header-body{padding:16px 18px 18px;}
-  .ws-header-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+  .ws-header-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+  .ws-header-main{display:flex;align-items:flex-start;gap:14px;flex:1;min-width:0;}
   .ws-project-cover{
-    width:100%;aspect-ratio:16/9;max-height:180px;overflow:hidden;
+    width:88px;height:88px;flex-shrink:0;border-radius:12px;overflow:hidden;
     background:rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;
+    border:1px solid rgba(255,255,255,0.2);
   }
   .ws-project-cover img, .ws-project-img{
-    width:100%;height:100%;object-fit:contain;object-position:center;display:block;
+    width:100%;height:100%;object-fit:cover;object-position:center;display:block;
   }
   .ws-header-top .ws-titles{flex:1;min-width:0;}
+  @media (min-width:720px){
+    .ws-project-cover{width:112px;height:112px;}
+  }
   .ws-edit-btn{
     flex-shrink:0;border:1px solid rgba(255,255,255,0.35);background:rgba(255,255,255,0.12);
     color:#fff;font-size:12px;font-weight:700;padding:8px 12px;border-radius:999px;cursor:pointer;
@@ -8578,14 +8583,16 @@ function renderWorkspace(){
     }
   } catch(e){}
   document.getElementById("wsHeaderCard").innerHTML = `
-    ${project.projectImage ? `<div class="ws-project-cover"><img src="${project.projectImage}" alt=""></div>` : ""}
     <div class="ws-header-body">
       <div class="ws-header-top">
-        <div class="ws-titles">
-          <div class="ws-name">${escapeHtml(project.name)}</div>
-          <div class="ws-meta">${[project.code, project.client, project.projectType, project.businessUnit].filter(Boolean).map(escapeHtml).join(" &middot; ") || "No code or client set"}</div>
-          ${dateLine}
-          ${infoBits.join("")}
+        <div class="ws-header-main">
+          ${project.projectImage ? `<div class="ws-project-cover"><img src="${project.projectImage}" alt=""></div>` : ""}
+          <div class="ws-titles">
+            <div class="ws-name">${escapeHtml(project.name)}</div>
+            <div class="ws-meta">${[project.code, project.client, project.projectType, project.businessUnit].filter(Boolean).map(escapeHtml).join(" &middot; ") || "No code or client set"}</div>
+            ${dateLine}
+            ${infoBits.join("")}
+          </div>
         </div>
         <button type="button" class="ws-edit-btn" id="wsEditProjectBtn" aria-label="Edit project">Edit</button>
       </div>
