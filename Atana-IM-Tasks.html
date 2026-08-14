@@ -405,7 +405,19 @@
   .gantt-zoom-bar label{font-size:11px;font-weight:700;color:var(--slate-500);text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;}
   .gantt-zoom-bar input[type=range]{flex:1;accent-color:var(--purple-800);height:28px;}
   .gantt-zoom-bar .zoom-val{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--purple-900);min-width:48px;text-align:right;}
-  .gantt-zoom-inner{min-width:560px;transition:min-width 0.12s ease;}
+  .gantt-zoom-inner{min-width:560px;transition:min-width 0.12s ease;position:relative;}
+  .gantt-today-marker,.clash-today-marker{
+    position:absolute;top:0;bottom:0;width:0;z-index:25;pointer-events:none;
+    border-left:2px solid #e11d48;
+  }
+  .gantt-today-marker .today-lbl,.clash-today-marker .today-lbl{
+    position:absolute;top:2px;left:4px;
+    background:#e11d48;color:#fff;font-size:9px;font-weight:800;
+    padding:2px 6px;border-radius:4px;white-space:nowrap;letter-spacing:0.02em;
+    box-shadow:0 1px 4px rgba(0,0,0,0.2);
+  }
+  .gantt-today-marker.out-of-range,.clash-today-marker.out-of-range{display:none;}
+  .clash-timeline-wrap{position:relative;overflow-x:auto;border:1px solid var(--slate-100);border-radius:10px;background:#fff;padding:8px 0 4px;min-height:48px;}
   .task-row.disabled-task{opacity:0.45;}
   .task-row.disabled-task .task-name{text-decoration:line-through;color:var(--slate-500);}
   .task-row .iso-badge{
@@ -4353,7 +4365,7 @@ function parseIsoFileName(filename){
 function pickAttr(obj, names){
   if(!obj || typeof obj !== "object") return "";
   const keys = Object.keys(obj);
-  const norm = (s) => String(s || "").toLowerCase().replace(/[\s_\-]+/g, "");
+  const norm = (s) => String(s || "").toLowerCase().replace(/[\s_\-./:]+/g, "");
   const readVal = (v) => {
     if(v == null || v === "") return "";
     if(typeof v === "object"){
@@ -4372,6 +4384,18 @@ function pickAttr(obj, names){
       if(norm(k) !== w) continue;
       const s = readVal(obj[k]);
       if(s) return s;
+    }
+  }
+  // 1b) Key ends with wanted name (ACC sometimes prefixes)
+  for(const want of names){
+    const w = norm(want);
+    if(!w || w.length < 4) continue;
+    for(const k of keys){
+      const nk = norm(k);
+      if(nk === w || nk.endsWith(w) || w.endsWith(nk)){
+        const s = readVal(obj[k]);
+        if(s) return s;
+      }
     }
   }
   // 2) Controlled startsWith / contains (only if the attribute key is specific enough)
@@ -4442,14 +4466,21 @@ async function apsItemTip(projectId, itemId){
 }
 async function apsItemCustomAttributes(projectId, versionOrItemId){
   // Custom attributes live on the **version** URN in Docs API
-  const pid = String(projectId || "").replace(/^b\./, "");
+  const rawPid = String(projectId || "");
+  const pidNoB = rawPid.replace(/^b\./, "");
+  const pidWithB = pidNoB.startsWith("b.") ? pidNoB : ("b." + pidNoB);
   const vid = versionOrItemId;
-  if(!pid || !vid) return {};
-  const urls = [
-    "https://developer.api.autodesk.com/bim360/docs/v1/projects/" + encodeURIComponent(pid) + "/versions/" + encodeURIComponent(vid) + "/custom-attributes",
-    "https://developer.api.autodesk.com/construction/files/v1/projects/" + encodeURIComponent(pid) + "/versions/" + encodeURIComponent(vid) + "/custom-attributes",
-    "https://developer.api.autodesk.com/construction/files/v1/projects/" + encodeURIComponent(pid) + "/items/" + encodeURIComponent(vid) + "/custom-attributes"
-  ];
+  if(!pidNoB || !vid) return {};
+  // URN may need double-encoding for path segments
+  const vidEnc = encodeURIComponent(vid);
+  const vidEnc2 = encodeURIComponent(vidEnc);
+  const pids = [pidNoB, pidWithB, rawPid].filter((v,i,a) => a.indexOf(v)===i);
+  const urls = [];
+  pids.forEach(pid => {
+    urls.push("https://developer.api.autodesk.com/bim360/docs/v1/projects/" + encodeURIComponent(pid) + "/versions/" + vidEnc + "/custom-attributes");
+    urls.push("https://developer.api.autodesk.com/bim360/docs/v1/projects/" + encodeURIComponent(pid) + "/versions/" + vidEnc2 + "/custom-attributes");
+    urls.push("https://developer.api.autodesk.com/construction/files/v1/projects/" + encodeURIComponent(pid) + "/versions/" + vidEnc + "/custom-attributes");
+  });
   for(const url of urls){
     try {
       const auth = await apsRefreshIfNeeded();
@@ -4647,13 +4678,25 @@ function mapAccFileRecord(name, attrs, custom, tipAttrs){
   // come from **custom attributes** on the tip version — never from tip extension noise.
   const ca = custom || {};
   // Match by **attribute name** (ACC custom attribute display name), never column index
-  const documentTitle = pickAttrMapped(ca, "documentTitle", ["Document Title", "DocumentTitle", "Title", "Doc Title", "Description", "document title"]) || "";
-  const reviewStatus = pickAttrMapped(ca, "reviewStatus", ["Review status", "Review Status", "ReviewStatus", "Approval Status", "Approval status", "Workflow status"]) || "";
+  const documentTitle = pickAttrMapped(ca, "documentTitle", [
+    "Document Title", "DocumentTitle", "Title", "Doc Title", "Description", "document title",
+    "DocTitle", "Document Name", "Sheet Title", "Drawing Title", "File Title"
+  ]) || "";
+  const reviewStatus = pickAttrMapped(ca, "reviewStatus", [
+    "Review status", "Review Status", "ReviewStatus", "Approval Status", "Approval status",
+    "Workflow status", "Workflow Status", "Review State", "Approval"
+  ]) || "";
   const markups = pickAttrMapped(ca, "markups", ["Markups", "Markup Count", "MarkupCount", "Markup", "Number of Markups"]) || "";
-  const workStage = pickAttrMapped(ca, "workStage", ["Work Stage", "WorkStage", "Work stage", "Project Stage", "ISO Stage"]) || "";
-  const status = pickAttrMapped(ca, "status", ["Status", "Document Status", "Suitability Code", "Suitability", "Doc Status"]) || "";
+  const workStage = pickAttrMapped(ca, "workStage", [
+    "Work Stage", "WorkStage", "Work stage", "Project Stage", "ISO Stage", "Stage", "WS", "Workstage"
+  ]) || "";
+  const status = pickAttrMapped(ca, "status", [
+    "Status", "Document Status", "Suitability Code", "Suitability", "Doc Status", "ISO Status", "Status Code"
+  ]) || "";
   // Revision letter/code (C01) — never tip versionNumber
-  const revision = pickAttrMapped(ca, "revision", ["Revision", "Rev", "Document Revision", "Rev.", "Document Rev"]) || "";
+  const revision = pickAttrMapped(ca, "revision", [
+    "Revision", "Rev", "Document Revision", "Rev.", "Document Rev", "Rev Code", "Revision Code"
+  ]) || "";
   // System metadata from tip / item attributes only
   const lastModified = (tipAttrs && tipAttrs.lastModifiedTime) || (attrs && attrs.lastModifiedTime) || "";
   const modifiedBy = (tipAttrs && tipAttrs.lastModifiedUserName) || (attrs && attrs.lastModifiedUserName) || "";
@@ -6071,6 +6114,18 @@ function pctAlong(rangeStart, rangeEnd, dateStr){
   const off = daysBetween(rangeStart, dateStr);
   return Math.max(0, Math.min(100, (off / total) * 100));
 }
+function todayMarkerHtml(rangeStart, rangeEnd, extraClass){
+  try {
+    const t = (typeof todayISO === "function") ? todayISO() : new Date().toISOString().slice(0,10);
+    if(!rangeStart || !rangeEnd) return "";
+    const left = pctAlong(rangeStart, rangeEnd, t);
+    const out = (t < String(rangeStart).slice(0,10) || t > String(rangeEnd).slice(0,10));
+    const label = (typeof fmtDate === "function") ? fmtDate(t) : t;
+    const cls = (extraClass || "gantt-today-marker") + (out ? " out-of-range" : "");
+    return `<div class="${cls}" style="left:${left}%;" title="Today · ${label}"><span class="today-lbl">Today · ${escapeHtml(label)}</span></div>`;
+  } catch(e){ return ""; }
+}
+
 /**
  * Precise bar placement for FS waterfall: uses calendar day + hour-of-day (0–8h).
  * Same-day sequential tasks no longer stack on top of each other.
@@ -7644,7 +7699,32 @@ function renderClashMatrix(project){
     </div>
   </div>`;
 
-  el.innerHTML = settings + msHtml + summary + `
+  // Timeline strip with today line
+  let clashTl = "";
+  try {
+    const allStarts = cSched.map(b => b.start).filter(Boolean).sort();
+    const allEnds = cSched.map(b => b.endInclusive || b.end).filter(Boolean).sort();
+    if(allStarts.length && allEnds.length){
+      const tlStart = allStarts[0];
+      const tlEnd = allEnds[allEnds.length-1];
+      const barsHtml = cSched.map(b => {
+        const L = pctAlong(tlStart, tlEnd, b.start);
+        const R = pctAlong(tlStart, tlEnd, b.endInclusive || b.end);
+        const w = Math.max(0.8, R - L);
+        const col = (b.priority===1||b.priority==="01") ? "#dc2626" : (b.priority===2||b.priority==="02") ? "#ea580c" : "#6366f1";
+        return `<div title="P${escapeHtml(String(b.priority))} ${escapeHtml(b.start||"")} → ${escapeHtml(b.endInclusive||"")}" style="position:absolute;left:${L}%;width:${w}%;top:22px;height:14px;background:${col};border-radius:3px;opacity:0.85;"></div>`;
+      }).join("");
+      clashTl = `<div class="card" style="margin-bottom:12px;padding:10px 12px;">
+        <div class="ms-label" style="margin-bottom:6px;">Clash schedule timeline</div>
+        <div class="clash-timeline-wrap" style="height:48px;">
+          ${todayMarkerHtml(tlStart, tlEnd, "clash-today-marker")}
+          ${barsHtml}
+        </div>
+        <p class="section-sub" style="margin:6px 0 0;">Red line = today · bars = priority windows</p>
+      </div>`;
+    }
+  } catch(e){ console.warn(e); }
+  el.innerHTML = settings + msHtml + summary + clashTl + `
     <div class="clash-ws-legend"><span class="ws3">WS3 · P01–P02 concurrent month</span><span class="ws4">WS4 · P03+ weekly</span></div>
     <div class="card" style="overflow:auto;">
       <table class="clash-table">
@@ -9425,6 +9505,7 @@ function renderWbsGantt(project){
     </div>
     <div class="gantt-wrap">
       <div class="gantt-zoom-inner" id="ganttZoomInner" style="min-width:${zoomMinW}px;">
+        ${todayMarkerHtml(projectStart, projectEnd)}
         <div class="gantt-scale">${scaleHtml}</div>
         ${rows}
       </div>
@@ -11483,6 +11564,7 @@ function renderProjectTeamPanel(project){
       <button type="button" class="btn btn-ghost btn-xs" id="f-pt-load-seed">Load Atana hub list</button>
       <button type="button" class="btn btn-primary btn-xs" id="f-pt-preview-org">Preview organogram</button>
     </div>
+    <div id="f-pt-acc-org"></div>
     <div id="f-pt-org-compare"></div>
     <input type="file" id="f-pt-file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none;">
     <div class="field"><label>Search hub / team directory</label>
@@ -11624,28 +11706,37 @@ function bindProjectTeamPanel(project){
     if(searchEl) searchEl.focus();
   };
 
+  const paintAccOrg = (live) => {
+    const accHost = document.getElementById("f-pt-acc-org");
+    if(accHost){ accHost.innerHTML = renderAccOrganogramBoard(live); bindAccOrganogramBoard(live); }
+    const cmpHost = document.getElementById("f-pt-org-compare");
+    if(cmpHost) cmpHost.innerHTML = renderOrganogramCompare(live);
+  };
+  // Initial ACC organogram snapshot (if already imported)
+  try { paintAccOrg(projectById(project.id) || project); } catch(e){}
   const accImp = document.getElementById("f-pt-import-acc");
   if(accImp) accImp.onclick = async () => {
     const live = projectById(project.id) || project;
     await importAccOrganogram(live);
-    const host = document.getElementById("f-pt-org-compare");
-    if(host) host.innerHTML = renderAccOrganogramBoard(live) + renderOrganogramCompare(live);
+    paintAccOrg(live);
   };
   const accMerge = document.getElementById("f-pt-merge-acc");
   if(accMerge) accMerge.onclick = async () => {
     const live = projectById(project.id) || project;
-    if(!live.accOrganogram) await importAccOrganogram(live);
+    if(!live.accOrganogram || !(live.accOrganogram.members||[]).length){
+      showToast("Import ACC organogram first — review the ACC snapshot, then merge");
+      return;
+    }
+    if(!confirm("Merge ACC organogram members into the project team using their first ACC role?")) return;
     await mergeAccMembersIntoAppTeam(live);
     window.__projectTeamDraft = ensureProjectTeam(live);
     redraw();
-    const host = document.getElementById("f-pt-org-compare");
-    if(host) host.innerHTML = renderOrganogramCompare(live);
+    paintAccOrg(live);
   };
   const accCmp = document.getElementById("f-pt-compare-org");
   if(accCmp) accCmp.onclick = () => {
     const live = projectById(project.id) || project;
-    const host = document.getElementById("f-pt-org-compare");
-    if(host) host.innerHTML = renderAccOrganogramBoard(live) + renderOrganogramCompare(live);
+    paintAccOrg(live);
   };
 
   const impBtn = document.getElementById("f-pt-import-hub");
@@ -11725,6 +11816,101 @@ function bindProjectTeamPanel(project){
 }
 
 /* ===================== ACC ORGANOGRAM ===================== */
+
+/** ACC project role catalog (exact labels from ACC). First role is used for auto-bucket. */
+const ACC_ROLE_CATALOG = [
+  { acc: "ADAG - Associate Director Advisory Group", func: "OTHER", disc: "", code: "ADAG" },
+  { acc: "APP - Client", func: "OTHER", disc: "", code: "APP" },
+  { acc: "AR - Information Author (Architectural)", func: "IA", disc: "AR", code: "AR" },
+  { acc: "AR - Peer Reviewer (Architecture)", func: "PEER", disc: "AR", code: "AR" },
+  { acc: "AR - Task Team Manager (Architecture)", func: "TTM", disc: "AR", code: "AR" },
+  { acc: "CSB-DE - Discipline Engineer (Subcontractor)", func: "IA", disc: "CSB", code: "CSB-DE" },
+  { acc: "CTR-CM - Construction Manager (Contractor)", func: "OTHER", disc: "CTR", code: "CTR-CM" },
+  { acc: "CTR-PM - Project Manager (Contractor)", func: "OTHER", disc: "CTR", code: "CTR-PM" },
+  { acc: "CTR-SM - Site Manager (Contractor)", func: "OTHER", disc: "CTR", code: "CTR-SM" },
+  { acc: "CTR-WS - Works Supervisor (Contractor)", func: "OTHER", disc: "CTR", code: "CTR-WS" },
+  { acc: "CV - Information Author (Civil)", func: "IA", disc: "CV", code: "CV" },
+  { acc: "CV - Peer Reviewer (Civil)", func: "PEER", disc: "CV", code: "CV" },
+  { acc: "CV - Task Team Manager (Civil)", func: "TTM", disc: "CV", code: "CV" },
+  { acc: "CW - Peer Reviewer (Civil Water)", func: "PEER", disc: "CW", code: "CW" },
+  { acc: "CW - Task Team Manager (Civil Water)", func: "TTM", disc: "CW", code: "CW" },
+  { acc: "DAG - Director Advisory Group", func: "OTHER", disc: "", code: "DAG" },
+  { acc: "DBD - Director Business Development", func: "OTHER", disc: "", code: "DBD" },
+  { acc: "DM - Document Manager (BIM)", func: "DM", disc: "", code: "DM" },
+  { acc: "DTL - Delivery Team Lead (Project Manager)", func: "DTL", disc: "", code: "DTL" },
+  { acc: "EE - Information Author (Electrical)", func: "IA", disc: "EE", code: "EE" },
+  { acc: "EE - Peer Reviewer (Electrical)", func: "PEER", disc: "EE", code: "EE" },
+  { acc: "EE - Task Team Manager (Electrical)", func: "TTM", disc: "EE", code: "EE" },
+  { acc: "FP - Information Author (Fire Protection)", func: "IA", disc: "FP", code: "FP" },
+  { acc: "FP - Peer Reviewer (Fire Protection)", func: "PEER", disc: "FP", code: "FP" },
+  { acc: "FP - Task Team Manager (Fire Protection)", func: "TTM", disc: "FP", code: "FP" },
+  { acc: "HG - Information Author (Roads & Highways - Geometrics)", func: "IA", disc: "HG", code: "HG" },
+  { acc: "IM - Information Lead(BIM)", func: "IM", disc: "", code: "IM" },
+  { acc: "IM - Information Manager (BIM)", func: "IM", disc: "", code: "IM" },
+  { acc: "ME - Information Author (Mechanical)", func: "IA", disc: "ME", code: "ME" },
+  { acc: "ME - Peer Reviewer (Mechanical)", func: "PEER", disc: "ME", code: "ME" },
+  { acc: "ME - Task Team Manager (Mechanical)", func: "TTM", disc: "ME", code: "ME" },
+  { acc: "MH - Information Author (Mechanical - HVAC)", func: "IA", disc: "MH", code: "MH" },
+  { acc: "MH - Peer Reviewer (Mechanical - HVAC)", func: "PEER", disc: "MH", code: "MH" },
+  { acc: "MH - Task Team Information Manager (Mechanical - HVAC)", func: "TTIM", disc: "MH", code: "MH" },
+  { acc: "MH - Task Team Manager (Mechanical - HVAC)", func: "TTM", disc: "MH", code: "MH" },
+  { acc: "PD - Information Author (Public Health)", func: "IA", disc: "PD", code: "PD" },
+  { acc: "PD - Peer Reviewer (Public Health)", func: "PEER", disc: "PD", code: "PD" },
+  { acc: "PD - Task Team Manager (Public Health)", func: "TTM", disc: "PD", code: "PD" },
+  { acc: "PDM - Project Delivery Manager (Design Manager)", func: "PDM", disc: "", code: "PDM" },
+  { acc: "PE - Information Author (Process Engineer)", func: "IA", disc: "PE", code: "PE" },
+  { acc: "PE - Peer Reviewer (Process Engineer)", func: "PEER", disc: "PE", code: "PE" },
+  { acc: "PE - Task Team Manager (Process Engineer)", func: "TTM", disc: "PE", code: "PE" },
+  { acc: "Project Member [IA]", func: "IA", disc: "", code: "IA" },
+  { acc: "QS - Information Author (Quantity Surveyor)", func: "IA", disc: "QS", code: "QS" },
+  { acc: "ST - Information Author (Structural)", func: "IA", disc: "ST", code: "ST" },
+  { acc: "ST - Peer Reviewer (Structural)", func: "PEER", disc: "ST", code: "ST" },
+  { acc: "ST - Task Team Manager (Structural)", func: "TTM", disc: "ST", code: "ST" },
+  { acc: "YC - Information Author (Controls Engineer)", func: "IA", disc: "YC", code: "YC" },
+  { acc: "YC - Peer Reviewer (Controls Engineer)", func: "PEER", disc: "YC", code: "YC" },
+  { acc: "YC - Task Team Manager (Controls Engineer)", func: "TTM", disc: "YC", code: "YC" },
+  { acc: "YS - Information Author (Security Specialist)", func: "IA", disc: "YS", code: "YS" },
+  { acc: "YS - Peer Reviewer (Security Specialist)", func: "PEER", disc: "YS", code: "YS" },
+  { acc: "YS - Task Team Manager (Security Specialist)", func: "TTM", disc: "YS", code: "YS" }
+];
+function matchAccRoleLabel(label){
+  const s = String(label || "").trim();
+  if(!s) return null;
+  let hit = ACC_ROLE_CATALOG.find(r => r.acc.toLowerCase() === s.toLowerCase());
+  if(hit) return hit;
+  const low = s.toLowerCase();
+  hit = ACC_ROLE_CATALOG.find(r => {
+    const a = r.acc.toLowerCase();
+    return low === a || low.indexOf(a) >= 0 || a.indexOf(low) >= 0;
+  });
+  if(hit) return hit;
+  hit = ACC_ROLE_CATALOG.find(r => {
+    const parts = r.acc.split(" - ");
+    if(parts.length < 2) return false;
+    const code = parts[0].toLowerCase();
+    const rest = parts.slice(1).join(" - ").toLowerCase();
+    return low.indexOf(code) === 0 && low.indexOf(rest.slice(0, 10)) >= 0;
+  });
+  if(hit) return hit;
+  const code = (s.split(/[\s\-]+/)[0] || "").toUpperCase();
+  let roleKind = "";
+  if(/task team manager|\bttm\b/i.test(s)) roleKind = "TTM";
+  else if(/peer reviewer|peer review/i.test(s)) roleKind = "PEER";
+  else if(/task team information|\bttim\b/i.test(s)) roleKind = "TTIM";
+  else if(/information author|\[ia\]/i.test(s)) roleKind = "IA";
+  else if(/information manager|information lead/i.test(s)) roleKind = "IM";
+  else if(/project delivery manager/i.test(s)) roleKind = "PDM";
+  else if(/delivery team lead/i.test(s)) roleKind = "DTL";
+  else if(/document manager/i.test(s)) roleKind = "DM";
+  if(code && roleKind){
+    return { acc: s, func: roleKind, disc: ["DTL","PDM","IM","DM"].includes(roleKind) ? "" : code, code: code };
+  }
+  return null;
+}
+
+
+
+
 async function apsListProjectUsers(projectId){
   // Construction Admin API — project users
   const pid = String(projectId || "").replace(/^b\./, "");
@@ -11759,10 +11945,20 @@ function extractAccRoles(u){
   push(u.jobTitle);
   if(Array.isArray(u.industryRoles)) u.industryRoles.forEach(push);
   if(Array.isArray(u.roles)) u.roles.forEach(push);
+  if(Array.isArray(u.roleNames)) u.roleNames.forEach(push);
+  if(Array.isArray(u.projectRoles)) u.projectRoles.forEach(push);
+  if(Array.isArray(u.memberRoles)) u.memberRoles.forEach(push);
   if(Array.isArray(u.products)) u.products.forEach(p => push(p && (p.access || p.name || p.role)));
   if(u.accessLevels){
     if(u.accessLevels.projectAdmin) roles.push("Project Admin");
     if(u.accessLevels.executive) roles.push("Executive");
+  }
+  // ACC Admin API sometimes nests roles under services
+  if(Array.isArray(u.services)){
+    u.services.forEach(svc => {
+      if(Array.isArray(svc.roles)) svc.roles.forEach(push);
+      push(svc.role); push(svc.name);
+    });
   }
   // unique preserve order
   const seen = new Set();
@@ -11778,12 +11974,18 @@ function normalizeAccUser(u){
   const email = String(u.email || u.emailId || "").toLowerCase().trim();
   const company = u.companyName || (u.company && (u.company.name || u.company)) || u.company || "";
   const roleList = extractAccRoles(u);
-  const roleName = roleList.join(" · ") || "";
   const primaryRole = roleList[0] || "";
+  const roleName = primaryRole || roleList.join(" · ") || "";
+  const allRoleLabels = roleList.slice();
+  // Map FIRST ACC role via catalog
+  let matched = matchAccRoleLabel(primaryRole);
+  if(!matched && roleList.length > 1){
+    for(const r of roleList){ matched = matchAccRoleLabel(r); if(matched) break; }
+  }
   const parsed = typeof parseHubRole === "function" ? parseHubRole(primaryRole) : { roleCode: "", func: "", discipline: "" };
-  let roleCode = parsed.roleCode || "";
-  let func = parsed.func || "";
-  let discipline = parsed.discipline || "";
+  let roleCode = (matched && matched.code) || parsed.roleCode || "";
+  let func = (matched && matched.func) || parsed.func || "";
+  let discipline = (matched && matched.disc) || parsed.discipline || "";
   const blob = (roleList.join(" ") + " " + company + " " + name).toUpperCase();
   if(!roleCode){
     if(/\bIM\b|INFORMATION MANAGER|INFORMATION LEAD/.test(blob)) roleCode = "IM";
@@ -11799,8 +12001,9 @@ function normalizeAccUser(u){
     else if(/ELECTR/.test(blob)) { roleCode = "EE"; discipline = "EE"; }
     else if(/MECH|HVAC/.test(blob)) { roleCode = "ME"; discipline = "ME"; }
   }
-  if(!func) func = ["DTL","PDM","IM","DM","TTM","TTIM","IA","PEER"].includes(roleCode) ? roleCode : (roleCode ? "IA" : "OTHER");
-  if(!discipline && roleCode && !["DTL","PDM","IM","DM"].includes(func)) discipline = roleCode;
+  if(!func) func = ["DTL","PDM","IM","DM","TTM","TTIM","IA","PEER"].includes(roleCode) ? roleCode : (matched ? matched.func : "OTHER");
+  if(!func) func = "OTHER";
+  if(!discipline && roleCode && !["DTL","PDM","IM","DM","OTHER"].includes(func)) discipline = roleCode;
   return {
     id: u.id || u.autodeskId || ("acc-" + (email || name)),
     name,
@@ -11813,7 +12016,8 @@ function normalizeAccUser(u){
     discipline,
     status: u.status || (u.accessLevels ? "active" : ""),
     source: "acc",
-    rawRoles: roleList
+    rawRoles: allRoleLabels || roleList,
+    primaryRole: primaryRole
   };
 }
 async function importAccOrganogram(project){
@@ -11854,11 +12058,12 @@ async function importAccOrganogram(project){
       name: m.name,
       email: m.email,
       company: m.company,
-      role: m.role || m.roleName || m.roleCode || "",
-      roleName: m.roleName || m.role || "",
+      role: m.primaryRole || m.role || m.roleName || m.roleCode || "",
+      roleName: m.primaryRole || m.roleName || m.role || "",
+      primaryRole: m.primaryRole || m.role || "",
       roleCode: m.roleCode,
-      func: m.func,
-      discipline: m.discipline,
+      func: m.func || "OTHER",
+      discipline: m.discipline || "",
       status: m.status,
       source: "acc",
       rawRoles: m.rawRoles || []
@@ -11870,7 +12075,14 @@ async function importAccOrganogram(project){
       companies: [...selected]
     };
     saveData(DATA);
-    showToast("ACC organogram: " + members.length + " members");
+    showToast("ACC organogram: " + members.length + " members (snapshot only)");
+    try {
+      const host = document.getElementById("f-pt-acc-org");
+      if(host){ host.innerHTML = renderAccOrganogramBoard(project); bindAccOrganogramBoard(project); }
+      else if(typeof renderProjectTeamPanel === "function"){
+        /* parent re-render if available */
+      }
+    } catch(e){}
     return members;
   } catch(e){
     console.error(e);
@@ -11882,68 +12094,87 @@ function renderAccOrganogramBoard(project){
   const members = (project.accOrganogram && project.accOrganogram.members) || [];
   if(!members.length){
     return `<div class="card" style="margin-top:12px;"><div class="chart-card-title">ACC organogram</div>
-      <p class="section-sub">No ACC snapshot yet. Use <strong>Import from ACC</strong> and choose companies.</p></div>`;
+      <p class="section-sub">No ACC snapshot yet. Use <strong>Import from ACC</strong> — members land here only (not the project organogram) until you merge.</p></div>`;
   }
   const at = project.accOrganogram.importedAt ? new Date(project.accOrganogram.importedAt).toLocaleString() : "";
-  // Group by company then role
-  const byCo = {};
+  const otherCount = members.filter(m => (m.func || "OTHER") === "OTHER").length;
+  // Group by mapped functional bucket + discipline, show primary ACC role
+  const groups = {};
   members.forEach(m => {
-    const co = m.company || "(No company)";
-    if(!byCo[co]) byCo[co] = [];
-    byCo[co].push(m);
+    const func = m.func || "OTHER";
+    const disc = m.discipline || "";
+    const key = func === "OTHER" ? "OTHER" : (["DTL","PDM","IM","DM"].includes(func) ? func : (func + (disc ? " · " + disc : "")));
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(m);
   });
-  const plate = (m) => `<div class="org-plate" style="cursor:default;" title="${escapeHtml(m.email||"")}">
-    <span class="nm">${escapeHtml(m.name)}</span>
-    <span class="em">${escapeHtml(m.role || m.roleName || m.roleCode || "—")} · ${escapeHtml(m.email||"")}</span>
-  </div>`;
-  let body = Object.keys(byCo).sort().map(co => {
-    const list = byCo[co].slice().sort((a,b) => String(a.role||"").localeCompare(String(b.role||"")) || String(a.name).localeCompare(String(b.name)));
-    return `<div class="org-band" style="margin-bottom:12px;">
-      <h4>${escapeHtml(co)} <span style="font-weight:500;color:var(--slate-500);">(${list.length})</span></h4>
-      <div class="org-roles" style="display:flex;flex-wrap:wrap;gap:10px;">
-        ${list.map(plate).join("")}
-      </div>
+  const order = ["DTL","PDM","IM","DM"];
+  const keys = Object.keys(groups).sort((a,b) => {
+    if(a === "OTHER") return 1;
+    if(b === "OTHER") return -1;
+    const ai = order.indexOf(a), bi = order.indexOf(b);
+    if(ai >= 0 || bi >= 0) return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+    return a.localeCompare(b);
+  });
+  const plate = (m) => {
+    const roles = (m.rawRoles && m.rawRoles.length) ? m.rawRoles.join(" · ") : (m.role || m.roleName || "—");
+    const primary = m.primaryRole || m.role || m.roleName || "—";
+    return `<div class="org-plate" style="cursor:default;" title="${escapeHtml(roles)}">
+      <span class="nm">${escapeHtml(m.name)}</span>
+      <span class="em">${escapeHtml(primary)}</span>
+      <span class="em" style="opacity:0.8;">${escapeHtml(m.company||"")} · ${escapeHtml(m.email||"")}</span>
+      ${m.rawRoles && m.rawRoles.length > 1 ? `<span class="em" style="font-size:10px;color:var(--slate-500);">+${m.rawRoles.length-1} more role(s)</span>` : ""}
+    </div>`;
+  };
+  const body = keys.map(k => {
+    const list = groups[k].slice().sort((a,b) => String(a.name).localeCompare(String(b.name)));
+    const isOther = k === "OTHER";
+    return `<div class="org-band" style="margin-bottom:12px;${isOther?"border:1px dashed var(--slate-300);padding:8px;border-radius:10px;":""}">
+      <h4 style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <span>${escapeHtml(k)} · ${list.length}</span>
+        ${isOther ? `<button type="button" class="btn btn-ghost btn-xs" id="acc-org-clear-other">Clear Other (${otherCount})</button>` : ""}
+      </h4>
+      <div class="org-role-col" style="min-height:auto;">${list.map(plate).join("")}</div>
     </div>`;
   }).join("");
   return `<div class="card" style="margin-top:12px;">
-    <div class="chart-card-title">ACC organogram (separate)</div>
-    <p class="section-sub">Snapshot ${escapeHtml(at)} · ${members.length} people · Name · Email · Company · Role</p>
-    <div class="org-board">${body}</div>
+    <div class="chart-card-title">ACC organogram (snapshot)</div>
+    <p class="section-sub">Imported ${escapeHtml(at)} · <strong>${members.length}</strong> members · auto-bucketed by <strong>first ACC role</strong>. Review here before merging into the project organogram.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <button type="button" class="btn btn-ghost btn-xs" id="acc-org-clear-other-top">Clear all in Other (${otherCount})</button>
+      <button type="button" class="btn btn-primary btn-xs" id="acc-org-merge-btn">Merge into project organogram…</button>
+    </div>
+    <div id="acc-org-board-body">${body}</div>
   </div>`;
 }
-function compareOrganograms(project){
-  const appTeam = (ensureProjectTeam(project).members || []);
-  const accTeam = (project.accOrganogram && project.accOrganogram.members) || [];
-  const byEmail = (list) => {
-    const m = new Map();
-    list.forEach(x => {
-      const k = String(x.email || "").toLowerCase().trim();
-      if(k) m.set(k, x);
-    });
-    return m;
-  };
-  const appMap = byEmail(appTeam);
-  const accMap = byEmail(accTeam);
-  const onlyApp = [];
-  const onlyAcc = [];
-  const roleMismatch = [];
-  const matched = [];
-  appMap.forEach((a, email) => {
-    const b = accMap.get(email);
-    if(!b){ onlyApp.push(a); return; }
-    const ar = String(a.roleCode || a.func || a.defaultRole || "").toUpperCase();
-    const br = String(b.roleCode || b.func || "").toUpperCase();
-    if(ar && br && ar !== br && !br.includes(ar) && !ar.includes(br)){
-      roleMismatch.push({ app: a, acc: b, appRole: ar, accRole: br });
-    } else {
-      matched.push({ app: a, acc: b });
+function bindAccOrganogramBoard(project){
+  const clear = () => {
+    if(!project.accOrganogram || !Array.isArray(project.accOrganogram.members)) return;
+    const before = project.accOrganogram.members.length;
+    project.accOrganogram.members = project.accOrganogram.members.filter(m => (m.func || "OTHER") !== "OTHER");
+    const removed = before - project.accOrganogram.members.length;
+    saveData(DATA);
+    showToast("Removed " + removed + " unmapped (Other) ACC members");
+    if(typeof renderProjectTeamPanel === "function"){
+      // re-render parent panel
+      const host = document.getElementById("f-pt-acc-org");
+      if(host){ host.innerHTML = renderAccOrganogramBoard(project); bindAccOrganogramBoard(project); }
     }
+  };
+  const btn = document.getElementById("acc-org-clear-other") || document.getElementById("acc-org-clear-other-top");
+  document.querySelectorAll("#acc-org-clear-other, #acc-org-clear-other-top").forEach(b => {
+    b.onclick = () => {
+      if(!confirm("Remove all ACC members currently under Other (unmapped roles)?")) return;
+      clear();
+    };
   });
-  accMap.forEach((b, email) => {
-    if(!appMap.has(email)) onlyAcc.push(b);
-  });
-  return { onlyApp, onlyAcc, roleMismatch, matched, appCount: appTeam.length, accCount: accTeam.length };
+  const mergeBtn = document.getElementById("acc-org-merge-btn");
+  if(mergeBtn) mergeBtn.onclick = () => {
+    const btn = document.getElementById("f-pt-merge-acc");
+    if(btn) btn.click();
+    else if(typeof mergeAccMembersIntoAppTeam === "function") mergeAccMembersIntoAppTeam(project);
+  };
 }
+
 function renderOrganogramCompare(project){
   const cmp = compareOrganograms(project);
   const accAt = project.accOrganogram && project.accOrganogram.importedAt
