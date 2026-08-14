@@ -4,35 +4,41 @@ Atana Tools — Project Sync (PyRevit)
 ====================================
 Schema: atana-revit-sync/2.0
 
-Reads the project DB JSON exported from the Atana IM app and:
-  1. Sets Project Information (built-in + ATA_ZZ_* shared parameters)
-  2. Sets / creates Global Parameters (GLOBAL_ZZ_*)
-  3. Derives task team from the model file name (ISO role segment)
-  4. Bulk-updates title block Designed By (TTM) / Checked By (Peer)
-  5. Builds a Publish Set named for the current work stage and adds matched DR/SH sheets
-  6. Writes a sheet-inventory JSON (merge by documentId) for the app to re-import
+WHAT IT DOES
+  1. Loads the project DB JSON (local file OR download from ACC)
+  2. Sets Project Information (built-in + ATA_ZZ_* shared parameters)
+  3. Sets / creates Global Parameters (GLOBAL_ZZ_*)
+  4. Derives task team from the model file name (ISO role segment)
+  5. Bulk-updates title block Designed By (TTM) / Checked By (Peer)
+  6. Builds a Publish Set for the current work stage (matched DR/SH sheets)
+  7. Writes a sheet-inventory JSON for the Atana IM app
 
 INSTALL (once)
 --------------
-1. Install pyRevit: https://pyrevitlabs.notion.site
+1. Install pyRevit
 2. Create folder:
-     %APPDATA%\\pyRevit\\Extensions\\AtanaTools.extension\\AtanaTools.tab\\ProjectSync.panel\\ProjectSync.pushbutton\
-3. Copy this file as `script.py` into that pushbutton folder.
-4. Copy `ATA_ZZ_SharedParameters.txt` next to `script.py` (or set SHARED_PARAM_FILE below).
-5. Reload pyRevit (pyRevit → Reload).
-6. In Revit: AtanaTools tab → Project Sync.
+   %APPDATA%\\pyRevit\\Extensions\\AtanaTools.extension\\AtanaTools.tab\\ProjectSync.panel\\ProjectSync.pushbutton\\
+3. Copy this file as script.py into that folder
+4. Copy ATA_ZZ_SharedParameters.txt next to script.py
+5. pyRevit → Reload
+6. Revit: AtanaTools → Project Sync
 
-APP SIDE
---------
-1. In Atana IM → Edit project → fill project info + organogram + import MIDP plan.
-2. Export / push the DB JSON to ACC (or download locally).
-3. First run of this button asks for the folder that contains that JSON.
-   Path is remembered per Windows user in %APPDATA%\\AtanaTools\\sync_path.txt
+APS / ACC LOGIN (optional — for downloading JSON from ACC)
+----------------------------------------------------------
+Register callback URL on your APS app (exact):
 
-NAMING
-------
-Model file should follow ISO naming so role can be parsed, e.g.:
-  MD6357-ATA-XX-XX-M3-AR-0001.rvt  → role = AR
+    http://127.0.0.1:8765/callback
+
+Scopes (same as the web app where possible):
+    data:read data:write data:create account:read code:all
+
+First run: script asks for Client ID + Client Secret (stored in
+%APPDATA%\\AtanaTools\\aps_config.json — not committed to git).
+
+You can also skip ACC and pick a local DB JSON exported from the web app.
+
+Pylance warnings about __revit__ / BuiltinParameterGroup are normal —
+those symbols only exist inside Revit + pyRevit.
 """
 
 from __future__ import print_function
@@ -40,80 +46,557 @@ from __future__ import print_function
 import os
 import re
 import json
-import clr
+import time
+import traceback
+import threading
 
-clr.AddReference("RevitAPI")
-clr.AddReference("RevitAPIUI")
-clr.AddReference("System")
-
-from Autodesk.Revit.DB import (
-    FilteredElementCollector, BuiltInCategory, BuiltInParameter,
-    Transaction, ElementId, StorageType, GlobalParameter,
-    DoubleParameterValue, IntegerParameterValue, StringParameterValue,
-    SpecTypeId, ParameterType, DefinitionFile, ExternalDefinitionCreationOptions,
-    SharedParameterElement, CategorySet, InstanceBinding, TypeBinding,
-    ViewSheet, PrintManager, ViewSet, ViewSheetSetting
-)
-from Autodesk.Revit.UI import TaskDialog, TaskDialogCommonButtons, TaskDialogResult
-from System.Windows.Forms import OpenFileDialog, DialogResult, FolderBrowserDialog
-from System.IO import File, Directory, Path
-
+# ---------------------------------------------------------------------------
+# .NET / Revit imports (guarded — prevents blank window on import failure)
+# ---------------------------------------------------------------------------
+IMPORT_ERROR = None
 try:
-    from Autodesk.Revit.DB import LabelUtils
-except Exception:
-    LabelUtils = None
+    import clr
+    clr.AddReference("RevitAPI")
+    clr.AddReference("RevitAPIUI")
+    clr.AddReference("System")
+    clr.AddReference("System.Windows.Forms")
 
-# pyRevit doc/uidoc
-doc = __revit__.ActiveUIDocument.Document
-uidoc = __revit__.ActiveUIDocument
-app = __revit__.Application
+    from Autodesk.Revit.DB import (
+        FilteredElementCollector, BuiltInCategory, BuiltInParameter,
+        Transaction, StorageType, GlobalParameter,
+        IntegerParameterValue, StringParameterValue,
+        ViewSheet, ViewSet
+    )
+    from Autodesk.Revit.UI import TaskDialog, TaskDialogCommonButtons, TaskDialogResult
+    from System.Windows.Forms import (
+        OpenFileDialog, DialogResult, FolderBrowserDialog, Form,
+        Label, TextBox, Button, DockStyle, FormStartPosition, DialogResult as DR
+    )
+    from System.IO import File, Directory
+    from System import Uri
+    from System.Diagnostics import Process
+except Exception as _ex:
+    IMPORT_ERROR = traceback.format_exc()
 
-SYNC_SCHEMA = "atana-revit-sync/2.0"
+
+# ---------------------------------------------------------------------------
+# Config paths
+# ---------------------------------------------------------------------------
+CONFIG_DIR = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "AtanaTools")
+CONFIG_PATH = os.path.join(CONFIG_DIR, "sync_path.txt")
+APS_CFG_PATH = os.path.join(CONFIG_DIR, "aps_config.json")
+APS_TOKEN_PATH = os.path.join(CONFIG_DIR, "aps_token.json")
+
+# ---------------------------------------------------------------------------
+# COMPANY APS APP (embedded so end users do not type these)
+# Replace the two strings below with your APS Client ID + Secret once.
+# Callback URL that MUST be registered on the same APS app:
+#   http://127.0.0.1:8765/callback
+# ---------------------------------------------------------------------------
+APS_CLIENT_ID = ""      # e.g. "AbCdEf..."
+APS_CLIENT_SECRET = ""  # e.g. "xxx..."
+
+# Localhost callback — ADD THIS EXACT URL in APS → your app → Callback URL
+# Port 8765 is often freer than 54777; change APS_CALLBACK_PORT if needed.
+# If HttpListener still fails, run (Admin CMD):
+#   netsh http add urlacl url=http://127.0.0.1:8765/ user=%USERNAME%
+APS_CALLBACK_PORT = 8765
+APS_CALLBACK_URL = "http://127.0.0.1:%d/callback" % APS_CALLBACK_PORT
+APS_AUTH = "https://developer.api.autodesk.com/authentication/v2"
+APS_DM = "https://developer.api.autodesk.com/data/v1"
+APS_SCOPES = "data:read data:write data:create account:read code:all"
+APS_LOGIN_TIMEOUT_SEC = 180  # stop hanging forever if browser never returns
+
+SHARED_PARAM_FILE = os.path.join(os.path.dirname(__file__), "ATA_ZZ_SharedParameters.txt")
 
 SHARED_GUIDS = {
     "ATA_ZZ_ClientContractNumber": "28b55e4c-650c-4af5-aae2-5ae0a0cda589",
-    "ATA_ZZ_ProjectDiscipline":     "60119a77-63b3-451e-969d-768d3b01fce0",
-    "ATA_ZZ_ProjectStage":          "b00f059e-1c43-446a-ad66-b7826e488c8f",
+    "ATA_ZZ_ProjectDiscipline": "60119a77-63b3-451e-969d-768d3b01fce0",
+    "ATA_ZZ_ProjectStage": "b00f059e-1c43-446a-ad66-b7826e488c8f",
 }
-
-# Built-in Project Information keys we write
-PI_BUILTIN = {
-    "Project Number":   BuiltInParameter.PROJECT_NUMBER,
-    "Project Name":     BuiltInParameter.PROJECT_NAME,
-    "Client Name":      BuiltInParameter.CLIENT_NAME,
-    "Project Address":  BuiltInParameter.PROJECT_ADDRESS,
-    "Organization Name": BuiltInParameter.PROJECT_ORGANIZATION_NAME,
-}
-
-GLOBAL_NAMES = [
-    "GLOBAL_ZZ_ClientContractNumber",
-    "GLOBAL_ZZ_ProjectDiscipline",
-    "GLOBAL_ZZ_ProjectStage",          # integer
-    "GLOBAL_ZZ_ProjectDeliveryManager",
-    "GLOBAL_ZZ_InformationManager",
-]
 
 TITLEBLOCK_DESIGNED = ["Designed By", "Designed by", "DESIGNED BY", "Drawn By", "Author"]
-TITLEBLOCK_CHECKED  = ["Checked By", "Checked by", "CHECKED BY", "Approved By", "Approved by"]
-
-CONFIG_DIR = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "AtanaTools")
-CONFIG_PATH = os.path.join(CONFIG_DIR, "sync_path.txt")
-
-# Optional: absolute path to shared-parameter definition file shipped with the button
-SHARED_PARAM_FILE = os.path.join(os.path.dirname(__file__), "ATA_ZZ_SharedParameters.txt")
+TITLEBLOCK_CHECKED = ["Checked By", "Checked by", "CHECKED BY", "Approved By", "Approved by"]
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# UI helpers
 # ---------------------------------------------------------------------------
-
 def info(msg, title="Atana Project Sync"):
-    TaskDialog.Show(title, str(msg))
+    try:
+        TaskDialog.Show(title, str(msg)[:3500])
+    except Exception:
+        print(title, msg)
 
 def confirm(msg, title="Atana Project Sync"):
-    r = TaskDialog.Show(title, str(msg), TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No)
-    return r == TaskDialogResult.Yes
+    try:
+        r = TaskDialog.Show(title, str(msg)[:3500],
+                            TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No)
+        return r == TaskDialogResult.Yes
+    except Exception:
+        return False
 
+def ensure_config_dir():
+    if not Directory.Exists(CONFIG_DIR):
+        Directory.CreateDirectory(CONFIG_DIR)
+
+
+# ---------------------------------------------------------------------------
+# APS config (Client ID / Secret)
+# ---------------------------------------------------------------------------
+def load_aps_cfg():
+    """Prefer embedded company credentials; optional local override file."""
+    cfg = {
+        "clientId": (APS_CLIENT_ID or "").strip(),
+        "clientSecret": (APS_CLIENT_SECRET or "").strip(),
+        "callbackUrl": APS_CALLBACK_URL,
+    }
+    ensure_config_dir()
+    if File.Exists(APS_CFG_PATH):
+        try:
+            disk = json.loads(File.ReadAllText(APS_CFG_PATH))
+            # Disk only fills blanks (embedded wins when set)
+            if not cfg["clientId"]:
+                cfg["clientId"] = (disk.get("clientId") or "").strip()
+            if not cfg["clientSecret"]:
+                cfg["clientSecret"] = (disk.get("clientSecret") or "").strip()
+        except Exception:
+            pass
+    return cfg
+
+def save_aps_cfg(cfg):
+    ensure_config_dir()
+    File.WriteAllText(APS_CFG_PATH, json.dumps(cfg, indent=2))
+
+def prompt_aps_credentials():
+    """Simple WinForms dialog for Client ID + Secret."""
+    form = Form()
+    form.Text = "Atana — Autodesk APS credentials"
+    form.Width = 520
+    form.Height = 260
+    form.StartPosition = FormStartPosition.CenterScreen
+
+    lbl = Label()
+    lbl.Text = ("Enter APS app Client ID and Client Secret.\n"
+                "Callback URL (add in APS portal):\n" + APS_CALLBACK_URL)
+    lbl.Top = 10
+    lbl.Left = 12
+    lbl.Width = 480
+    lbl.Height = 55
+
+    l1 = Label(); l1.Text = "Client ID"; l1.Top = 70; l1.Left = 12; l1.Width = 100
+    t1 = TextBox(); t1.Top = 68; t1.Left = 120; t1.Width = 360
+    l2 = Label(); l2.Text = "Client Secret"; l2.Top = 105; l2.Left = 12; l2.Width = 100
+    t2 = TextBox(); t2.Top = 103; t2.Left = 120; t2.Width = 360
+    t2.UseSystemPasswordChar = True
+
+    cfg = load_aps_cfg()
+    t1.Text = cfg.get("clientId") or ""
+    t2.Text = cfg.get("clientSecret") or ""
+
+    ok = Button(); ok.Text = "Save"; ok.Top = 160; ok.Left = 280; ok.Width = 90
+    ok.DialogResult = DR.OK
+    cancel = Button(); cancel.Text = "Cancel"; cancel.Top = 160; cancel.Left = 380; cancel.Width = 90
+    cancel.DialogResult = DR.Cancel
+
+    form.Controls.Add(lbl)
+    form.Controls.Add(l1); form.Controls.Add(t1)
+    form.Controls.Add(l2); form.Controls.Add(t2)
+    form.Controls.Add(ok); form.Controls.Add(cancel)
+    form.AcceptButton = ok
+    form.CancelButton = cancel
+
+    if form.ShowDialog() != DR.OK:
+        return None
+    out = {
+        "clientId": (t1.Text or "").strip(),
+        "clientSecret": (t2.Text or "").strip(),
+        "callbackUrl": APS_CALLBACK_URL
+    }
+    if not out["clientId"] or not out["clientSecret"]:
+        info("Client ID and Client Secret are both required.")
+        return None
+    save_aps_cfg(out)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# APS OAuth (authorization code + localhost callback)
+# ---------------------------------------------------------------------------
+def _http_post_form(url, data, headers=None):
+    """Minimal POST using System.Net (works in IronPython)."""
+    from System.Net import WebClient, WebRequest
+    from System.Text import Encoding
+    req = WebRequest.Create(url)
+    req.Method = "POST"
+    req.ContentType = "application/x-www-form-urlencoded"
+    if headers:
+        for k, v in headers.items():
+            if k.lower() == "authorization":
+                req.Headers.Add("Authorization", v)
+            elif k.lower() != "content-type":
+                try:
+                    req.Headers.Add(k, v)
+                except Exception:
+                    pass
+    body = Encoding.UTF8.GetBytes(data)
+    req.ContentLength = body.Length
+    stream = req.GetRequestStream()
+    stream.Write(body, 0, body.Length)
+    stream.Close()
+    resp = req.GetResponse()
+    from System.IO import StreamReader as _SR
+    reader = _SR(resp.GetResponseStream())
+    text = reader.ReadToEnd()
+    reader.Close()
+    resp.Close()
+    return text
+
+def _http_get_json(url, token):
+    from System.Net import WebRequest
+    from System.IO import StreamReader
+    req = WebRequest.Create(url)
+    req.Method = "GET"
+    req.Headers.Add("Authorization", "Bearer " + token)
+    resp = req.GetResponse()
+    reader = StreamReader(resp.GetResponseStream())
+    text = reader.ReadToEnd()
+    reader.Close()
+    resp.Close()
+    return json.loads(text)
+
+def load_tokens():
+    if not File.Exists(APS_TOKEN_PATH):
+        return None
+    try:
+        return json.loads(File.ReadAllText(APS_TOKEN_PATH))
+    except Exception:
+        return None
+
+def save_tokens(tok):
+    ensure_config_dir()
+    File.WriteAllText(APS_TOKEN_PATH, json.dumps(tok, indent=2))
+
+def tokens_valid(tok):
+    if not tok or not tok.get("access_token"):
+        return False
+    exp = tok.get("expires_at") or 0
+    return time.time() < float(exp) - 60
+
+def refresh_tokens(cfg, tok):
+    if not tok or not tok.get("refresh_token"):
+        return None
+    import base64
+    basic = base64.b64encode(
+        ("%s:%s" % (cfg["clientId"], cfg["clientSecret"])).encode("ascii")
+    ).decode("ascii")
+    try:
+        import System
+        data = "grant_type=refresh_token&refresh_token=" + tok["refresh_token"]
+        text = _http_post_form(
+            APS_AUTH + "/token",
+            data,
+            {"Authorization": "Basic " + basic}
+        )
+        js = json.loads(text)
+        out = {
+            "access_token": js["access_token"],
+            "refresh_token": js.get("refresh_token") or tok["refresh_token"],
+            "expires_at": time.time() + int(js.get("expires_in") or 3600),
+            "token_type": js.get("token_type") or "Bearer"
+        }
+        save_tokens(out)
+        return out
+    except Exception as ex:
+        print("refresh failed", ex)
+        return None
+
+def _exchange_code_for_token(cfg, code):
+    """Exchange authorization code for tokens."""
+    import base64
+    import System
+    client_id = cfg["clientId"]
+    client_secret = cfg["clientSecret"]
+    redirect = APS_CALLBACK_URL
+    basic = base64.b64encode(
+        ("%s:%s" % (client_id, client_secret)).encode("ascii")
+    ).decode("ascii")
+    data = (
+        "grant_type=authorization_code"
+        + "&code=" + code
+        + "&redirect_uri=" + System.Uri.EscapeDataString(redirect)
+    )
+    text_body = _http_post_form(
+        APS_AUTH + "/token",
+        data,
+        {"Authorization": "Basic " + basic}
+    )
+    js = json.loads(text_body)
+    if not js.get("access_token"):
+        raise Exception("No access_token in response: " + text_body[:500])
+    tok = {
+        "access_token": js["access_token"],
+        "refresh_token": js.get("refresh_token"),
+        "expires_at": time.time() + int(js.get("expires_in") or 3600),
+        "token_type": js.get("token_type") or "Bearer"
+    }
+    save_tokens(tok)
+    return tok
+
+
+def _extract_code_from_text(s):
+    """Accept full redirect URL or raw code."""
+    s = (s or "").strip()
+    if not s:
+        return None
+    # full URL? code=...
+    m = re.search(r"[?&#]code=([^&\\s#]+)", s)
+    if m:
+        return m.group(1)
+    # bare code (no spaces, reasonably long)
+    if " " not in s and len(s) > 20 and "http" not in s.lower():
+        return s
+    return None
+
+
+def prompt_paste_auth_code(auth_url):
+    """Fallback when Windows blocks HttpListener — user pastes redirect URL or code."""
+    form = Form()
+    form.Text = "Atana — paste Autodesk login code"
+    form.Width = 560
+    form.Height = 320
+    form.StartPosition = FormStartPosition.CenterScreen
+
+    lbl = Label()
+    lbl.Text = (
+        "Windows blocked the local callback (HttpListener).\n\n"
+        "1) Browser should open Autodesk login (or open the URL shown after OK).\n"
+        "2) Sign in and Allow.\n"
+        "3) Browser may show an error page — that is OK.\n"
+        "4) Copy the FULL address from the browser bar\n"
+        "   (starts with http://127.0.0.1:%d/callback?code=...)\n"
+        "   and paste it below."
+    ) % APS_CALLBACK_PORT
+    lbl.Top = 10
+    lbl.Left = 12
+    lbl.Width = 520
+    lbl.Height = 120
+
+    t = TextBox()
+    t.Top = 140
+    t.Left = 12
+    t.Width = 520
+    t.Height = 60
+    t.Multiline = True
+
+    ok = Button(); ok.Text = "Continue"; ok.Top = 220; ok.Left = 320; ok.Width = 100
+    ok.DialogResult = DR.OK
+    cancel = Button(); cancel.Text = "Cancel"; cancel.Top = 220; cancel.Left = 430; cancel.Width = 100
+    cancel.DialogResult = DR.Cancel
+    openbtn = Button(); openbtn.Text = "Open login URL"; openbtn.Top = 220; openbtn.Left = 12; openbtn.Width = 120
+
+    def _open(sender, args):
+        try:
+            Process.Start(auth_url)
+        except Exception:
+            pass
+    openbtn.Click += _open
+
+    form.Controls.Add(lbl)
+    form.Controls.Add(t)
+    form.Controls.Add(ok)
+    form.Controls.Add(cancel)
+    form.Controls.Add(openbtn)
+    form.AcceptButton = ok
+    form.CancelButton = cancel
+
+    try:
+        Process.Start(auth_url)
+    except Exception:
+        pass
+
+    if form.ShowDialog() != DR.OK:
+        return None
+    return _extract_code_from_text(t.Text)
+
+
+def aps_login_interactive(cfg):
+    """Prefer localhost callback; on Windows block / timeout, fall back to paste-code."""
+    import base64
+    import System
+    from System.Net import HttpListener
+    from System.Threading import Thread, ThreadStart, ManualResetEvent
+
+    client_id = cfg["clientId"]
+    redirect = APS_CALLBACK_URL
+
+    auth_url = (
+        APS_AUTH + "/authorize"
+        + "?response_type=code"
+        + "&client_id=" + client_id
+        + "&redirect_uri=" + System.Uri.EscapeDataString(redirect)
+        + "&scope=" + System.Uri.EscapeDataString(APS_SCOPES)
+    )
+
+    listener_ok = False
+    listener = None
+    try:
+        listener = HttpListener()
+        prefix = "http://127.0.0.1:%d/" % APS_CALLBACK_PORT
+        listener.Prefixes.Add(prefix)
+        listener.Start()
+        listener_ok = True
+    except Exception as ex:
+        print("HttpListener start failed:", ex)
+        listener_ok = False
+
+    if not listener_ok:
+        # --- Windows block path ---
+        info(
+            "Windows blocked HttpListener on port %d.\n\n"
+            "Fix (run once in Command Prompt as Administrator):\n\n"
+            "  netsh http add urlacl url=http://127.0.0.1:%d/ user=%%USERNAME%%\n\n"
+            "Or use the next dialog to paste the browser redirect URL / code."
+            % (APS_CALLBACK_PORT, APS_CALLBACK_PORT)
+        )
+        code = prompt_paste_auth_code(auth_url)
+        if not code:
+            return None
+        try:
+            return _exchange_code_for_token(cfg, code)
+        except Exception as ex:
+            info("Token exchange failed:\n" + str(ex))
+            return None
+
+    # --- Listener path with timeout ---
+    holder = {"ctx": None, "err": None}
+    done = ManualResetEvent(False)
+
+    def _accept():
+        try:
+            holder["ctx"] = listener.GetContext()
+        except Exception as ex:
+            holder["err"] = str(ex)
+        try:
+            done.Set()
+        except Exception:
+            pass
+
+    th = Thread(ThreadStart(_accept))
+    th.IsBackground = True
+    th.Start()
+
+    try:
+        Process.Start(auth_url)
+    except Exception:
+        pass
+
+    info(
+        "Complete Autodesk login in the browser.\n\n"
+        "You have %d seconds.\n"
+        "Callback must be:\n%s"
+        % (APS_LOGIN_TIMEOUT_SEC, redirect)
+    )
+
+    ok = done.WaitOne(int(APS_LOGIN_TIMEOUT_SEC * 1000))
+    if not ok:
+        try:
+            listener.Stop()
+        except Exception:
+            pass
+        info(
+            "Local callback timed out (Windows often blocks this).\n\n"
+            "Next dialog: paste the browser address bar URL\n"
+            "(http://127.0.0.1:%d/callback?code=...).\n\n"
+            "Optional permanent fix (Admin CMD):\n"
+            "  netsh http add urlacl url=http://127.0.0.1:%d/ user=%%USERNAME%%"
+            % (APS_CALLBACK_PORT, APS_CALLBACK_PORT)
+        )
+        code = prompt_paste_auth_code(auth_url)
+        if not code:
+            return None
+        try:
+            return _exchange_code_for_token(cfg, code)
+        except Exception as ex:
+            info("Token exchange failed:\n" + str(ex))
+            return None
+
+    ctx = holder["ctx"]
+    if ctx is None:
+        try:
+            listener.Stop()
+        except Exception:
+            pass
+        code = prompt_paste_auth_code(auth_url)
+        if not code:
+            return None
+        try:
+            return _exchange_code_for_token(cfg, code)
+        except Exception as ex:
+            info("Token exchange failed:\n" + str(ex))
+            return None
+
+    code = None
+    try:
+        req = ctx.Request
+        code = req.QueryString["code"]
+        err = req.QueryString["error"]
+        html = """<html><body style="font-family:sans-serif;padding:24px">
+        <h2>Atana Project Sync</h2>
+        <p>Login complete. Close this tab and return to Revit.</p>
+        </body></html>"""
+        if err or not code:
+            html = """<html><body style="font-family:sans-serif;padding:24px">
+            <h2>Login failed</h2><p>%s</p></body></html>""" % (err or "No code")
+        buf = System.Text.Encoding.UTF8.GetBytes(html)
+        ctx.Response.ContentLength64 = buf.Length
+        ctx.Response.OutputStream.Write(buf, 0, buf.Length)
+        ctx.Response.OutputStream.Close()
+    except Exception as ex:
+        print("callback read error", ex)
+    finally:
+        try:
+            listener.Stop()
+        except Exception:
+            pass
+
+    if not code:
+        code = prompt_paste_auth_code(auth_url)
+        if not code:
+            return None
+    try:
+        return _exchange_code_for_token(cfg, code)
+    except Exception as ex:
+        info("Token exchange failed:\n" + str(ex))
+        return None
+
+
+def ensure_aps_token():
+    cfg = load_aps_cfg()
+    if not cfg.get("clientId") or not cfg.get("clientSecret"):
+        info("APS Client ID / Secret are not set in script.py.\n\n"
+             "A site admin must set APS_CLIENT_ID and APS_CLIENT_SECRET "
+             "at the top of script.py (company APS app).")
+        # last resort prompt for admin machines only
+        cfg = prompt_aps_credentials()
+        if not cfg:
+            return None, None
+    tok = load_tokens()
+    if tokens_valid(tok):
+        return cfg, tok
+    if tok:
+        tok = refresh_tokens(cfg, tok)
+        if tokens_valid(tok):
+            return cfg, tok
+    tok = aps_login_interactive(cfg)
+    if tokens_valid(tok):
+        return cfg, tok
+    return cfg, None
+
+
+# ---------------------------------------------------------------------------
+# Local JSON helpers
+# ---------------------------------------------------------------------------
 def load_sync_folder():
     if File.Exists(CONFIG_PATH):
         try:
@@ -125,8 +608,7 @@ def load_sync_folder():
     return None
 
 def save_sync_folder(path):
-    if not Directory.Exists(CONFIG_DIR):
-        Directory.CreateDirectory(CONFIG_DIR)
+    ensure_config_dir()
     File.WriteAllText(CONFIG_PATH, path)
 
 def pick_folder(prompt="Select folder that contains the Atana DB JSON"):
@@ -136,120 +618,116 @@ def pick_folder(prompt="Select folder that contains the Atana DB JSON"):
         return dlg.SelectedPath
     return None
 
-def pick_json_file(start_dir=None):
+def pick_json_file():
     dlg = OpenFileDialog()
-    dlg.Filter = "Atana DB JSON (*.json)|*.json|All files (*.*)|*.*"
+    dlg.Filter = "JSON (*.json)|*.json|All files (*.*)|*.*"
     dlg.Title = "Select Atana project DB JSON"
-    if start_dir and Directory.Exists(start_dir):
-        dlg.InitialDirectory = start_dir
     if dlg.ShowDialog() == DialogResult.OK:
         return dlg.FileName
     return None
 
-def find_db_json(folder):
-    """Prefer *DB*IM*.json or *DB*.json in folder (non-recursive first, then 1 level)."""
+def find_db_json_in_folder(folder):
     if not folder or not Directory.Exists(folder):
         return None
-    candidates = []
-    for root, dirs, files in os.walk(folder):
-        depth = root[len(folder):].count(os.sep)
-        if depth > 1:
-            dirs[:] = []
-            continue
-        for f in files:
-            if not f.lower().endswith(".json"):
-                continue
-            low = f.lower()
-            if "db" in low and ("im" in low or "sync" in low or "atana" in low):
-                candidates.append((0, os.path.join(root, f)))
-            elif "db" in low:
-                candidates.append((1, os.path.join(root, f)))
-            elif "atana" in low or "revit-sync" in low:
-                candidates.append((2, os.path.join(root, f)))
-    candidates.sort(key=lambda x: x[0])
-    return candidates[0][1] if candidates else None
+    # Prefer *DB*.json or *revit*sync*.json
+    try:
+        names = list(Directory.GetFiles(folder, "*.json"))
+    except Exception:
+        return None
+    prefer = []
+    other = []
+    for n in names:
+        base = os.path.basename(n).lower()
+        if "db" in base or "revit" in base or "atana" in base or "sync" in base:
+            prefer.append(n)
+        else:
+            other.append(n)
+    pool = prefer or other
+    if not pool:
+        return None
+    pool.sort(key=lambda p: File.GetLastWriteTime(p).Ticks, reverse=True)
+    return pool[0]
 
-def load_pack(path):
-    with open(path, "r") as fh:
-        data = json.load(fh)
-    return data
+def load_pack_from_path(path):
+    text = File.ReadAllText(path)
+    return json.loads(text)
 
-def parse_role_from_model_name(path_or_name):
-    """ISO: Project-Originator-Func-Spatial-Form-Role-Number → role is 2nd last token."""
-    base = os.path.splitext(os.path.basename(path_or_name or ""))[0]
+
+# ---------------------------------------------------------------------------
+# Model / role helpers
+# ---------------------------------------------------------------------------
+def model_path(doc):
+    try:
+        p = doc.PathName
+        return p or ""
+    except Exception:
+        return ""
+
+def parse_role_from_model_name(path):
+    base = os.path.basename(path or "")
+    base = re.sub(r"\.rvt$", "", base, flags=re.I)
     parts = base.split("-")
     if len(parts) >= 6:
+        # Project-Orig-Func-Spatial-Form-Role-Number
         return parts[-2].upper()
-    # fallback: look for known role codes
-    known = ("AR", "ST", "CV", "EE", "ME", "MH", "PD", "PS", "FP", "IM", "ZZ")
-    for p in parts:
-        if p.upper() in known:
-            return p.upper()
+    if len(parts) >= 2:
+        return parts[-2].upper()
     return ""
 
-def model_path():
-    try:
-        if doc.PathName:
-            return doc.PathName
-    except Exception:
-        pass
-    return doc.Title or "Untitled"
-
 
 # ---------------------------------------------------------------------------
-# Shared parameters
+# Shared parameters / Project Info / Globals
 # ---------------------------------------------------------------------------
-
-def ensure_shared_params():
-    """Bind ATA_ZZ_* shared parameters to Project Information if missing."""
+def ensure_shared_params(doc, app):
     if not File.Exists(SHARED_PARAM_FILE):
-        # still OK if parameters already exist in the model
+        print("Shared param file missing:", SHARED_PARAM_FILE)
         return False
-
-    # Open definition file
     prev = app.SharedParametersFilename
     try:
         app.SharedParametersFilename = SHARED_PARAM_FILE
         def_file = app.OpenSharedParameterFile()
         if def_file is None:
             return False
+        # Group
         group = None
         for g in def_file.Groups:
             group = g
             break
         if group is None:
             return False
-
-        pi_cat = doc.Settings.Categories.get_Item(BuiltInCategory.OST_ProjectInformation)
         cats = app.Create.NewCategorySet()
-        cats.Insert(pi_cat)
+        cats.Insert(doc.Settings.Categories.get_Item(BuiltInCategory.OST_ProjectInformation))
         binding_map = doc.ParameterBindings
-
-        t = Transaction(doc, "Atana — ensure shared parameters")
+        t = Transaction(doc, "Atana — ensure shared params")
         t.Start()
         try:
-            for name, guid in SHARED_GUIDS.items():
-                # already present?
-                found = False
+            for defn in group.Definitions:
+                name = defn.Name
+                if name not in SHARED_GUIDS:
+                    continue
+                # already bound?
                 it = binding_map.ForwardIterator()
                 it.Reset()
+                found = False
                 while it.MoveNext():
-                    defn = it.Key
-                    if defn and defn.Name == name:
-                        found = True
-                        break
+                    try:
+                        if it.Key and it.Key.Name == name:
+                            found = True
+                            break
+                    except Exception:
+                        pass
                 if found:
                     continue
-                # create from definition file
-                ext_def = None
-                for d in group.Definitions:
-                    if d.Name == name:
-                        ext_def = d
-                        break
-                if ext_def is None:
-                    continue
                 binding = app.Create.NewInstanceBinding(cats)
-                binding_map.Insert(ext_def, binding, BuiltInParameterGroup.PG_DATA)
+                # BuiltInParameterGroup may differ by Revit version
+                try:
+                    from Autodesk.Revit.DB import BuiltInParameterGroup
+                    binding_map.Insert(defn, binding, BuiltInParameterGroup.PG_DATA)
+                except Exception:
+                    try:
+                        binding_map.Insert(defn, binding)
+                    except Exception as ex:
+                        print("bind", name, ex)
         finally:
             t.Commit()
         return True
@@ -262,13 +740,11 @@ def ensure_shared_params():
         except Exception:
             pass
 
-
-def get_project_info_element():
+def get_project_info_element(doc):
     col = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_ProjectInformation)
     for e in col:
         return e
     return None
-
 
 def set_pi_builtin(pi, bip, value):
     if value is None:
@@ -287,7 +763,6 @@ def set_pi_builtin(pi, bip, value):
         print("set_pi_builtin", bip, ex)
     return False
 
-
 def set_pi_shared_by_name(pi, name, value):
     if value is None:
         return False
@@ -304,9 +779,7 @@ def set_pi_shared_by_name(pi, name, value):
                     return True
             except Exception as ex:
                 print("set_pi_shared", name, ex)
-            return False
     return False
-
 
 def read_pi_value(pi, name_or_bip):
     if isinstance(name_or_bip, BuiltInParameter):
@@ -317,355 +790,380 @@ def read_pi_value(pi, name_or_bip):
             return (p.AsString() if p else "") or ""
     return ""
 
-
-# ---------------------------------------------------------------------------
-# Global parameters
-# ---------------------------------------------------------------------------
-
-def find_global(name):
-    for gp in FilteredElementCollector(doc).OfClass(GlobalParameter):
-        if gp.Name == name:
-            return gp
-    return None
-
-
-def ensure_global(name, is_integer=False):
-    gp = find_global(name)
-    if gp:
-        return gp
-    t = Transaction(doc, "Atana — create global " + name)
-    t.Start()
-    try:
-        # Text vs Integer
-        try:
-            # Newer Revit: SpecTypeId
-            if is_integer:
-                gp = GlobalParameter.Create(doc, name, SpecTypeId.Int.Integer)
-            else:
-                gp = GlobalParameter.Create(doc, name, SpecTypeId.String.Text)
-        except Exception:
-            # Older API fallback
-            from Autodesk.Revit.DB import ParameterType as PT
-            if is_integer:
-                gp = GlobalParameter.Create(doc, name, PT.Integer)
-            else:
-                gp = GlobalParameter.Create(doc, name, PT.Text)
-        t.Commit()
-        return gp
-    except Exception as ex:
-        t.RollBack()
-        print("ensure_global", name, ex)
-        return None
-
-
-def set_global(name, value, is_integer=False):
-    gp = ensure_global(name, is_integer=is_integer)
-    if gp is None:
+def set_global(doc, name, value, is_integer=False):
+    if value is None or value == "":
         return False
-    t = Transaction(doc, "Atana — set global " + name)
+    gp = None
+    for g in FilteredElementCollector(doc).OfClass(GlobalParameter):
+        if g.GetDefinition().Name == name:
+            gp = g
+            break
+    t = Transaction(doc, "Atana — global " + name)
     t.Start()
     try:
+        if gp is None:
+            try:
+                from Autodesk.Revit.DB import SpecTypeId
+                if is_integer:
+                    gp = GlobalParameter.Create(doc, name, SpecTypeId.Int.Integer)
+                else:
+                    gp = GlobalParameter.Create(doc, name, SpecTypeId.String.Text)
+            except Exception:
+                try:
+                    from Autodesk.Revit.DB import ParameterType as PT
+                    if is_integer:
+                        gp = GlobalParameter.Create(doc, name, PT.Integer)
+                    else:
+                        gp = GlobalParameter.Create(doc, name, PT.Text)
+                except Exception as ex:
+                    print("create global", name, ex)
+                    t.RollBack()
+                    return False
         if is_integer:
-            iv = int(value) if value not in (None, "") else 0
-            gp.SetValue(IntegerParameterValue(iv))
+            try:
+                gp.SetValue(IntegerParameterValue(int(str(value).lstrip("SsWw"))))
+            except Exception:
+                gp.SetValue(IntegerParameterValue(0))
         else:
-            gp.SetValue(StringParameterValue(str(value or "")))
+            gp.SetValue(StringParameterValue(str(value)))
         t.Commit()
         return True
     except Exception as ex:
-        t.RollBack()
         print("set_global", name, ex)
+        try:
+            t.RollBack()
+        except Exception:
+            pass
         return False
 
 
-def read_global(name, is_integer=False):
-    gp = find_global(name)
-    if not gp:
-        return None
-    try:
-        val = gp.GetValue()
-        if is_integer:
-            return int(val.Value) if val else None
-        return str(val.Value) if val else ""
-    except Exception:
-        return None
-
-
 # ---------------------------------------------------------------------------
-# Title blocks
+# Title blocks + publish set + sheet inventory
 # ---------------------------------------------------------------------------
-
-def iter_titleblock_instances():
-    col = FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_TitleBlocks).WhereElementIsNotElementType()
-    for e in col:
-        yield e
-
-
-def param_by_names(el, names):
-    for n in names:
-        for p in el.Parameters:
-            if p.Definition and p.Definition.Name == n:
-                return p
-    # type params
-    try:
-        t = doc.GetElement(el.GetTypeId())
-        if t:
-            for n in names:
-                for p in t.Parameters:
-                    if p.Definition and p.Definition.Name == n:
-                        return p
-    except Exception:
-        pass
-    return None
-
-
-def apply_titleblocks(designed_by, checked_by):
-    changed = 0
-    t = Transaction(doc, "Atana — title block names")
+def apply_titleblocks(doc, designed_by, checked_by):
+    count = 0
+    t = Transaction(doc, "Atana — title blocks")
     t.Start()
     try:
-        for tb in iter_titleblock_instances():
-            if designed_by:
-                p = param_by_names(tb, TITLEBLOCK_DESIGNED)
-                if p and not p.IsReadOnly and p.StorageType == StorageType.String:
+        for tb in FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_TitleBlocks).WhereElementIsNotElementType():
+            changed = False
+            for p in tb.Parameters:
+                if not p.Definition or p.IsReadOnly:
+                    continue
+                n = p.Definition.Name
+                if designed_by and n in TITLEBLOCK_DESIGNED and p.StorageType == StorageType.String:
                     if (p.AsString() or "") != designed_by:
                         p.Set(designed_by)
-                        changed += 1
-            if checked_by:
-                p = param_by_names(tb, TITLEBLOCK_CHECKED)
-                if p and not p.IsReadOnly and p.StorageType == StorageType.String:
+                        changed = True
+                if checked_by and n in TITLEBLOCK_CHECKED and p.StorageType == StorageType.String:
                     if (p.AsString() or "") != checked_by:
                         p.Set(checked_by)
-                        changed += 1
+                        changed = True
+            if changed:
+                count += 1
         t.Commit()
     except Exception as ex:
-        t.RollBack()
-        print("apply_titleblocks", ex)
-    return changed
-
-
-# ---------------------------------------------------------------------------
-# Publish set (ViewSheetSetting)
-# ---------------------------------------------------------------------------
-
-def sheets_in_model():
-    out = []
-    for vs in FilteredElementCollector(doc).OfClass(ViewSheet):
+        print("titleblocks", ex)
         try:
-            out.append(vs)
+            t.RollBack()
         except Exception:
             pass
-    return out
+    return count
 
-
-def normalize_id(s):
-    return re.sub(r"\s+", "", str(s or "").upper())
-
-
-def match_sheets_to_plan(plan_rows, role_code):
-    """Return ViewSheet list whose number or name matches plan DR/SH for this role."""
+def match_sheets_to_plan(doc, plan_rows, role):
+    sheets = list(FilteredElementCollector(doc).OfClass(ViewSheet))
     if not plan_rows:
-        return []
-    wanted = set()
+        return sheets  # no plan → leave empty; caller decides
+    ids = set()
     for r in plan_rows:
-        form = str(r.get("form") or "").upper()
-        row_role = str(r.get("role") or "").upper()
-        if role_code and row_role and row_role != role_code:
-            continue
-        if form and form not in ("DR", "SH", "M3", "M2", "M1"):
-            # still allow if sheet number looks like a drawing
+        did = (r.get("documentId") or r.get("name") or "").upper()
+        if role and ("-" + role + "-") not in did and not did.endswith("-" + role):
+            # soft filter by role segment
             pass
-        doc_id = r.get("documentId") or r.get("isoNumber") or ""
-        sheet_no = r.get("sheetNumber") or ""
-        if doc_id:
-            wanted.add(normalize_id(doc_id))
-            # last token often is the number
-            parts = str(doc_id).split("-")
-            if parts:
-                wanted.add(normalize_id(parts[-1]))
-        if sheet_no:
-            wanted.add(normalize_id(sheet_no))
-
+        ids.add(re.sub(r"\.[A-Z0-9]+$", "", did))
     matched = []
-    for vs in sheets_in_model():
-        num = normalize_id(vs.SheetNumber)
-        name = normalize_id(vs.Name)
-        if num in wanted or name in wanted:
-            matched.append(vs)
-            continue
-        # fuzzy: sheet number appears as last segment of an iso id
-        for w in wanted:
-            if w.endswith(num) or num and num in w:
-                matched.append(vs)
-                break
+    for s in sheets:
+        try:
+            num = (s.SheetNumber or "").upper()
+            name = (s.Name or "").upper()
+            key = num
+            for pid in ids:
+                if num and num in pid:
+                    matched.append(s)
+                    break
+                if name and name in pid:
+                    matched.append(s)
+                    break
+        except Exception:
+            pass
     return matched
 
-
-def create_or_update_publish_set(set_name, sheets):
-    """Create/replace a print set (publish set) with the given sheets."""
+def create_or_update_print_set(doc, set_name, sheets):
+    """Best-effort in-session ViewSheetSet via PrintManager."""
     if not sheets:
         return 0
-    pm = doc.PrintManager
-    try:
-        pm.PrintRange = pm.PrintRange.Select
-    except Exception:
-        pass
-    vss = pm.ViewSheetSetting
     t = Transaction(doc, "Atana — publish set " + set_name)
     t.Start()
     try:
-        # Delete existing set with same name if present
-        try:
-            existing = vss.GetViewSheets()  # may not list named sets on all versions
-        except Exception:
-            existing = None
-        # Build ViewSet
+        pm = doc.PrintManager
+        pm.PrintRange = pm.PrintRange.Select
+        vss = pm.ViewSheetSetting
         vs = ViewSet()
         for s in sheets:
             vs.Insert(s)
-        # Save as named set
+        # Remove existing with same name if possible
         try:
-            # In-session current set
+            existing = vss.InSession
+        except Exception:
+            existing = None
+        try:
             vss.CurrentViewSheetSet.Views = vs
+            vss.SaveAs(set_name)
+        except Exception:
             try:
                 vss.SaveAs(set_name)
-            except Exception:
-                # already exists — delete and re-save
-                try:
-                    vss.Delete()
-                except Exception:
-                    pass
-                try:
-                    vss.SaveAs(set_name)
-                except Exception as ex2:
-                    print("SaveAs failed", ex2)
-        except Exception as ex:
-            print("publish set", ex)
+            except Exception as ex:
+                print("SaveAs set", ex)
         t.Commit()
         return len(list(sheets))
     except Exception as ex:
-        t.RollBack()
-        print("create_or_update_publish_set", ex)
+        print("publish set", ex)
+        try:
+            t.RollBack()
+        except Exception:
+            pass
         return 0
 
-
-# ---------------------------------------------------------------------------
-# Sheet inventory export (merge)
-# ---------------------------------------------------------------------------
-
-def export_sheet_inventory(folder, role_code, pack):
-    """Write/merge sheet inventory JSON for this task team."""
-    if not folder:
-        return None
-    model = os.path.basename(model_path())
-    inv_name = "SHEETS-{}-INVENTORY.json".format(role_code or "ZZ")
-    inv_path = os.path.join(folder, inv_name)
-
-    existing = []
-    if File.Exists(inv_path):
-        try:
-            with open(inv_path, "r") as fh:
-                data = json.load(fh)
-            existing = data.get("sheets") or data.get("rows") or []
-        except Exception:
-            existing = []
-
-    by_id = {}
-    for r in existing:
-        key = normalize_id(r.get("documentId") or r.get("sheetNumber") or r.get("id"))
-        if key:
-            by_id[key] = r
-
-    for vs in sheets_in_model():
-        rec = {
-            "documentId": vs.SheetNumber,
-            "sheetNumber": vs.SheetNumber,
-            "sheetName": vs.Name,
-            "role": role_code,
-            "form": "SH",
-            "revision": "",
-            "modelName": model,
-            "updatedAt": None,
-            "updatedBy": os.environ.get("USERNAME", ""),
+def export_sheet_inventory(folder, role, pack, doc):
+    try:
+        sheets = []
+        for s in FilteredElementCollector(doc).OfClass(ViewSheet):
+            sheets.append({
+                "sheetNumber": s.SheetNumber,
+                "sheetName": s.Name,
+                "uniqueId": s.UniqueId
+            })
+        out = {
+            "schema": "atana-sheet-inventory/1.0",
+            "role": role,
+            "projectCode": (pack.get("project") or {}).get("code") if isinstance(pack.get("project"), dict) else pack.get("code"),
+            "sheets": sheets,
+            "exportedAt": time.strftime("%Y-%m-%dT%H:%M:%S")
         }
-        key = normalize_id(vs.SheetNumber)
-        by_id[key] = rec
+        path = os.path.join(folder, "sheet-inventory-%s.json" % (role or "ZZ"))
+        File.WriteAllText(path, json.dumps(out, indent=2))
+        return path
+    except Exception as ex:
+        print("inventory", ex)
+        return None
 
-    out = {
-        "schema": "atana-sheet-inventory/1.0",
-        "role": role_code,
-        "modelName": model,
-        "sheets": list(by_id.values()),
-    }
-    with open(inv_path, "w") as fh:
-        json.dump(out, fh, indent=2)
-    return inv_path
+
+# ---------------------------------------------------------------------------
+# Pack field extraction (flexible schema)
+# ---------------------------------------------------------------------------
+def extract_pi(pack):
+    """Support both nested pack.projectInformation and flat project keys."""
+    if not isinstance(pack, dict):
+        return {}
+    pi = pack.get("projectInformation") or pack.get("projectInfo") or {}
+    if not pi and pack.get("project"):
+        p = pack["project"]
+        pi = {
+            "Project Number": p.get("code") or p.get("projectNumber") or p.get("number"),
+            "Project Name": p.get("name") or p.get("projectName"),
+            "Client Name": p.get("client") or p.get("clientName"),
+            "Project Address": p.get("address") or p.get("projectAddress"),
+            "Organization Name": p.get("originator") or p.get("organizationName") or "ATANA",
+            "ATA_ZZ_ClientContractNumber": p.get("clientContractNo") or p.get("clientContractNumber"),
+            "ATA_ZZ_ProjectDiscipline": p.get("discipline") or "",
+            "ATA_ZZ_ProjectStage": p.get("currentStageId") or p.get("projectStage") or "",
+        }
+    # globals
+    return pi
+
+def extract_stage(pack):
+    p = pack.get("project") if isinstance(pack.get("project"), dict) else pack
+    return (p.get("currentStageId") or p.get("projectStage") or
+            pack.get("currentStageId") or "S1")
+
+def extract_plan_rows(pack):
+    # deliverables / stageDeliverables / midp
+    rows = pack.get("deliverables") or pack.get("planRows") or []
+    if rows:
+        return rows
+    sd = pack.get("stageDeliverables") or {}
+    stage = extract_stage(pack)
+    block = sd.get(stage) or {}
+    if isinstance(block, dict):
+        return block.get("rows") or []
+    return []
+
+def extract_titleblock_map(pack):
+    """role → {designedBy, checkedBy} from organogram / projectTeam."""
+    out = {}
+    team = pack.get("projectTeam") or {}
+    members = team.get("members") if isinstance(team, dict) else []
+    if not members and isinstance(pack.get("organogram"), list):
+        members = pack["organogram"]
+    for m in members or []:
+        disc = (m.get("discipline") or m.get("roleCode") or "").upper()
+        func = (m.get("func") or "").upper()
+        name = m.get("name") or ""
+        if not disc or not name:
+            continue
+        if disc not in out:
+            out[disc] = {}
+        if func == "TTM":
+            out[disc]["designedBy"] = name
+        if func in ("PEER", "PR"):
+            out[disc]["checkedBy"] = name
+            out[disc]["approvedBy"] = name
+    # also pack.revit.titleblocks
+    tb = (pack.get("revit") or {}).get("titleblocks") or pack.get("titleblocks") or {}
+    for role, val in tb.items():
+        if isinstance(val, dict):
+            out.setdefault(role.upper(), {}).update(val)
+    return out
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-
 def main():
-    # 1) Locate DB JSON
-    folder = load_sync_folder()
-    if not folder:
-        folder = pick_folder("Select the ACC/local folder that holds the Atana DB JSON")
-        if not folder:
-            info("Cancelled — no folder selected.")
-            return
-        save_sync_folder(folder)
-
-    json_path = find_db_json(folder)
-    if not json_path:
-        json_path = pick_json_file(folder)
-        if not json_path:
-            info("No DB JSON found in:\n{}\n\nExport it from Atana IM (Revit / DB sync) first.".format(folder))
-            return
-        # remember parent
-        save_sync_folder(os.path.dirname(json_path))
-        folder = os.path.dirname(json_path)
-
-    try:
-        pack = load_pack(json_path)
-    except Exception as ex:
-        info("Could not read JSON:\n{}\n\n{}".format(json_path, ex))
+    if IMPORT_ERROR:
+        # Can't even show TaskDialog if imports failed hard
+        print(IMPORT_ERROR)
+        try:
+            TaskDialog.Show("Atana Project Sync", "Import error:\n" + IMPORT_ERROR[:1500])
+        except Exception:
+            pass
         return
 
-    pi_src = pack.get("projectInformation") or {}
-    gp_src = pack.get("globalParameters") or {}
-    tb_map = (pack.get("titleBlocks") or {}).get("byTaskTeam") or {}
-    plan_rows = pack.get("deliverables") or pack.get("planRows") or []
-    stage = (pack.get("workStage") or {})
-    stage_code = stage.get("code") or pi_src.get("ATA_ZZ_ProjectStage") or "WS1"
+    # Resolve Revit context INSIDE main (avoids blank window / Pylance noise)
+    try:
+        _revit = __revit__  # noqa: F821  — provided by pyRevit at runtime
+    except NameError:
+        info("This script must be run from pyRevit inside Revit.\n"
+             "__revit__ was not found.")
+        return
 
-    # 2) Role from model name
-    role = parse_role_from_model_name(model_path())
+    if _revit.ActiveUIDocument is None:
+        info("Open a project model first, then run Project Sync.")
+        return
+
+    doc = _revit.ActiveUIDocument.Document
+    uidoc = _revit.ActiveUIDocument
+    app = _revit.Application
+
+    if doc.IsFamilyDocument:
+        info("Open a project (.rvt), not a family.")
+        return
+
+    # ---- Choose data source ----
+    source = None
+    pack = None
+    json_path = None
+
+    choice = TaskDialog.Show(
+        "Atana Project Sync",
+        "How do you want to load the project DB JSON?\n\n"
+        "YES = Local file / folder (exported from Atana IM)\n"
+        "NO  = Sign in to ACC and download (uses APS Client ID/Secret)\n"
+        "CANCEL = Abort",
+        TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No | TaskDialogCommonButtons.Cancel
+    )
+
+    if choice == TaskDialogResult.Cancel:
+        return
+
+    if choice == TaskDialogResult.No:
+        # ACC login path
+        cfg, tok = ensure_aps_token()
+        if not tok:
+            info("ACC login did not complete.\n\n"
+                 "1) APS app Callback URL must be exactly:\n" + APS_CALLBACK_URL + "\n\n"
+                 "2) Client ID / Secret must match that APS app.\n\n"
+                 "Falling back to local file…")
+            choice = TaskDialogResult.Yes
+        else:
+            info("Signed in to Autodesk.\n\n"
+                 "Automatic ACC folder browse is limited in this version.\n"
+                 "Use the Atana IM web app to Push DB JSON, then pick the "
+                 "local download / synced folder with YES next time — "
+                 "or place the JSON in your remembered sync folder.\n\n"
+                 "Looking for a local JSON in the saved sync folder…")
+            folder = load_sync_folder()
+            if folder:
+                json_path = find_db_json_in_folder(folder)
+            if not json_path:
+                info("No JSON found after ACC login.\nPick a local JSON file.")
+                choice = TaskDialogResult.Yes
+            else:
+                source = "local+token"
+                pack = load_pack_from_path(json_path)
+
+    if choice == TaskDialogResult.Yes and pack is None:
+        folder = load_sync_folder()
+        if folder:
+            json_path = find_db_json_in_folder(folder)
+        if not json_path:
+            # ask file or folder
+            if confirm("Pick a JSON file?\n\nYes = file\nNo = folder"):
+                json_path = pick_json_file()
+                if json_path:
+                    save_sync_folder(os.path.dirname(json_path))
+            else:
+                folder = pick_folder()
+                if folder:
+                    save_sync_folder(folder)
+                    json_path = find_db_json_in_folder(folder)
+        if not json_path:
+            info("No JSON selected.")
+            return
+        try:
+            pack = load_pack_from_path(json_path)
+            source = "local"
+        except Exception as ex:
+            info("Could not read JSON:\n" + str(ex))
+            return
+
+    if not pack:
+        info("No project pack loaded.")
+        return
+
+    # ---- Extract ----
+    pi_src = extract_pi(pack)
+    stage_code = extract_stage(pack)
+    plan_rows = extract_plan_rows(pack)
+    tb_map = extract_titleblock_map(pack)
+
+    role = parse_role_from_model_name(model_path(doc))
     if not role:
-        role = pi_src.get("ATA_ZZ_ProjectDiscipline") or ""
-    if not role:
-        info("Could not determine task team from model file name.\n"
-             "Name the model with an ISO role segment (e.g. …-AR-0001.rvt).")
-        # continue anyway
+        role = (pi_src.get("ATA_ZZ_ProjectDiscipline") or "").upper()
 
     team_info = tb_map.get(role) or {}
     designed_by = team_info.get("designedBy") or ""
     checked_by = team_info.get("approvedBy") or team_info.get("checkedBy") or ""
 
-    # 3) Ensure shared params exist
-    ensure_shared_params()
-
-    pi = get_project_info_element()
+    ensure_shared_params(doc, app)
+    pi = get_project_info_element(doc)
     if pi is None:
         info("No Project Information element found.")
         return
 
-    # 4) Diff project information
+    PI_BUILTIN = {
+        "Project Number": BuiltInParameter.PROJECT_NUMBER,
+        "Project Name": BuiltInParameter.PROJECT_NAME,
+        "Client Name": BuiltInParameter.CLIENT_NAME,
+        "Project Address": BuiltInParameter.PROJECT_ADDRESS,
+        "Organization Name": BuiltInParameter.PROJECT_ORGANIZATION_NAME,
+    }
+
     desired_pi = {
-        "Project Number":   pi_src.get("Project Number") or pi_src.get("projectNumber") or "",
-        "Project Name":     pi_src.get("Project Name") or pi_src.get("projectName") or "",
-        "Client Name":      pi_src.get("Client Name") or pi_src.get("clientName") or "",
-        "Project Address":  pi_src.get("Project Address") or pi_src.get("projectAddress") or "",
+        "Project Number": pi_src.get("Project Number") or pi_src.get("projectNumber") or "",
+        "Project Name": pi_src.get("Project Name") or pi_src.get("projectName") or "",
+        "Client Name": pi_src.get("Client Name") or pi_src.get("clientName") or "",
+        "Project Address": pi_src.get("Project Address") or pi_src.get("projectAddress") or "",
         "Organization Name": pi_src.get("Organization Name") or pi_src.get("organizationName") or "",
         "ATA_ZZ_ClientContractNumber": pi_src.get("ATA_ZZ_ClientContractNumber") or "",
         "ATA_ZZ_ProjectDiscipline": role or pi_src.get("ATA_ZZ_ProjectDiscipline") or "",
@@ -684,7 +1182,7 @@ def main():
     if mismatches:
         lines = ["Project Information differs from Atana pack:\n"]
         for k, cur, new_v in mismatches:
-            lines.append("• {}: \"{}\" → \"{}\"".format(k, cur, new_v))
+            lines.append(u"• {}: \"{}\" → \"{}\"".format(k, cur, new_v))
         lines.append("\nUpdate all listed values?")
         if confirm("\n".join(lines)):
             t = Transaction(doc, "Atana — project information")
@@ -698,45 +1196,35 @@ def main():
                         set_pi_shared_by_name(pi, k, new_v)
                 t.Commit()
             except Exception as ex:
-                t.RollBack()
-                info("Failed to write Project Information:\n{}".format(ex))
-                return
+                try:
+                    t.RollBack()
+                except Exception:
+                    pass
+                info("Project Information update failed:\n" + str(ex))
     else:
-        print("Project Information already matches pack.")
+        print("Project Information already matches pack")
 
-    # 5) Global parameters
-    gp_desired = {
-        "GLOBAL_ZZ_ClientContractNumber": gp_src.get("GLOBAL_ZZ_ClientContractNumber") or desired_pi["ATA_ZZ_ClientContractNumber"],
-        "GLOBAL_ZZ_ProjectDiscipline": role or gp_src.get("GLOBAL_ZZ_ProjectDiscipline") or "",
-        "GLOBAL_ZZ_ProjectStage": gp_src.get("GLOBAL_ZZ_ProjectStage") or int(re.sub(r"\D", "") or 0) or 1,
-        "GLOBAL_ZZ_ProjectDeliveryManager": gp_src.get("GLOBAL_ZZ_ProjectDeliveryManager") or "",
-        "GLOBAL_ZZ_InformationManager": gp_src.get("GLOBAL_ZZ_InformationManager") or "",
+    # Globals
+    globals_map = {
+        "GLOBAL_ZZ_ClientContractNumber": desired_pi.get("ATA_ZZ_ClientContractNumber"),
+        "GLOBAL_ZZ_ProjectDiscipline": desired_pi.get("ATA_ZZ_ProjectDiscipline"),
+        "GLOBAL_ZZ_ProjectStage": desired_pi.get("ATA_ZZ_ProjectStage"),
+        "GLOBAL_ZZ_ProjectDeliveryManager": "",
+        "GLOBAL_ZZ_InformationManager": "",
     }
-    # stage integer
-    try:
-        stage_int = int(gp_desired["GLOBAL_ZZ_ProjectStage"])
-    except Exception:
-        m = re.search(r"(\d+)", str(stage_code))
-        stage_int = int(m.group(1)) if m else 1
-    gp_desired["GLOBAL_ZZ_ProjectStage"] = stage_int
+    team = pack.get("projectTeam") or {}
+    for m in (team.get("members") or []):
+        if (m.get("func") or "").upper() == "PDM":
+            globals_map["GLOBAL_ZZ_ProjectDeliveryManager"] = m.get("name") or ""
+        if (m.get("func") or "").upper() == "IM":
+            globals_map["GLOBAL_ZZ_InformationManager"] = m.get("name") or ""
 
-    gp_mismatch = []
-    for name, val in gp_desired.items():
-        is_int = name.endswith("ProjectStage")
-        cur = read_global(name, is_integer=is_int)
-        if cur is None or str(cur) != str(val):
-            gp_mismatch.append((name, cur, val, is_int))
+    for n, val in globals_map.items():
+        if not val:
+            continue
+        set_global(doc, n, val, is_integer=(n == "GLOBAL_ZZ_ProjectStage"))
 
-    if gp_mismatch:
-        lines = ["Global Parameters differ:\n"]
-        for n, cur, val, _ in gp_mismatch:
-            lines.append("• {}: {} → {}".format(n, cur, val))
-        lines.append("\nUpdate globals?")
-        if confirm("\n".join(lines)):
-            for n, cur, val, is_int in gp_mismatch:
-                set_global(n, val, is_integer=is_int)
-
-    # 6) Title blocks (bulk one confirmation)
+    # Title blocks
     if designed_by or checked_by:
         msg = ("Title blocks for task team {}:\n\n"
                "Designed By (TTM): {}\n"
@@ -744,39 +1232,37 @@ def main():
                "Apply to all title blocks in this model?").format(
                    role or "—", designed_by or "—", checked_by or "—")
         if confirm(msg):
-            n = apply_titleblocks(designed_by, checked_by)
+            n = apply_titleblocks(doc, designed_by, checked_by)
             info("Updated parameters on {} title block instance(s).".format(n))
 
-    # 7) Publish set
-    matched = match_sheets_to_plan(plan_rows, role)
-    set_name = stage_code if stage_code else "WS1"
-    # normalise S3 → keep as provided; also accept SW3 style
+    # Publish set
+    matched = match_sheets_to_plan(doc, plan_rows, role)
+    set_name = stage_code if stage_code else "S1"
     if set_name.startswith("S") and not set_name.startswith("WS"):
         set_name = "WS" + set_name[1:]
-    if matched:
+    if matched and plan_rows:
         msg = ("Publish Set \"{}\"\n\n"
-               "Matched {} sheet(s) from the MIDP plan for role {}.\n"
+               "Matched {} sheet(s) from the plan for role {}.\n"
                "Create / replace this publish set?").format(set_name, len(matched), role or "all")
         if confirm(msg):
-            n = create_or_update_publish_set(set_name, matched)
-            info("Publish set \"{}\" now has {} sheet(s).\n"
-                 "Use this set when exporting to Revizto / ACC.".format(set_name, n))
-    else:
-        print("No plan sheets matched for role", role)
+            n = create_or_update_print_set(doc, set_name, matched)
+            info("Publish set \"{}\" processed ({} sheet(s)).".format(set_name, n))
 
-    # 8) Sheet inventory merge export
-    inv = export_sheet_inventory(folder, role or "ZZ", pack)
-    if inv:
-        print("Sheet inventory written:", inv)
+    folder = os.path.dirname(json_path) if json_path else load_sync_folder()
+    inv = None
+    if folder:
+        inv = export_sheet_inventory(folder, role or "ZZ", pack, doc)
 
     info(
         "Project Sync complete.\n\n"
+        "Source: {}\n"
         "JSON: {}\n"
         "Role: {}\n"
         "Stage: {}\n"
         "Publish set: {}\n"
         "Sheet inventory: {}".format(
-            os.path.basename(json_path),
+            source or "—",
+            os.path.basename(json_path) if json_path else "—",
             role or "—",
             stage_code,
             set_name,
@@ -785,5 +1271,13 @@ def main():
     )
 
 
-if __name__ == "__main__":
+# pyRevit executes the script body — always call main (don't rely on __name__)
+try:
     main()
+except Exception:
+    err = traceback.format_exc()
+    print(err)
+    try:
+        TaskDialog.Show("Atana Project Sync — error", err[:3000])
+    except Exception:
+        pass
