@@ -1,5 +1,5 @@
 /* Atana IM Tasks service worker — offline cache + background sync hook */
-const CACHE = "atana-im-tasks-v90";
+const CACHE = "atana-im-tasks-v91";
 const ASSETS = [
   "./",
   "./index.html",
