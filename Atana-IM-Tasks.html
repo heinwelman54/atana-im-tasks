@@ -245,6 +245,21 @@
   .progress-track{
     height:7px;background:var(--slate-100);border-radius:99px;overflow:hidden;
   }
+  .docs-progress{height:8px;border-radius:4px;background:#e2e8f0;overflow:hidden;display:flex;margin-top:5px;min-width:100px;max-width:220px;}
+  .docs-progress > span{display:block;height:100%;min-width:0;}
+  .ws-stage-meta{margin:8px 0 12px;}
+  .ws-stage-meta .ws-stage-label{font-size:13px;font-weight:600;color:var(--slate-700);margin-bottom:6px;}
+  .ws-timeline{position:relative;height:40px;background:#f1f5f9;border-radius:8px;margin:0 0 8px;border:1px solid #e2e8f0;overflow:hidden;}
+  .ws-timeline .ws-tl-past{position:absolute;left:0;top:0;bottom:0;background:#cbd5e1;}
+  .ws-timeline .ws-tl-remain{position:absolute;top:0;bottom:0;background:#bbf7d0;}
+  .ws-timeline .ws-tl-today{position:absolute;top:0;bottom:0;width:2px;background:#dc2626;z-index:3;}
+  .ws-timeline .ws-tl-ms{position:absolute;top:4px;bottom:4px;width:3px;background:#7c3aed;z-index:2;border-radius:2px;}
+  .ws-timeline .ws-tl-label{position:absolute;bottom:2px;font-size:10px;color:#64748b;white-space:nowrap;}
+  .ws-stage-progress-wrap{margin-top:4px;}
+  .ws-stage-progress-wrap .progress-track{height:8px;background:rgba(0,0,0,.12);border-radius:99px;overflow:hidden;background:#e2e8f0;}
+  .ws-stage-progress-wrap .progress-fill{height:100%;background:linear-gradient(90deg,#fbbf24,#f59e0b);border-radius:99px;}
+  .ws-stage-progress-label{font-size:11px;color:var(--slate-600);margin-top:4px;font-family:var(--mono);}
+
   .progress-fill{height:100%;background:var(--gold-500);border-radius:99px;transition:width 0.25s;}
   .pc-progress-label{font-size:11px;color:var(--slate-500);margin-top:4px;font-family:var(--mono);}
   .pc-avatars{display:flex;margin-top:8px;}
@@ -1028,7 +1043,44 @@
   .docs-table th .th-sort{font-size:10px;color:var(--slate-500);margin-left:2px;}
   .docs-table th .col-resizer{position:absolute;right:0;top:0;width:6px;height:100%;cursor:col-resize;user-select:none;}
   .docs-table th{position:sticky;top:0;}
-  .docs-table tr.row-ws-match{background:#dcfce7 !important;}
+  
+  .midp-docs-toolbar{
+    display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:flex-start;
+    gap:12px;margin:12px 0 14px;
+  }
+  .midp-docs-toolbar-spacer{flex:1 1 auto;min-width:0;}
+  .midp-docs-actions{
+    display:flex;flex-direction:column;align-items:stretch;gap:10px;
+    min-width:min(100%,320px);max-width:420px;
+  }
+  .btn-group{
+    display:flex;flex-direction:column;align-items:stretch;gap:8px;
+    padding:10px 12px;border-radius:12px;border:1px solid #e2e8f0;
+    background:#f1f5f9;box-shadow:inset 0 1px 0 rgba(255,255,255,.7);
+  }
+  .btn-group.plan-group{
+    background:#eef2ff;border-color:#c7d2fe;
+  }
+  .btn-group.forma-group{
+    background:#fff7ed;border-color:#fed7aa;
+  }
+  .btn-group.export-group{
+    background:#f5f3ff;border-color:#ddd6fe;
+  }
+  .btn-group-label{
+    display:block;font-size:10px;font-weight:800;letter-spacing:.06em;
+    text-transform:uppercase;color:#64748b;margin:0;
+  }
+  .btn-group-row{
+    display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+  }
+  .btn-group .btn{
+    opacity:.95;
+  }
+  .btn-group .btn-ghost{
+    background:rgba(255,255,255,.72);border-color:rgba(148,163,184,.45);
+  }
+.docs-table tr.row-ws-match{background:#dcfce7 !important;}
   .docs-table tr.row-no-review{background:#fef3c7 !important;}
   .docs-table tr.row-ws-match.row-no-review{background:linear-gradient(90deg,#dcfce7 60%,#fef3c7 100%) !important;}
   .docs-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 10px;}
@@ -1315,6 +1367,14 @@
       <div class="stage-picker-wrap">
         <div class="stage-picker-label">Current work stage</div>
         <div class="stage-picker" id="stagePicker"></div>
+        <div class="ws-stage-meta">
+          <div class="ws-stage-label" id="wsStageCurrentLabel"></div>
+          <div id="wsStageTimeline" class="ws-timeline" title="Work stage timeline"></div>
+          <div class="ws-stage-progress-wrap">
+            <div class="progress-track"><div class="progress-fill" id="wsStageProgressFill" style="width:0%"></div></div>
+            <div class="ws-stage-progress-label" id="wsStageProgressLabel"></div>
+          </div>
+        </div>
       </div>
       <div class="segmented" id="wsSegmented">
         <button class="active" data-wsview="imtasks">IM Tasks</button>
@@ -1396,30 +1456,37 @@
         <div class="midp-wrap" id="midpRoot">
           <div class="midp-title">MIDP · work stage tracking</div>
           <div class="midp-sub">Imported plan = live MIDP/TIDP for the stage. ACC = CDE check (issued / approved). Baseline generation is under project <strong>Tools → Generator</strong>.</div>
-          <div id="midp-docs-current-stage" class="section-sub" style="margin:4px 0;font-weight:600;"></div>
-          <div id="midp-ws-timeline" class="ws-timeline" title="Work stage timeline"></div>
           <div class="stage-picker-wrap" style="margin:8px 0;">
             <div class="stage-picker-label">Work stage</div>
             <div class="stage-picker" id="midpDocsStagePicker"></div>
           </div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start;margin:10px 0;">
-            <div class="btn-group plan-group">
-              <span class="btn-group-label">Plan (MIDP/TIDP)</span>
-              <button type="button" class="btn btn-primary btn-xs" id="midp-docs-import">Import MIDP/TIDP</button>
-              <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-clear-plan" title="Clear imported plan for the selected work stage">Clear plan</button>
-              <button type="button" class="btn btn-ghost btn-xs" id="midp-ttm-email" title="Email TTM with outstanding items">Email TTM</button>
-            </div>
-            <div class="btn-group forma-group">
-              <span class="btn-group-label">FORMA (CDE)</span>
-              <button type="button" class="btn btn-gold btn-xs" id="midp-docs-refresh">Sync FORMA</button>
-              <button type="button" class="btn btn-primary btn-xs" id="midp-docs-import-log" title="Import FORMA Files log report (.xlsx)">Import FORMA log</button>
-              <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-clear-acc" title="Clear FORMA file cache">Clear FORMA cache</button>
-              <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-filetypes">File types</button>
-              <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-cols" title="Show/hide columns">⚙ Columns</button>
-            </div>
-            <div class="btn-group export-group">
-              <span class="btn-group-label">Export</span>
-              <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-export" title="Export current view (respects filters)">Export view…</button>
+          <div class="midp-docs-toolbar">
+            <div class="midp-docs-toolbar-spacer"></div>
+            <div class="midp-docs-actions">
+              <div class="btn-group plan-group" role="group" aria-label="Plan MIDP TIDP">
+                <span class="btn-group-label">Plan (MIDP/TIDP)</span>
+                <div class="btn-group-row">
+                  <button type="button" class="btn btn-primary btn-xs" id="midp-docs-import">Import MIDP/TIDP</button>
+                  <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-clear-plan" title="Clear imported plan for the selected work stage">Clear plan</button>
+                  <button type="button" class="btn btn-ghost btn-xs" id="midp-ttm-email" title="Email TTM with outstanding items">Email TTM</button>
+                </div>
+              </div>
+              <div class="btn-group forma-group" role="group" aria-label="FORMA CDE">
+                <span class="btn-group-label">FORMA (CDE)</span>
+                <div class="btn-group-row">
+                  <button type="button" class="btn btn-gold btn-xs" id="midp-docs-refresh">Sync FORMA</button>
+                  <button type="button" class="btn btn-primary btn-xs" id="midp-docs-import-log" title="Import FORMA Files log report (.xlsx)">Import FORMA log</button>
+                  <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-clear-acc" title="Clear FORMA file cache">Clear FORMA cache</button>
+                  <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-filetypes">File types</button>
+                  <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-cols" title="Show/hide columns">⚙ Columns</button>
+                </div>
+              </div>
+              <div class="btn-group export-group" role="group" aria-label="Export">
+                <span class="btn-group-label">Export</span>
+                <div class="btn-group-row">
+                  <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-export" title="Export current view (respects filters)">Export view…</button>
+                </div>
+              </div>
             </div>
             <input type="file" id="importAccLogFile" accept=".xlsx,.xls,.csv" style="display:none;">
             <input type="file" id="importDeliverablesFile" accept=".xlsx,.xls,.csv" style="display:none;">
@@ -1625,8 +1692,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "2.1.7";
-const APP_BUILD = "2026-08-16h";
+const APP_VERSION = "2.1.9";
+const APP_BUILD = "2026-08-16j";
 const BUILTIN_HIERARCHY = [{"id":"S1","label":"Stage 1 — Inception","categories":[{"num":"1","title":"Common Data Environment (CDE)","subs":[{"num":"1.1","title":"CDE configuration","tasks":[{"id":"t-1.1-root","name":"Setup project CDE","children":[{"id":"t-1.1-3","name":"Create project CDE workspace"},{"id":"t-1.1-4","name":"Setup package / container structure"},{"id":"t-1.1-5","name":"Configure CDE states (WIP / Shared / Published / Archive)"},{"id":"t-1.1-sec","name":"Configure CDE security and access model"},{"id":"t-1.1-pi","name":"Setup central project information container"}]},{"id":"t-1.1-info","name":"Define project information & naming","children":[{"id":"t-1.1-0","name":"Define project attributes"},{"id":"t-1.1-12","name":"Setup standard attributes"},{"id":"t-1.1-2","name":"Configure metadata schema"},{"id":"t-1.1-1","name":"Configure naming convention in CDE"}]},{"id":"t-1.1-ops","name":"Configure CDE operations","children":[{"id":"t-1.1-8","name":"Configure CDE workflows and approval gates"},{"id":"t-1.1-9","name":"Configure search and filters"},{"id":"t-1.1-11","name":"Setup Published structure"}]}]},{"num":"1.2","title":"Collaboration platforms","tasks":[{"id":"t-1.2-root","name":"Setup collaboration platforms","children":[{"id":"t-1.2-0","name":"Create project team (Teams)"},{"id":"t-1.2-1","name":"Create SharePoint / project site"},{"id":"t-1.2-2","name":"Configure folder structure"},{"id":"t-1.2-3","name":"Configure permissions"},{"id":"t-1.2-4","name":"Configure dashboards"},{"id":"t-1.2-5","name":"Configure reporting"},{"id":"t-1.2-6","name":"Configure synchronisation with CDE"}]}]},{"num":"1.5","title":"User administration","tasks":[{"id":"t-1.5-root","name":"Administer CDE users & roles","children":[{"id":"t-1.1-6","name":"Invite enabling team (DTL, PDM & IM) to CDE"},{"id":"t-1.1-7","name":"Assign enabling-team functional roles (DTL, PDM, IM)"},{"id":"t-1.5-0","name":"Manage users"},{"id":"t-1.5-1","name":"Manage permissions"},{"id":"t-1.5-3","name":"Audit access"},{"id":"t-1.5-2","name":"Support task teams on CDE"}]}]}]},{"num":"2","title":"Information Delivery Planning","subs":[{"num":"2.1","title":"Appointing party information requirements","tasks":[{"id":"t-2.1-root","name":"Capture appointing party requirements","children":[{"id":"t-2.1-0","name":"Review OIR","appClient":true},{"id":"t-2.1-1","name":"Review AIR","appClient":true},{"id":"t-2.1-2","name":"Review EIR","appClient":true},{"id":"t-2.1-3","name":"Review client standards"},{"id":"t-2.1-4","name":"Extract requirements from scope"},{"id":"t-2.1-5","name":"Extract requirements from tender"},{"id":"t-2.1-6","name":"Extract requirements from basis of design"},{"id":"t-2.1-cap","name":"Capture EIR with DTL and PDM"}]},{"id":"t-2.1-gap","name":"Assess requirements gap","children":[{"id":"t-2.1-7","name":"Gap assessment vs Atana IM standards"},{"id":"t-2.1-8","name":"ISO 19650 compliance assessment"},{"id":"t-2.1-9","name":"Apply Atana IM standards where EIR is silent"}]}]},{"num":"2.2","title":"BEP and delivery strategy","tasks":[{"id":"t-2.2-root","name":"Establish BEP & delivery strategy","children":[{"id":"t-2.2-0","name":"Define information requirements response"},{"id":"t-2.2-1","name":"Define exchange requirements response"},{"id":"t-2.2-2","name":"Define asset information response"},{"id":"t-2.2-3","name":"Define acceptance criteria"},{"id":"t-2.2-4","name":"Define delivery methodology"},{"id":"t-2.2-5","name":"Create requirements traceability matrix"},{"id":"t-2.2-bep","name":"Draft / maintain project BEP"}]}]},{"num":"2.6","title":"Information management assignment matrix","tasks":[{"id":"t-2.6-root","name":"IM assignment matrix","children":[{"id":"t-2.6-0","name":"Review standard IM responsibility matrix"},{"id":"t-2.6-1","name":"Verify roles (ISO functional roles)"},{"id":"t-2.6-2","name":"Verify authorities"},{"id":"t-2.6-3","name":"Verify responsibilities"},{"id":"t-2.6-m","name":"Maintain project IM assignment matrix"}]}]},{"num":"2.7","title":"Mobilisation (IM)","tasks":[{"id":"t-2.7-root","name":"Mobilise IM capability","children":[{"id":"t-2.7-0","name":"Confirm IM resource availability"},{"id":"t-2.7-1","name":"Mobilise information technology for CDE"},{"id":"t-2.7-2","name":"Test CDE information exchanges"},{"id":"t-2.7-3","name":"Identify IM training needs"}]}]}]},{"num":"3","title":"Information Standards & Convention","subs":[{"num":"3.1","title":"Naming and codes","tasks":[{"id":"t-3.1-root","name":"Configure naming convention system","children":[{"id":"t-2.8-0","name":"Configure naming tool"},{"id":"t-2.8-1","name":"Configure project codes"},{"id":"t-2.8-2","name":"Configure task teams / disciplines"},{"id":"t-2.8-3","name":"Configure work stages"},{"id":"t-2.8-4","name":"Verify naming outputs"},{"id":"t-3.1-del","name":"Define deliverable naming convention"},{"id":"t-3.1-ast","name":"Define asset naming convention"}]}]},{"num":"3.2","title":"Work stage and volume setup","tasks":[{"id":"t-3.2-root","name":"Configure stages & volumes","children":[{"id":"t-2.9-0","name":"Configure work stages"},{"id":"t-2.9-1","name":"Generate baseline deliverables list"},{"id":"t-3.2-vol","name":"Define volume / spatial strategy"}]}]},{"num":"3.3","title":"Classification and parameters","tasks":[{"id":"t-3.3-root","name":"Classification & shared parameters","children":[{"id":"t-3.3-0","name":"Define Uniclass / classification strategy"},{"id":"t-3.3-1","name":"Setup shared parameters (project)"},{"id":"t-3.3-2","name":"Setup shared parameters (client)","appClient":true},{"id":"t-3.3-tb","name":"Create project titleblock and drawing templates"},{"id":"t-3.3-tb-dist","name":"Distribute titleblocks and drawing templates to task teams"},{"id":"t-3.3-lib","name":"Setup shared content / family library"}]}]}]},{"num":"4","title":"Digital Plan of Works & LOIN","subs":[{"num":"4.1","title":"DPoW baseline","tasks":[{"id":"t-4.1-root","name":"Establish Digital Plan of Works","children":[{"id":"t-4.1-0","name":"Setup Digital Plan of Works (DPoW)"},{"id":"t-4.1-1","name":"Define LOIN template per work stage"},{"id":"t-4.1-2","name":"Define functional breakdown"},{"id":"t-4.1-3","name":"Define spatial breakdown"},{"id":"t-4.1-4","name":"Communicate LOIN guidance to task teams"}]}]},{"num":"4.2","title":"MIDP / TIDP systems","tasks":[{"id":"t-4.2-root","name":"Setup MIDP & TIDP systems","children":[{"id":"t-4.2-0","name":"Setup MIDP hosting system"},{"id":"t-4.2-1","name":"Setup TIDP templates and system"},{"id":"t-4.2-2","name":"Baseline MIDP deliverables and dates"}]}]}]},{"num":"5","title":"Information Quality Assurance (IQA)","subs":[{"num":"5.1","title":"Acceptance baseline","tasks":[{"id":"t-5.1-root","name":"Define IQA baseline","children":[{"id":"t-5.1-0","name":"Define information acceptance criteria"},{"id":"t-5.1-1","name":"Define suitability / status codes"}]}]}]},{"num":"6","title":"Design & Information Coordination (VDC)","subs":[{"num":"6.1","title":"Coordination strategy","tasks":[{"id":"t-6.1-root","name":"Define coordination strategy","children":[{"id":"t-6.1-0","name":"Define federation strategy"},{"id":"t-6.1-1","name":"Define clash detection strategy"},{"id":"t-6.1-2","name":"Define issue management workflow"},{"id":"t-6.1-3","name":"Define interface management approach"},{"id":"t-6.1-model","name":"Define central model and worksharing strategy"},{"id":"t-6.1-views","name":"Define standard coordination views (sections / ceiling plans)"}]}]}]}]},{"id":"S2","label":"Stage 2 — Concept","categories":[{"num":"1","title":"Common Data Environment (CDE)","subs":[{"num":"1.3","title":"CDE refinement","tasks":[{"id":"t-1.3-root","name":"Refine CDE for concept","children":[{"id":"t-1.3-0","name":"Refine CDE package structure for concept"},{"id":"t-1.3-1","name":"Update CDE workflows for concept exchanges"},{"id":"t-1.3-2","name":"Audit CDE access and permissions"},{"id":"t-S2-cde-autopub","name":"Set auto-publish of models in Collaboration space (weekly · Sundays)"},{"id":"t-S2-cde-offtake","name":"Capture static federation offtake after concept data drops"},{"id":"t-S2-cde-share","name":"Share complete federation package to Shared state"}]}]},{"num":"1.5","title":"User administration (task teams)","tasks":[{"id":"t-S2-inv-root","name":"Invite task teams & stakeholders","children":[{"id":"t-S2-inv-0","name":"Invite task team members (TTM, TTIM, IA)"},{"id":"t-S2-inv-1","name":"Invite peer reviewers"},{"id":"t-S2-inv-2","name":"Invite client / appointing party users as required"},{"id":"t-S2-inv-3","name":"Invite external third parties as required"},{"id":"t-S2-inv-4","name":"Assign task-team CDE permissions"}]}]}]},{"num":"2","title":"Information Delivery Planning","subs":[{"num":"2.3","title":"Confirm appointment information","tasks":[{"id":"t-2.3-root","name":"Confirm appointment information","children":[{"id":"t-2.3-0","name":"Confirm delivery team BEP"},{"id":"t-2.3-1","name":"Update high-level responsibility matrix"},{"id":"t-2.3-2","name":"Confirm production methods and procedures"},{"id":"t-2.3-3","name":"Confirm IT and software schedule"},{"id":"t-2.3-4","name":"Align information milestones with programme"}]}]},{"num":"2.4","title":"MIDP / TIDP concept","tasks":[{"id":"t-2.4-root","name":"Establish concept MIDP / TIDP","children":[{"id":"t-2.4-0","name":"Establish detailed TIDP templates"},{"id":"t-2.4-1","name":"Establish concept MIDP"},{"id":"t-2.4-2","name":"Inform task teams of MIDP baseline"}]}]}]},{"num":"3","title":"Information Standards & Convention","subs":[{"num":"3.4","title":"Standards alignment","tasks":[{"id":"t-3.4-root","name":"Align standards for concept","children":[{"id":"t-3.4-0","name":"Agree amendments to information standard"},{"id":"t-3.4-1","name":"Update shared resources for concept"},{"id":"t-3.4-2","name":"Security triage of project information"},{"id":"t-3.4-tb","name":"Confirm titleblocks and shared resources issued"}]}]}]},{"num":"4","title":"Digital Plan of Works & LOIN","subs":[{"num":"4.3","title":"Concept LOIN","tasks":[{"id":"t-4.3-root","name":"Update LOIN for concept","children":[{"id":"t-4.3-0","name":"Update DPoW for concept stage"},{"id":"t-4.3-1","name":"Set LOIN for concept deliverables"},{"id":"t-4.3-2","name":"Align functional breakdown to concept scope"}]}]}]},{"num":"5","title":"Information Quality Assurance (IQA)","subs":[{"num":"5.2","title":"Concept QA setup","tasks":[{"id":"t-5.2-root","name":"Setup concept QA","children":[{"id":"t-5.2-0","name":"Define concept QA checklist"},{"id":"t-5.2-1","name":"Configure model checking rules"}]}]}]},{"num":"6","title":"Design & Information Coordination (VDC)","subs":[{"num":"6.2","title":"Coordinates and phases","tasks":[{"id":"t-6.2-root","name":"Establish coordinates & phases","children":[{"id":"t-6.2-0","name":"Confirm survey / civil base data"},{"id":"t-6.2-1","name":"Set model coordinates (base and survey points)"},{"id":"t-6.2-2","name":"Setup project phases"},{"id":"t-6.2-3","name":"Hand over coordinates and phases to TTIMs"}]}]},{"num":"6.3","title":"Federation baseline","tasks":[{"id":"t-6.3-root","name":"Mobilise concept model federation","children":[{"id":"t-6.3-0","name":"Establish shared model spaces for concept federation"},{"id":"t-6.3-central","name":"Create central / shared concept coordination models"},{"id":"t-6.3-seed","name":"Create seed models per discipline (linked to central)"},{"id":"t-6.3-dist","name":"Distribute central models and links to task teams"},{"id":"t-6.3-verify","name":"Verify central model links and worksharing"}]}]}]}]},{"id":"S3","label":"Stage 3 — Developed Design","categories":[{"num":"1","title":"Common Data Environment (CDE)","subs":[{"num":"1.4","title":"CDE operations","tasks":[{"id":"t-S3-cde-root","name":"Maintain CDE operations","children":[{"id":"t-S3-cde-0","name":"Maintain CDE states and workflows"},{"id":"t-S3-cde-1","name":"Manage Shared and Published releases"},{"id":"t-S3-cde-2","name":"Monitor CDE audit trail"},{"id":"t-S3-cde-council","name":"Capture federation offtake for council permitting package"},{"id":"t-S3-cde-autopub","name":"Maintain weekly Sunday auto-publish of models in Collaboration space"}]}]},{"num":"1.5","title":"User administration (remaining teams)","tasks":[{"id":"t-S3-inv-root","name":"Invite remaining task teams for federation","children":[{"id":"t-S3-inv-0","name":"Invite remaining discipline task teams to CDE"},{"id":"t-S3-inv-1","name":"Onboard smaller task teams into federation"},{"id":"t-S3-inv-2","name":"Confirm auto-publish (Sundays) still active for new teams"}]}]}]},{"num":"2","title":"Information Delivery Planning","subs":[{"num":"2.0","title":"BIM / IM kick-off","tasks":[{"id":"t-S3-kick-root","name":"BIM / IM kick-off (start of Stage 3)","children":[{"id":"t-S3-kick-0","name":"Hold BIM / IM kick-off meeting"},{"id":"t-S3-kick-1","name":"Issue kick-off agenda and BEP overview"},{"id":"t-S3-kick-2","name":"Record kick-off actions and owners"},{"id":"t-S3-kick-3","name":"Confirm clash & issue cycle starts week 2 of Stage 3"}]}]},{"num":"2.5","title":"MIDP / TIDP stage update","tasks":[{"id":"t-S3-midp-root","name":"Update MIDP / TIDP for stage","children":[{"id":"t-S3-midp-0","name":"Update MIDP for work stage"},{"id":"t-S3-midp-1","name":"Coordinate TIDP status with TTMs"},{"id":"t-S3-midp-2","name":"Monitor information delivery vs milestones"},{"id":"t-S3-midp-3","name":"Report delivery risks to DTL / appointing party"}]}]}]},{"num":"4","title":"Digital Plan of Works & LOIN","subs":[{"num":"4.4","title":"Stage LOIN","tasks":[{"id":"t-S3-loin-root","name":"Update LOIN for stage","children":[{"id":"t-S3-loin-0","name":"Update DPoW for work stage"},{"id":"t-S3-loin-1","name":"Confirm LOIN for stage deliverables"},{"id":"t-S3-loin-2","name":"Communicate LOIN changes to task teams"}]}]}]},{"num":"5","title":"Information Quality Assurance (IQA)","subs":[{"num":"5.3","title":"Pre-share QA","tasks":[{"id":"t-S3-qa-root","name":"Pre-share information QA","children":[{"id":"t-S3-qa-0","name":"Undertake information QA check before Shared"},{"id":"t-S3-qa-1","name":"Validate deliverables against EIR and BEP"},{"id":"t-S3-qa-2","name":"Assign suitability status on containers"},{"id":"t-S3-qa-3","name":"Review information model for authorisation"}]}]},{"num":"5.4","title":"Model information audits","tasks":[{"id":"t-S3-aud-root","name":"Audit model information","children":[{"id":"t-S3-aud-0","name":"Audit model metadata"},{"id":"t-S3-aud-1","name":"Audit coordinates compliance"},{"id":"t-S3-aud-2","name":"Audit deliverable exports"},{"id":"t-S3-aud-3","name":"Audit MIDP/TIDP compliance"}]}]}]},{"num":"6","title":"Design & Information Coordination (VDC)","subs":[{"num":"6.3","title":"Structural openings & spatial enablement","tasks":[{"id":"t-S3-open-root","name":"Enable structural opening requirements","children":[{"id":"t-S3-open-0","name":"Issue structural opening requirements request to task teams"},{"id":"t-S3-open-1","name":"Collect service reticulation requirements within dedicated zones"},{"id":"t-S3-open-2","name":"Coordinate spatial requirements to structural engineer"},{"id":"t-S3-open-3","name":"Track structural opening mark-ups and acceptance"}]}]},{"num":"6.4","title":"Federation and clash","tasks":[{"id":"t-S3-fed-root","name":"Federation & clash management (P01–P02 in Stage 3)","children":[{"id":"t-S3-fed-0","name":"Federate remaining task team models"},{"id":"t-S3-fed-1","name":"Run clash detection — Priority 01 & 02 (complete before end of Stage 3)"},{"id":"t-S3-fed-2","name":"Manage issues for Priority 01 & 02 resolution"},{"id":"t-S3-fed-3","name":"Maintain interface register"},{"id":"t-S3-fed-4","name":"Support coordination meetings"},{"id":"t-S3-fed-5","name":"Produce Stage 3 coordination reports (P01–P02)"}]}]},{"num":"6.5","title":"Change and exchange","tasks":[{"id":"t-S3-chg-root","name":"Manage design change information","children":[{"id":"t-S3-chg-0","name":"Track design changes in CDE"},{"id":"t-S3-chg-1","name":"Assess information impacts of changes"},{"id":"t-S3-chg-2","name":"Communicate information exchanges"}]}]},{"num":"6.6","title":"Coordination drawings & sections","tasks":[{"id":"t-S3-coord-root","name":"Early Stage 3 coordination drawings (IM)","children":[{"id":"t-S3-sz","name":"Create Service Zone sections (early Stage 3)"},{"id":"t-S3-sz-pub","name":"Publish Service Zone sections to Shared"},{"id":"t-S3-ceil","name":"Create ceiling services void & combined ceiling coordination layouts (early Stage 3)"},{"id":"t-S3-ceil-pub","name":"Publish ceiling void & combined coordination layouts to Shared"},{"id":"t-S3-coord-issue","name":"Issue coordination drawings for task-team mark-up"},{"id":"t-S3-offtake","name":"Capture static federation offtake after each data drop / council package"},{"id":"t-S3-offtake-share","name":"Share complete federation package to Shared state"}]}]}]}]},{"id":"S4","label":"Stage 4 — Technical Design","categories":[{"num":"1","title":"Common Data Environment (CDE)","subs":[{"num":"1.4","title":"CDE operations","tasks":[{"id":"t-S4-cde-root","name":"Maintain CDE operations","children":[{"id":"t-S4-cde-0","name":"Maintain CDE states and workflows"},{"id":"t-S4-cde-1","name":"Manage Shared and Published releases"},{"id":"t-S4-cde-2","name":"Monitor CDE audit trail"},{"id":"t-S4-cde-offtake","name":"Capture static federation offtake after each Stage 4 data drop"},{"id":"t-S4-cde-share","name":"Share complete federation package to Shared state"}]}]}]},{"num":"2","title":"Information Delivery Planning","subs":[{"num":"2.5","title":"MIDP / TIDP stage update","tasks":[{"id":"t-S4-midp-root","name":"Update MIDP / TIDP for stage","children":[{"id":"t-S4-midp-0","name":"Update MIDP for work stage"},{"id":"t-S4-midp-1","name":"Coordinate TIDP status with TTMs"},{"id":"t-S4-midp-2","name":"Monitor information delivery vs milestones"},{"id":"t-S4-midp-3","name":"Report delivery risks to DTL / appointing party"}]}]}]},{"num":"4","title":"Digital Plan of Works & LOIN","subs":[{"num":"4.4","title":"Stage LOIN","tasks":[{"id":"t-S4-loin-root","name":"Update LOIN for stage","children":[{"id":"t-S4-loin-0","name":"Update DPoW for work stage"},{"id":"t-S4-loin-1","name":"Confirm LOIN for stage deliverables"},{"id":"t-S4-loin-2","name":"Communicate LOIN changes to task teams"}]}]}]},{"num":"5","title":"Information Quality Assurance (IQA)","subs":[{"num":"5.3","title":"Pre-share QA","tasks":[{"id":"t-S4-qa-root","name":"Pre-share information QA","children":[{"id":"t-S4-qa-0","name":"Undertake information QA check before Shared"},{"id":"t-S4-qa-1","name":"Validate deliverables against EIR and BEP"},{"id":"t-S4-qa-2","name":"Assign suitability status on containers"},{"id":"t-S4-qa-3","name":"Review information model for authorisation"}]}]},{"num":"5.4","title":"Model information audits","tasks":[{"id":"t-S4-aud-root","name":"Audit model information","children":[{"id":"t-S4-aud-0","name":"Audit model metadata"},{"id":"t-S4-aud-1","name":"Audit coordinates compliance"},{"id":"t-S4-aud-2","name":"Audit deliverable exports"},{"id":"t-S4-aud-3","name":"Audit MIDP/TIDP compliance"}]}]}]},{"num":"6","title":"Design & Information Coordination (VDC)","subs":[{"num":"6.4","title":"Federation and clash","tasks":[{"id":"t-S4-fed-root","name":"Federation & clash management (Priority 03+ in Stage 4)","children":[{"id":"t-S4-fed-0","name":"Federate task team models"},{"id":"t-S4-fed-1","name":"Run clash detection — Priority 03 and remaining (Stage 4)"},{"id":"t-S4-fed-2","name":"Manage issues for Priority 03+ resolution"},{"id":"t-S4-fed-3","name":"Maintain interface register"},{"id":"t-S4-fed-4","name":"Support coordination meetings"},{"id":"t-S4-fed-5","name":"Produce Stage 4 coordination reports (P03+)"}]}]},{"num":"6.5","title":"Change and exchange","tasks":[{"id":"t-S4-chg-root","name":"Manage design change information","children":[{"id":"t-S4-chg-0","name":"Track design changes in CDE"},{"id":"t-S4-chg-1","name":"Assess information impacts of changes"},{"id":"t-S4-chg-2","name":"Communicate information exchanges"}]}]},{"num":"6.6","title":"Coordination drawings & sections","tasks":[{"id":"t-S4-coord-root","name":"Update coordination drawing set","children":[{"id":"t-S4-sz","name":"Update Service Zone sections"},{"id":"t-S4-sz-pub","name":"Publish Service Zone sections to Shared"},{"id":"t-S4-ceil","name":"Update ceiling coordination plans"},{"id":"t-S4-ceil-pub","name":"Publish ceiling coordination plans to Shared"},{"id":"t-S4-coord-issue","name":"Issue technical coordination drawings for review"}]}]}]}]},{"id":"S5","label":"Stage 5 — Construction","categories":[{"num":"1","title":"Common Data Environment (CDE)","subs":[{"num":"1.6","title":"Construction CDE modules","tasks":[{"id":"t-1.6-root","name":"Configure construction CDE modules","children":[{"id":"t-1.6-0","name":"Configure issues module"},{"id":"t-1.6-1","name":"Configure snagging"},{"id":"t-1.6-2","name":"Configure RFIs"},{"id":"t-1.6-3","name":"Configure submittals"},{"id":"t-1.6-4","name":"Configure specifications exchange"},{"id":"t-1.6-5","name":"Configure reviews"},{"id":"t-1.6-6","name":"Configure correspondence"},{"id":"t-1.6-7","name":"Configure site instructions"}]}]},{"num":"1.5","title":"User administration (contractor)","tasks":[{"id":"t-S5-inv-root","name":"Invite contractor team","children":[{"id":"t-S5-inv-0","name":"Invite main contractor information team to CDE"},{"id":"t-S5-inv-1","name":"Invite contractor subcontractors / suppliers as required"},{"id":"t-S5-inv-2","name":"Assign contractor CDE permissions and containers"},{"id":"t-S5-inv-3","name":"Brief contractor on naming, states and exchange rules"}]}]}]},{"num":"2","title":"Information Delivery Planning","subs":[{"num":"2.10","title":"Construction information delivery","tasks":[{"id":"t-2.10-root","name":"Manage construction information delivery","children":[{"id":"t-2.10-0","name":"Update MIDP for construction exchanges"},{"id":"t-2.10-1","name":"Track contractor information deliverables"},{"id":"t-2.10-2","name":"Monitor construction information milestones"}]}]}]},{"num":"4","title":"Digital Plan of Works & LOIN","subs":[{"num":"4.5","title":"Construction LOIN","tasks":[{"id":"t-4.5-root","name":"Update LOIN for construction","children":[{"id":"t-4.5-0","name":"Update DPoW for construction / manufacture LOD"},{"id":"t-4.5-1","name":"Confirm LOIN for contractor models (LOD4/5 information)"}]}]}]},{"num":"5","title":"Information Quality Assurance (IQA)","subs":[{"num":"5.11","title":"Non-conformance information","tasks":[{"id":"t-5.11-root","name":"Manage information NCRs","children":[{"id":"t-5.11-0","name":"Record information NCRs"},{"id":"t-5.11-1","name":"Assign corrective actions"},{"id":"t-5.11-2","name":"Verify NCR close-out"}]}]}]},{"num":"6","title":"Design & Information Coordination (VDC)","subs":[{"num":"6.11","title":"Construction coordination","tasks":[{"id":"t-6.11-root","name":"Construction model coordination","children":[{"id":"t-6.11-0","name":"Federate construction models"},{"id":"t-6.11-1","name":"Track contractor model deliverables"},{"id":"t-6.11-2","name":"Coordinate site information exchanges"},{"id":"t-6.11-3","name":"Clash detection on contractor information (LOD4/5)"},{"id":"t-S5-offtake","name":"Capture static construction federation offtake after data drops"},{"id":"t-S5-offtake-share","name":"Share construction federation package to Shared state"}]}]},{"num":"6.12","title":"RFI and site issues","tasks":[{"id":"t-6.12-root","name":"Track site information issues","children":[{"id":"t-6.12-0","name":"Track RFIs in CDE"},{"id":"t-6.12-1","name":"Track snags"},{"id":"t-6.12-2","name":"Track site issues"}]}]}]}]},{"id":"S6","label":"Stage 6 — Close-out","categories":[{"num":"1","title":"Common Data Environment (CDE)","subs":[{"num":"1.7","title":"Archive management","tasks":[{"id":"t-1.7-root","name":"Archive project information","children":[{"id":"t-1.7-0","name":"Archive deliverables"},{"id":"t-1.7-1","name":"Archive models"},{"id":"t-1.7-2","name":"Archive correspondence"},{"id":"t-1.7-3","name":"Verify CDE audit trail"}]}]}]},{"num":"5","title":"Information Quality Assurance (IQA)","subs":[{"num":"5.12","title":"Handover QA","tasks":[{"id":"t-5.12-root","name":"Handover information QA","children":[{"id":"t-5.12-0","name":"Audit final deliverables"},{"id":"t-5.12-1","name":"Audit AIM","appClient":true},{"id":"t-5.12-2","name":"Verify appointing party acceptance"}]}]}]},{"num":"6","title":"Design & Information Coordination (VDC)","subs":[{"num":"6.13","title":"Handover coordination","tasks":[{"id":"t-6.13-root","name":"Close-out coordination","children":[{"id":"t-6.13-2","name":"Verify handover readiness"},{"id":"t-6.13-1","name":"Verify final federation"},{"id":"t-6.13-0","name":"Verify information closure"},{"id":"t-6.13-ll","name":"Capture lessons learned (IM)"}]}]}]}]}];
 
 /* ===================== MIDP GENERATOR (project-linked) ===================== */
@@ -3105,6 +3172,7 @@ function collectDocReviewCandidates(files, docId){
       lastModified: f.lastModified || "",
       cdeState: f.cdeState || "",
     reviewId: f.reviewId || "",
+    webUrl: f.webUrl || f.accUrl || "",
       source: f.approvalStatusSource || ""
     });
   });
@@ -3276,6 +3344,7 @@ const ACC_COLUMN_DEFS = [
   { key: "number", label: "Number", default: true, attrId: "3066122" },
   { key: "status", label: "Status", default: true, attrId: "3066123" },
   { key: "reviewStatus", label: "Review status", default: true },
+  { key: "approvalFlow", label: "Approval flow", default: true },
   { key: "sheetTitle", label: "Sheet title", default: false, attrId: "3066496" },
   { key: "sheetNumber", label: "Sheet number", default: false, attrId: "3066497" },
   { key: "sheet", label: "Sheet", default: false, attrId: "3552395" },
@@ -4189,9 +4258,12 @@ function weeksBetween(a, b){
 }
 
 function renderWsTimelineBar(project, stageId){
-  const el = document.getElementById("midp-ws-timeline");
-  const labelEl = document.getElementById("midp-docs-current-stage");
-  if(!el) return;
+  // Primary: main workspace stage selector (all pages)
+  const el = document.getElementById("wsStageTimeline") || document.getElementById("midp-ws-timeline");
+  const labelEl = document.getElementById("wsStageCurrentLabel") || document.getElementById("midp-docs-current-stage");
+  const fillEl = document.getElementById("wsStageProgressFill");
+  const progLbl = document.getElementById("wsStageProgressLabel");
+  if(!el && !labelEl && !fillEl) return;
   let sched = (typeof projectStageSchedule === "function") ? projectStageSchedule(project) : null;
   if((!sched || !sched.length) && project && project.startDate && typeof getHierarchy === "function"){
     try { sched = projectStageSchedule(project); } catch(e){}
@@ -4210,7 +4282,9 @@ function renderWsTimelineBar(project, stageId){
       (se && se.start ? ` · ${escapeHtml(fmtDate(se.start))} → ${escapeHtml(fmtDate(se.months > 0 && typeof addDaysISO === "function" ? addDaysISO(se.end, -1) : se.end))}` : "");
   }
   if(!se || !se.start){
-    el.innerHTML = `<div style="padding:10px 12px;font-size:12px;color:#64748b;">Work stage timeline: set <strong>project start date</strong> in Project settings to show start → end, today marker, remaining weeks and milestones.</div>`;
+    if(el) el.innerHTML = `<div style="padding:10px 12px;font-size:12px;color:#64748b;">Work stage timeline: set <strong>project start date</strong> in Project settings to show start → end, today marker, remaining weeks and milestones.</div>`;
+    if(fillEl) fillEl.style.width = "0%";
+    if(progLbl) progLbl.textContent = "Set project start date for stage progress";
     return;
   }
   const start = new Date(se.start).getTime();
@@ -4224,6 +4298,14 @@ function renderWsTimelineBar(project, stageId){
   const remainLeft = pastPct;
   const remainWidth = Math.max(0, 100 - pastPct);
   const weeksLeft = today < endInc ? weeksBetween(new Date().toISOString().slice(0,10), new Date(endInc).toISOString().slice(0,10)) : 0;
+  // Date-based work stage progress (like task progress bar in header)
+  const stagePct = Math.round(Math.max(0, Math.min(100, pastPct)));
+  if(fillEl) fillEl.style.width = stagePct + "%";
+  if(progLbl){
+    progLbl.textContent = stagePct + "% through stage" +
+      (weeksLeft ? (" · " + weeksLeft + " weeks remaining") : (today > endInc ? " · stage ended" : "")) +
+      (" · " + (se.label || stageId));
+  }
 
   // Milestones from tasks for this stage
   let msHtml = "";
@@ -4244,7 +4326,7 @@ function renderWsTimelineBar(project, stageId){
     });
   } catch(e){}
 
-  el.innerHTML = `
+  if(el) el.innerHTML = `
     <div class="ws-tl-past" style="width:${pastPct}%;"></div>
     <div class="ws-tl-remain" style="left:${remainLeft}%;width:${remainWidth}%;" title="${weeksLeft} weeks remaining"></div>
     <div class="ws-tl-today" style="left:${todayPct}%;" title="Today"></div>
@@ -4260,17 +4342,16 @@ function roleProgressBarHtml(g){
   const outdated = Number(g.outdated) || 0;
   const approved = Number(g.approved) || 0;
   const onAcc = Number(g.onAcc) || 0;
-  const ok = Math.max(0, onAcc - outstanding); // rough
-  const done = Math.min(total, approved || Math.max(0, total - outstanding - outdated));
-  const pDone = (done / total) * 100;
-  const pOut = (outdated / total) * 100;
-  const pOst = (outstanding / total) * 100;
-  const pRest = Math.max(0, 100 - pDone - pOut - pOst);
-  return `<div class="docs-progress" title="Done ${done} · Outstanding ${outstanding} · Outdated ${outdated} · Planned ${total}">
-    <span style="width:${pDone}%;background:#22c55e;"></span>
-    <span style="width:${pOst}%;background:#ef4444;"></span>
-    <span style="width:${pOut}%;background:#f59e0b;"></span>
-    <span style="width:${pRest}%;background:#e2e8f0;"></span>
+  const done = Math.min(total, Math.max(0, approved || (onAcc - outstanding) || (total - outstanding - outdated)));
+  const pDone = Math.max(0, (done / total) * 100);
+  const pOut = Math.max(0, (outdated / total) * 100);
+  const pOst = Math.max(0, (outstanding / total) * 100);
+  let pRest = Math.max(0, 100 - pDone - pOut - pOst);
+  return `<div title="Done ${Math.round(done)} · Outstanding ${outstanding} · Outdated ${outdated} · Planned ${total}" style="height:8px;border-radius:4px;background:#e2e8f0;overflow:hidden;display:flex;margin-top:5px;min-width:120px;max-width:240px;">
+    <span style="display:block;height:100%;width:${pDone}%;background:#22c55e;"></span>
+    <span style="display:block;height:100%;width:${pOst}%;background:#ef4444;"></span>
+    <span style="display:block;height:100%;width:${pOut}%;background:#f59e0b;"></span>
+    <span style="display:block;height:100%;width:${pRest}%;background:#e2e8f0;"></span>
   </div>`;
 }
 
@@ -4284,16 +4365,17 @@ function overallProgressBarHtml(totals){
   const pOut = (outdated / total) * 100;
   return `<div style="margin:8px 0 12px;">
     <div class="section-sub" style="margin-bottom:4px;">Overall plan progress · ${done}/${total} addressed · ${outstanding} outstanding · ${outdated} outdated</div>
-    <div class="docs-progress" style="height:12px;">
-      <span style="width:${pDone}%;background:#22c55e;"></span>
-      <span style="width:${pOst}%;background:#ef4444;"></span>
-      <span style="width:${pOut}%;background:#f59e0b;"></span>
+    <div style="height:12px;border-radius:6px;background:#e2e8f0;overflow:hidden;display:flex;">
+      <span style="display:block;height:100%;width:${pDone}%;background:#22c55e;"></span>
+      <span style="display:block;height:100%;width:${pOst}%;background:#ef4444;"></span>
+      <span style="display:block;height:100%;width:${pOut}%;background:#f59e0b;"></span>
     </div>
   </div>`;
 }
 
+
 function accFileHref(project, f){
-  const accGuid = String(project.accProjectId || "").replace(/^b\\./, "");
+  const accGuid = String(project.accProjectId || "").replace(/^b\./, "");
   if(!accGuid) return "";
   // Folder deep link; item id when available
   if(f.folderId){
@@ -4306,7 +4388,7 @@ function accFileHref(project, f){
 }
 
 function accReviewHref(project, f){
-  const accGuid = String(project.accProjectId || "").replace(/^b\\./, "");
+  const accGuid = String(project.accProjectId || "").replace(/^b\./, "");
   if(!accGuid) return "";
   // Reviews home for project — specific review id when we have it
   const rid = f.reviewId || (f.review && f.review.id) || "";
@@ -4688,9 +4770,16 @@ function renderAccDocsTracking(project){
               if(c.key === "name" && (!val || val === "—")) val = stripFileExtension(f.name || "") || "—";
               if(c.key === "name"){
                 const short = val.length > 40 ? val.slice(0,40)+"…" : val;
-                const docId = typeof normalizeDocId === "function" ? normalizeDocId(f.name || val) : val;
-                const flow = (window.__gatewayFlowMap && typeof gatewayFlowHtml === "function") ? gatewayFlowHtml(docId, window.__gatewayFlowMap) : "";
-                return `<td class="mono" title="${escapeHtml(val)}">${escapeHtml(short)}${flow}</td>`;
+                const href = f.webUrl || f.accUrl || (typeof accFileHref === "function" ? accFileHref(project, f) : "");
+                const nameHtml = href
+                  ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener" class="mono" style="color:var(--purple-800);text-decoration:underline;" onclick="event.stopPropagation()">${escapeHtml(short)}</a>`
+                  : `<span class="mono">${escapeHtml(short)}</span>`;
+                return `<td title="${escapeHtml(val)}">${nameHtml}</td>`;
+              }
+              if(c.key === "approvalFlow"){
+                const docId = typeof normalizeDocId === "function" ? normalizeDocId(f.name || "") : (f.name || "");
+                const flow = (window.__gatewayFlowMap && typeof gatewayFlowHtml === "function") ? gatewayFlowHtml(docId, window.__gatewayFlowMap) : "—";
+                return `<td>${flow || "—"}</td>`;
               }
               if(c.key === "folderPath"){
                 const path = f.folderPath || val || "";
@@ -7951,6 +8040,17 @@ async function loadAccDeliverables(project, force){
             rec.reviewStatus = String(rec.reviewStatus || rec.approvalStatusValue || "").trim();
           }
           if(rec.name) rec.name = stripFileExtension(rec.name);
+          try {
+            const guid = String(projectId || "").replace(/^b\./, "").replace(/^urn:adsk\.workspace:beta\.project:/, "");
+            if(guid && rec.folderId){
+              rec.webUrl = "https://acc.autodesk.com/docs/files/projects/" + encodeURIComponent(guid) +
+                "?folderUrn=" + encodeURIComponent(rec.folderId) +
+                (rec.id ? ("&entityId=" + encodeURIComponent(rec.id)) : "");
+            } else if(guid && rec.id){
+              rec.webUrl = "https://acc.autodesk.com/docs/files/projects/" + encodeURIComponent(guid) +
+                "?entityId=" + encodeURIComponent(rec.id);
+            }
+          } catch(e){}
           // Keep ID-keyed attrs (FORMA uses numeric ids as keys). Cap size only.
           if(rec.custom && typeof rec.custom === "object"){
             const slim = {};
@@ -8656,6 +8756,7 @@ function slimAccRecord(f){
     reviewStatusRaw: f.reviewStatusRaw || "",
     cdeState: f.cdeState || "",
     reviewId: f.reviewId || "",
+    webUrl: f.webUrl || f.accUrl || "",
     reviewEventAt: f.reviewEventAt || "",
     approvalStatusValue: f.approvalStatusValue || "",
     approvalStatusSource: f.approvalStatusSource || "",
@@ -12087,15 +12188,21 @@ function applyWbsMode(){
 
 function renderStagePicker(project){
   const el = document.getElementById("stagePicker");
+  if(!el) return;
   el.innerHTML = getHierarchy().map(stage => `
     <button class="${project.currentStageId === stage.id ? "active" : ""}" data-set-stage="${stage.id}" title="${escapeHtml(stageDisplayLabel(stage, project))}">${stage.id}</button>
   `).join("");
+  try {
+    if(typeof renderWsTimelineBar === "function")
+      renderWsTimelineBar(project, project.currentStageId || (getHierarchy()[0] && getHierarchy()[0].id));
+  } catch(e){}
 }
 
 function setProjectStage(project, stageId){
   if(!project) return;
   const id = String(stageId || "").trim();
   if(!id) return;
+  try { if(typeof renderWsTimelineBar === "function") renderWsTimelineBar(project, id); } catch(e){}
   // Write onto the canonical project in DATA
   const target = (DATA.projects || []).find(p => p.id === project.id) || project;
   target.currentStageId = id;
