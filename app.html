@@ -1301,12 +1301,12 @@
 <body>
 
 <div id="atanaBootBeacon" style="position:fixed;bottom:72px;right:12px;z-index:99998;background:#14532d;color:#fff;font:12px/1.3 system-ui,sans-serif;padding:8px 12px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.25);max-width:220px;">
-  Loading Atana IM <strong>3.0.2</strong>…
+  Loading Atana IM <strong>3.0.3</strong>…
 </div>
 <script>
 (function(){
   window.__ATANA_BOOT = Date.now();
-  document.documentElement.setAttribute("data-atana-version","3.0.2");
+  document.documentElement.setAttribute("data-atana-version","3.0.3");
   window.addEventListener("error", function(ev){
     var b = document.getElementById("atanaBootBeacon");
     if(b){ b.style.background="#7f1d1d"; b.innerHTML = "Boot error: " + (ev.message||"unknown"); }
@@ -1315,7 +1315,7 @@
     var b = document.getElementById("atanaBootBeacon");
     if(b){
       b.style.background="#14532d";
-      b.innerHTML = "Atana IM <strong>v3.0.2</strong> ready";
+      b.innerHTML = "Atana IM <strong>v3.0.3</strong> ready";
       setTimeout(function(){ try{ b.remove(); }catch(e){} }, 4000);
     }
     // Kill stale service workers on first load of 3.0.0
@@ -1575,7 +1575,8 @@
       <div class="ws-view active" id="wsview-imtasks">
         <div id="imsub-tasks">
           <div class="ws-toolbar" id="tasksToolbar" style="display:none;"></div>
-          <div id="taskTree"></div>
+          <div id="wsTeamAssignList" style="display:none" aria-hidden="true"></div>
+            <div id="taskTree"></div>
         </div>
         <div id="imsub-progress" style="display:none;">
           <div id="progressSummary"></div>
@@ -1871,8 +1872,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.0.2";
-const APP_BUILD = "2026-08-17-oauth";
+const APP_VERSION = "3.0.3";
+const APP_BUILD = "2026-08-17-accfix";
 /** Safe DOM write — never throw on missing nodes */
 function setHtml(elOrId, html){
   try {
@@ -7205,12 +7206,35 @@ function apsProjectDisplay(p){
   };
 }
 async function apsLoadAllProjects(){
-  const hubs = await apsListHubs();
   const out = [];
-  for(const h of hubs){
-    const hubName = (h.attributes && (h.attributes.name || h.attributes.extension && h.attributes.extension.data && h.attributes.extension.data.name)) || h.id;
+  const errors = [];
+  let hubs = [];
+  // Try US then EMEA region headers (ACC accounts are region-bound)
+  const regions = [null, "US", "EMEA"];
+  for(const region of regions){
     try {
-      const projects = await apsListProjects(h.id);
+      const headers = region ? { Region: region, "x-ads-region": region } : {};
+      const data = await apsFetch(APS_DM + "/hubs", { headers });
+      hubs = (data && data.data) || [];
+      if(hubs.length){
+        window.__apsLastHubRegion = region || "default";
+        break;
+      }
+    } catch(e){
+      errors.push("hubs[" + (region || "default") + "]: " + (e.message || e));
+    }
+  }
+  if(!hubs.length){
+    console.warn("[APS] no hubs", errors);
+    return { hubs: [], projects: out, errors, hint: "No hubs returned. In ACC Admin, add this APS Client ID under Custom Integrations (or Account Admin → Apps), and ensure scopes include data:read." };
+  }
+  for(const h of hubs){
+    const hubName = (h.attributes && (h.attributes.name || (h.attributes.extension && h.attributes.extension.data && h.attributes.extension.data.name))) || h.id;
+    try {
+      const region = window.__apsLastHubRegion && window.__apsLastHubRegion !== "default" ? window.__apsLastHubRegion : null;
+      const headers = region ? { Region: region, "x-ads-region": region } : {};
+      const data = await apsFetch(APS_DM + "/hubs/" + encodeURIComponent(h.id) + "/projects", { headers });
+      const projects = (data && data.data) || [];
       projects.forEach(p => {
         const d = apsProjectDisplay(p);
         d.hubName = hubName;
@@ -7219,9 +7243,10 @@ async function apsLoadAllProjects(){
       });
     } catch(e){
       console.warn("Hub projects failed", h.id, e);
+      errors.push("projects[" + h.id + "]: " + (e.message || e));
     }
   }
-  return { hubs, projects: out };
+  return { hubs, projects: out, errors };
 }
 
 function bindProjectImageFields(project){
@@ -7430,7 +7455,8 @@ async function openAccFolderPicker(project, kind){
 async function openAccProjectLinkPicker(project){
   try {
     showToast("Loading ACC projects…");
-    const { projects } = await apsLoadAllProjects();
+    const result = await apsLoadAllProjects();
+    const projects = result.projects || [];
     openSheet(`
       <h2>Link ACC project</h2>
       <p class="section-sub">Select the ACC project to link to <strong>${escapeHtml(project.name)}</strong></p>
@@ -9820,9 +9846,14 @@ async function renderAccProjectList(){
   }
   host.innerHTML = '<p class="section-sub">Loading hubs &amp; projects…</p>';
   try {
-    const { projects } = await apsLoadAllProjects();
+    const result = await apsLoadAllProjects();
+    const projects = result.projects || [];
     if(!projects.length){
-      host.innerHTML = '<p class="section-sub">No projects returned. Check account access and API scopes.</p>';
+      const errLines = (result.errors || []).slice(0, 4).map(e => "<li>" + escapeHtml(e) + "</li>").join("");
+      const hint = result.hint || "Check: (1) APS app Callback URL matches this site (2) Client ID is added under ACC Account Admin → Custom integrations (3) scopes include data:read account:read.";
+      host.innerHTML = '<p class="section-sub"><strong>No projects returned.</strong> ' + escapeHtml(hint) + "</p>"
+        + (errLines ? '<ul class="section-sub" style="margin:8px 0 0;padding-left:18px;">' + errLines + "</ul>" : "")
+        + '<p class="section-sub" style="margin-top:8px;">Hubs found: ' + String((result.hubs || []).length) + (window.__apsLastHubRegion ? (" · region " + window.__apsLastHubRegion) : "") + "</p>";
       renderApsStatus();
       return;
     }
@@ -13729,8 +13760,10 @@ function restoreOpenKeys(container, openKeys){
 
 function renderTaskTree(project){
   const el = document.getElementById("taskTree");
+  if(!el) return;
   const openKeys = captureOpenKeys(el);
-  const scrollPos = document.getElementById("mainContent").scrollTop;
+  const mainEl = document.getElementById("mainContent");
+  const scrollPos = mainEl ? mainEl.scrollTop : 0;
   const schedule = projectStageSchedule(project);
   const scheduleById = schedule ? Object.fromEntries(schedule.map(s => [s.id, s])) : {};
   const taskSched = autoScheduleProject(project);
@@ -13929,7 +13962,7 @@ const weeklyHtml = weekly.length ? `
       });
     }
   } else {
-    document.getElementById("mainContent").scrollTop = scrollPos;
+    const __mc = document.getElementById("mainContent"); if(__mc) __mc.scrollTop = scrollPos;
   }
 }
 
@@ -14438,6 +14471,7 @@ function renderWbsGantt(project){
 
 function renderWsTeamAssign(project){
   const el = document.getElementById("wsTeamAssignList");
+  if(!el) return;
   if(DATA.team.length === 0){
     el.innerHTML = `<div class="empty-state"><p>No team members yet.</p><p>Add people from the Team tab first, then assign them here.</p></div>`;
     return;
