@@ -1301,12 +1301,12 @@
 <body>
 
 <div id="atanaBootBeacon" style="position:fixed;bottom:72px;right:12px;z-index:99998;background:#14532d;color:#fff;font:12px/1.3 system-ui,sans-serif;padding:8px 12px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.25);max-width:220px;">
-  Loading Atana IM <strong>3.0.6</strong>…
+  Loading Atana IM <strong>3.0.8</strong>…
 </div>
 <script>
 (function(){
   window.__ATANA_BOOT = Date.now();
-  document.documentElement.setAttribute("data-atana-version","3.0.6");
+  document.documentElement.setAttribute("data-atana-version","3.0.8");
   window.addEventListener("error", function(ev){
     var b = document.getElementById("atanaBootBeacon");
     if(b){ b.style.background="#7f1d1d"; b.innerHTML = "Boot error: " + (ev.message||"unknown"); }
@@ -1315,7 +1315,7 @@
     var b = document.getElementById("atanaBootBeacon");
     if(b){
       b.style.background="#14532d";
-      b.innerHTML = "Atana IM <strong>v3.0.6</strong> ready";
+      b.innerHTML = "Atana IM <strong>v3.0.8</strong> ready";
       setTimeout(function(){ try{ b.remove(); }catch(e){} }, 4000);
     }
     // Kill stale service workers on first load of 3.0.0
@@ -1881,8 +1881,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.0.6";
-const APP_BUILD = "2026-08-17-folders";
+const APP_VERSION = "3.0.8";
+const APP_BUILD = "2026-08-17-sync-emea";
 /** Safe DOM write — never throw on missing nodes */
 function setHtml(elOrId, html){
   try {
@@ -7245,6 +7245,30 @@ function apsRegionHeaders(region){
   }
   return h;
 }
+/** All Data Management + ACC folder/item calls go through here — always EMEA/US region headers */
+async function apsDmFetch(url, opts){
+  opts = opts || {};
+  let auth = await apsRefreshIfNeeded();
+  if(!auth || !auth.access_token) throw new Error("Not signed in to Autodesk / ACC");
+  const reg = opts.region || apsPreferredRegion();
+  const headers = Object.assign(
+    {
+      Authorization: "Bearer " + auth.access_token,
+      Accept: "application/json"
+    },
+    apsRegionHeaders(reg),
+    opts.headers || {}
+  );
+  const res = await fetch(url, { method: opts.method || "GET", headers, body: opts.body });
+  const text = await res.text().catch(() => "");
+  let json = null;
+  try { json = text ? JSON.parse(text) : null; } catch(e){}
+  if(!res.ok){
+    throw new Error("ACC " + res.status + " · " + reg + " · " + (text || "").slice(0, 180));
+  }
+  return json;
+}
+
 /** Low-level hubs call that keeps status even when empty */
 async function apsFetchHubsRaw(region){
   let auth = await apsRefreshIfNeeded();
@@ -7447,31 +7471,19 @@ async function apsProjectTopFolders(hubId, projectId){
   const url = "https://developer.api.autodesk.com/project/v1/hubs/" + encodeURIComponent(hid) +
     "/projects/" + encodeURIComponent(pid) + "/topFolders";
   // Explicit region (EMEA) — same requirement as hubs list
-  let auth = await apsRefreshIfNeeded();
-  if(!auth || !auth.access_token) throw new Error("Not signed in");
-  const headers = Object.assign(
-    { Authorization: "Bearer " + auth.access_token, Accept: "application/json" },
-    apsRegionHeaders(reg)
-  );
-  const res = await fetch(url, { headers });
-  const text = await res.text().catch(() => "");
-  let json = null;
-  try { json = text ? JSON.parse(text) : null; } catch(e){}
-  if(!res.ok){
-    throw new Error("topFolders HTTP " + res.status + " · region " + reg + " · " + (text || "").slice(0, 160));
-  }
+  const json = await apsDmFetch(url, { region: reg });
   const folders = (json && json.data) || [];
   console.info("[APS topFolders]", { hubId: hid, projectId: pid, region: reg, count: folders.length });
   return folders;
 }
 async function apsFolderContents(projectId, folderId, opts){
-  // Data Management API — folders + tip items only (never version history rows)
-  // https://aps.autodesk.com/en/docs/data/v2/reference/http/projects-project_id-folders-folder_id-contents-GET/
+  // Data Management — always region-aware (EMEA/US). Used for subfolders + file sync.
   opts = opts || {};
   const pid = typeof apsNormalizeProjectId === "function" ? apsNormalizeProjectId(projectId) : projectId;
+  const fid = String(folderId || "").trim();
+  if(!pid || !fid) return [];
   const base = "https://developer.api.autodesk.com/data/v1/projects/" + encodeURIComponent(pid) +
-    "/folders/" + encodeURIComponent(folderId) + "/contents";
-  // filter[type]=items|folders — exclude "versions"
+    "/folders/" + encodeURIComponent(fid) + "/contents";
   const typeFilter = opts.itemsOnly ? "items" : (opts.foldersOnly ? "folders" : null);
   let url = base + "?page[limit]=200";
   if(typeFilter) url += "&filter[type]=" + encodeURIComponent(typeFilter);
@@ -7480,8 +7492,15 @@ async function apsFolderContents(projectId, folderId, opts){
   let guard = 0;
   while(url && guard < 100){
     guard++;
-    const data = await apsFetch(url);
-    const page = Array.isArray(data.data) ? data.data : [];
+    let data;
+    try {
+      data = await apsDmFetch(url);
+    } catch(e){
+      // If type filter not supported / empty, caller can retry unfiltered
+      if(typeFilter) throw e;
+      throw e;
+    }
+    const page = Array.isArray(data && data.data) ? data.data : [];
     page.forEach(it => {
       if(!it || !it.id) return;
       if(seenIds.has(it.id)) return;
@@ -7490,21 +7509,47 @@ async function apsFolderContents(projectId, folderId, opts){
       if(t === "versions" || t === "version") return;
       all.push(it);
     });
-    let next = (data.links && data.links.next) || null;
+    let next = (data && data.links && data.links.next) || null;
     if(next && typeof next === "object") next = next.href || next.url || null;
     if(next && typeof next === "string" && next.startsWith("/")){
       next = "https://developer.api.autodesk.com" + next;
     }
-    // strip accidental version includes if API ignores filter on next link
-    url = next || null;
+    url = (typeof next === "string" && next) ? next : null;
   }
   return all;
 }
+
+async function apsListChildFolders(projectId, folderId){
+  // Prefer folders filter; fall back to mixed contents + client filter
+  let folders = [];
+  try {
+    folders = await apsFolderContents(projectId, folderId, { foldersOnly: true });
+  } catch(e){
+    console.warn("foldersOnly failed", e);
+  }
+  if(!folders.length){
+    try {
+      const mixed = await apsFolderContents(pid, folderId, {});
+      folders = mixed.filter(x => /folder/i.test(String(x.type || "")));
+    } catch(e){
+      console.warn("mixed contents failed", e);
+      throw e;
+    }
+  } else {
+    // still filter defensively
+    folders = folders.filter(x => /folder/i.test(String(x.type || "")) || !x.type);
+  }
+  console.info("[APS child folders]", folderId, folders.length);
+  return folders.map(accFolderDisplay);
+}
+
 async function apsFolderItemsAndFolders(projectId, folderId){
+  // Sync walk entry — same EMEA region path as folder picker
+  const pid = typeof apsNormalizeProjectId === "function" ? apsNormalizeProjectId(projectId) : projectId;
   // Two filtered calls is more reliable than one mixed contents (avoids versions)
   const [folders, items] = await Promise.all([
-    apsFolderContents(projectId, folderId, { foldersOnly: true }).catch(() => []),
-    apsFolderContents(projectId, folderId, { itemsOnly: true }).catch(() => [])
+    apsFolderContents(pid, folderId, { foldersOnly: true }).catch(() => []),
+    apsFolderContents(pid, folderId, { itemsOnly: true }).catch(() => [])
   ]);
   // Fallback if filter unsupported: one unfiltered call, client-side filter
   if(!folders.length && !items.length){
@@ -7603,13 +7648,18 @@ async function openAccFolderPicker(project, kind){
       document.querySelectorAll("[data-acc-open]").forEach(btn => {
         btn.onclick = async () => {
           const id = btn.getAttribute("data-acc-open");
-          const name = btn.getAttribute("data-acc-name");
+          const name = btn.getAttribute("data-acc-name") || "Folder";
+          if(!id){ showToast("Missing folder id"); return; }
           try {
-            const contents = await apsFolderContents(project.accProjectId, id);
-            const folders = contents.filter(x => x.type === "folders").map(accFolderDisplay);
+            showToast("Loading subfolders…");
+            const folders = await apsListChildFolders(project.accProjectId, id);
             stack.push({ id, name, folders });
             render();
-          } catch(e){ showToast(String(e.message||e)); }
+            if(!folders.length) showToast("No subfolders in this folder");
+          } catch(e){
+            console.error(e);
+            showToast(String(e.message || e));
+          }
         };
       });
       document.querySelectorAll("[data-acc-sel]").forEach(btn => {
@@ -8331,8 +8381,9 @@ async function apsVersionApprovalStatus(projectId, versionUrn, preferredGateway,
 
 async function apsItemTip(projectId, itemId){
   try {
-    return await apsFetch(
-      "https://developer.api.autodesk.com/data/v1/projects/" + encodeURIComponent(projectId) +
+    const pid = typeof apsNormalizeProjectId === "function" ? apsNormalizeProjectId(projectId) : projectId;
+    return await apsDmFetch(
+      "https://developer.api.autodesk.com/data/v1/projects/" + encodeURIComponent(pid) +
       "/items/" + encodeURIComponent(itemId) + "/tip"
     );
   } catch(e){
