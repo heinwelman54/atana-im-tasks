@@ -1301,12 +1301,12 @@
 <body>
 
 <div id="atanaBootBeacon" style="position:fixed;bottom:72px;right:12px;z-index:99998;background:#14532d;color:#fff;font:12px/1.3 system-ui,sans-serif;padding:8px 12px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.25);max-width:220px;">
-  Loading Atana IM <strong>3.0.3</strong>…
+  Loading Atana IM <strong>3.0.4</strong>…
 </div>
 <script>
 (function(){
   window.__ATANA_BOOT = Date.now();
-  document.documentElement.setAttribute("data-atana-version","3.0.3");
+  document.documentElement.setAttribute("data-atana-version","3.0.4");
   window.addEventListener("error", function(ev){
     var b = document.getElementById("atanaBootBeacon");
     if(b){ b.style.background="#7f1d1d"; b.innerHTML = "Boot error: " + (ev.message||"unknown"); }
@@ -1315,7 +1315,7 @@
     var b = document.getElementById("atanaBootBeacon");
     if(b){
       b.style.background="#14532d";
-      b.innerHTML = "Atana IM <strong>v3.0.3</strong> ready";
+      b.innerHTML = "Atana IM <strong>v3.0.4</strong> ready";
       setTimeout(function(){ try{ b.remove(); }catch(e){} }, 4000);
     }
     // Kill stale service workers on first load of 3.0.0
@@ -1501,6 +1501,15 @@
         <div class="field">
           <label>APS Client Secret</label>
           <input type="password" id="apsClientSecret" placeholder="Client Secret" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field">
+          <label>ACC / APS region</label>
+          <select id="apsRegion">
+            <option value="EMEA">EMEA (Europe / UK / SA / Middle East)</option>
+            <option value="US">US</option>
+            <option value="AUS">AUS (Australia)</option>
+          </select>
+          <p class="section-sub" style="margin:6px 0 0;">Your ACC is on the <strong>EMEA</strong> server — this must stay on EMEA or hubs stay empty.</p>
         </div>
         <div class="field">
           <label>Callback / redirect URI (must match APS app exactly)</label>
@@ -1872,8 +1881,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.0.3";
-const APP_BUILD = "2026-08-17-accfix";
+const APP_VERSION = "3.0.4";
+const APP_BUILD = "2026-08-17-emea";
 /** Safe DOM write — never throw on missing nodes */
 function setHtml(elOrId, html){
   try {
@@ -7149,9 +7158,25 @@ async function apsFetch(url, opts){
     }
     if(!auth || !auth.access_token) throw new Error("Not signed in to Autodesk / ACC");
   }
-  const doFetch = (token) => fetch(url, {
-    headers: Object.assign({ Authorization: "Bearer " + token }, opts.headers || {})
-  });
+  const doFetch = (token) => {
+    const base = {
+      Authorization: "Bearer " + token,
+      Accept: "application/json"
+    };
+    // Default region for Data Management / ACC calls when caller did not set one
+    try {
+      if(!opts.headers || (!opts.headers.Region && !opts.headers["x-ads-region"])){
+        if(/\/project\/v1\//.test(url) || /\/construction\//.test(url) || /\/dm\//.test(url)){
+          const reg = apsPreferredRegion();
+          base.Region = reg;
+          base["x-ads-region"] = reg;
+        }
+      }
+    } catch(e){}
+    return fetch(url, {
+      headers: Object.assign(base, opts.headers || {})
+    });
+  };
   let res = await doFetch(auth.access_token);
   if(res.status === 401){
     // Keep refresh_token — only force-refresh access token
@@ -7205,40 +7230,90 @@ function apsProjectDisplay(p){
     type: p.type || "projects"
   };
 }
+function apsPreferredRegion(){
+  try {
+    const cfg = apsLoadCfg();
+    if(cfg && cfg.region) return String(cfg.region).toUpperCase();
+  } catch(e){}
+  return "EMEA"; // SA / EU ACC tenants
+}
+function apsRegionHeaders(region){
+  const h = { "Accept": "application/json" };
+  if(region){
+    h["Region"] = region;
+    h["x-ads-region"] = region;
+  }
+  return h;
+}
+/** Low-level hubs call that keeps status even when empty */
+async function apsFetchHubsRaw(region){
+  let auth = await apsRefreshIfNeeded();
+  if(!auth || !auth.access_token) throw new Error("Not signed in");
+  const headers = Object.assign(
+    { Authorization: "Bearer " + auth.access_token },
+    apsRegionHeaders(region)
+  );
+  const res = await fetch(APS_DM + "/hubs", { headers });
+  const text = await res.text().catch(() => "");
+  let json = null;
+  try { json = text ? JSON.parse(text) : null; } catch(e){}
+  return {
+    region: region || "default",
+    status: res.status,
+    ok: res.ok,
+    count: (json && Array.isArray(json.data)) ? json.data.length : 0,
+    data: (json && json.data) || [],
+    bodyPreview: text ? text.slice(0, 180) : ""
+  };
+}
 async function apsLoadAllProjects(){
   const out = [];
   const errors = [];
+  const attempts = [];
   let hubs = [];
-  // Try US then EMEA region headers (ACC accounts are region-bound)
-  const regions = [null, "US", "EMEA"];
+  const preferred = apsPreferredRegion();
+  // EMEA first for EU/SA, then others — empty array is not an exception
+  const regions = [preferred, "EMEA", "EU", "US", "AUS", null].filter((v, i, a) => a.indexOf(v) === i);
   for(const region of regions){
     try {
-      const headers = region ? { Region: region, "x-ads-region": region } : {};
-      const data = await apsFetch(APS_DM + "/hubs", { headers });
-      hubs = (data && data.data) || [];
-      if(hubs.length){
-        window.__apsLastHubRegion = region || "default";
+      const raw = await apsFetchHubsRaw(region);
+      attempts.push(raw.region + ": HTTP " + raw.status + " · hubs " + raw.count + (raw.bodyPreview && !raw.count ? (" · " + raw.bodyPreview) : ""));
+      if(raw.ok && raw.count > 0){
+        hubs = raw.data;
+        window.__apsLastHubRegion = raw.region;
         break;
+      }
+      if(!raw.ok){
+        errors.push("hubs[" + raw.region + "]: HTTP " + raw.status + " " + (raw.bodyPreview || ""));
       }
     } catch(e){
       errors.push("hubs[" + (region || "default") + "]: " + (e.message || e));
+      attempts.push((region || "default") + ": ERROR " + (e.message || e));
     }
   }
+  window.__apsHubAttempts = attempts;
   if(!hubs.length){
-    console.warn("[APS] no hubs", errors);
-    return { hubs: [], projects: out, errors, hint: "No hubs returned. In ACC Admin, add this APS Client ID under Custom Integrations (or Account Admin → Apps), and ensure scopes include data:read." };
+    console.warn("[APS] no hubs", attempts, errors);
+    return {
+      hubs: [],
+      projects: out,
+      errors: errors.concat(attempts),
+      hint: "No hubs for region " + preferred + ". EU/SA ACC needs header Region=EMEA on every Data Management call. Also confirm the APS Client ID is added on the EMEA ACC account (Account Admin → Custom integrations)."
+    };
   }
+  const region = window.__apsLastHubRegion && window.__apsLastHubRegion !== "default" ? window.__apsLastHubRegion : preferred;
   for(const h of hubs){
     const hubName = (h.attributes && (h.attributes.name || (h.attributes.extension && h.attributes.extension.data && h.attributes.extension.data.name))) || h.id;
     try {
-      const region = window.__apsLastHubRegion && window.__apsLastHubRegion !== "default" ? window.__apsLastHubRegion : null;
-      const headers = region ? { Region: region, "x-ads-region": region } : {};
-      const data = await apsFetch(APS_DM + "/hubs/" + encodeURIComponent(h.id) + "/projects", { headers });
+      const data = await apsFetch(APS_DM + "/hubs/" + encodeURIComponent(h.id) + "/projects", {
+        headers: apsRegionHeaders(region === "default" ? "EMEA" : region)
+      });
       const projects = (data && data.data) || [];
       projects.forEach(p => {
         const d = apsProjectDisplay(p);
         d.hubName = hubName;
         d.hubId = h.id;
+        d.region = region;
         out.push(d);
       });
     } catch(e){
@@ -7246,7 +7321,7 @@ async function apsLoadAllProjects(){
       errors.push("projects[" + h.id + "]: " + (e.message || e));
     }
   }
-  return { hubs, projects: out, errors };
+  return { hubs, projects: out, errors, attempts };
 }
 
 function bindProjectImageFields(project){
@@ -9853,7 +9928,8 @@ async function renderAccProjectList(){
       const hint = result.hint || "Check: (1) APS app Callback URL matches this site (2) Client ID is added under ACC Account Admin → Custom integrations (3) scopes include data:read account:read.";
       host.innerHTML = '<p class="section-sub"><strong>No projects returned.</strong> ' + escapeHtml(hint) + "</p>"
         + (errLines ? '<ul class="section-sub" style="margin:8px 0 0;padding-left:18px;">' + errLines + "</ul>" : "")
-        + '<p class="section-sub" style="margin-top:8px;">Hubs found: ' + String((result.hubs || []).length) + (window.__apsLastHubRegion ? (" · region " + window.__apsLastHubRegion) : "") + "</p>";
+        + '<p class="section-sub" style="margin-top:8px;">Hubs found: ' + String((result.hubs || []).length) + " · preferred region " + escapeHtml(apsPreferredRegion()) + (window.__apsLastHubRegion ? (" · matched " + window.__apsLastHubRegion) : "") + "</p>"
+        + (result.attempts && result.attempts.length ? '<pre class="section-sub" style="margin-top:8px;white-space:pre-wrap;font-size:11px;max-height:120px;overflow:auto;">' + escapeHtml(result.attempts.join("\n")) + "</pre>" : "");
       renderApsStatus();
       return;
     }
@@ -9924,6 +10000,18 @@ async function renderAccProjectList(){
 }
 function bindApsUi(){
   const cfg = apsLoadCfg();
+  if(!cfg.region){ cfg.region = "EMEA"; apsSaveCfg(cfg); }
+  const regEl = document.getElementById("apsRegion");
+  if(regEl){
+    regEl.value = cfg.region || "EMEA";
+    regEl.onchange = () => {
+      const c = apsLoadCfg();
+      c.region = regEl.value || "EMEA";
+      apsSaveCfg(c);
+      window.__apsLastHubRegion = c.region;
+      showToast("Region set to " + c.region + " — click Refresh projects");
+    };
+  }
   const idEl = document.getElementById("apsClientId");
   const secEl = document.getElementById("apsClientSecret");
   const reEl = document.getElementById("apsRedirectUri");
