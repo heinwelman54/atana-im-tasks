@@ -1265,6 +1265,25 @@
     content: attr(data-placeholder);
     color: #94a3b8; font-style: italic;
   }
+
+  /* Perf: skip off-screen role groups */
+  details.acc-role-group, details.plan-role-group, details.compare-role-group {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 120px;
+  }
+  table.docs-table tbody tr, table.clash-table tbody tr {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 32px;
+  }
+  tr.docs-row-selected, tr.docs-row-selected > td {
+    outline: 2px solid #7c3aed !important;
+    background: #ede9fe !important;
+  }
+  tr.docs-row-selected { box-shadow: inset 3px 0 0 #7c3aed; }
+  .docs-selectable { cursor: default; }
+  .docs-selectable tbody tr { cursor: pointer; }
+  .docs-selectable tbody tr.docs-form-hdr { cursor: default; }
+  .docs-selectable td { user-select: text; -webkit-user-select: text; }
 </style>
 </head>
 <body>
@@ -1806,8 +1825,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "2.2.12";
-const APP_BUILD = "2026-08-17j";
+const APP_VERSION = "2.2.13";
+const APP_BUILD = "2026-08-17k";
 const BUILTIN_HIERARCHY = [{"id":"S1","label":"Stage 1 — Inception","categories":[{"num":"1","title":"Common Data Environment (CDE)","subs":[{"num":"1.1","title":"CDE configuration","tasks":[{"id":"t-1.1-root","name":"Setup project CDE","children":[{"id":"t-1.1-3","name":"Create project CDE workspace"},{"id":"t-1.1-4","name":"Setup package / container structure"},{"id":"t-1.1-5","name":"Configure CDE states (WIP / Shared / Published / Archive)"},{"id":"t-1.1-sec","name":"Configure CDE security and access model"},{"id":"t-1.1-pi","name":"Setup central project information container"}]},{"id":"t-1.1-info","name":"Define project information & naming","children":[{"id":"t-1.1-0","name":"Define project attributes"},{"id":"t-1.1-12","name":"Setup standard attributes"},{"id":"t-1.1-2","name":"Configure metadata schema"},{"id":"t-1.1-1","name":"Configure naming convention in CDE"}]},{"id":"t-1.1-ops","name":"Configure CDE operations","children":[{"id":"t-1.1-8","name":"Configure CDE workflows and approval gates"},{"id":"t-1.1-9","name":"Configure search and filters"},{"id":"t-1.1-11","name":"Setup Published structure"}]}]},{"num":"1.2","title":"Collaboration platforms","tasks":[{"id":"t-1.2-root","name":"Setup collaboration platforms","children":[{"id":"t-1.2-0","name":"Create project team (Teams)"},{"id":"t-1.2-1","name":"Create SharePoint / project site"},{"id":"t-1.2-2","name":"Configure folder structure"},{"id":"t-1.2-3","name":"Configure permissions"},{"id":"t-1.2-4","name":"Configure dashboards"},{"id":"t-1.2-5","name":"Configure reporting"},{"id":"t-1.2-6","name":"Configure synchronisation with CDE"}]}]},{"num":"1.5","title":"User administration","tasks":[{"id":"t-1.5-root","name":"Administer CDE users & roles","children":[{"id":"t-1.1-6","name":"Invite enabling team (DTL, PDM & IM) to CDE"},{"id":"t-1.1-7","name":"Assign enabling-team functional roles (DTL, PDM, IM)"},{"id":"t-1.5-0","name":"Manage users"},{"id":"t-1.5-1","name":"Manage permissions"},{"id":"t-1.5-3","name":"Audit access"},{"id":"t-1.5-2","name":"Support task teams on CDE"}]}]}]},{"num":"2","title":"Information Delivery Planning","subs":[{"num":"2.1","title":"Appointing party information requirements","tasks":[{"id":"t-2.1-root","name":"Capture appointing party requirements","children":[{"id":"t-2.1-0","name":"Review OIR","appClient":true},{"id":"t-2.1-1","name":"Review AIR","appClient":true},{"id":"t-2.1-2","name":"Review EIR","appClient":true},{"id":"t-2.1-3","name":"Review client standards"},{"id":"t-2.1-4","name":"Extract requirements from scope"},{"id":"t-2.1-5","name":"Extract requirements from tender"},{"id":"t-2.1-6","name":"Extract requirements from basis of design"},{"id":"t-2.1-cap","name":"Capture EIR with DTL and PDM"}]},{"id":"t-2.1-gap","name":"Assess requirements gap","children":[{"id":"t-2.1-7","name":"Gap assessment vs Atana IM standards"},{"id":"t-2.1-8","name":"ISO 19650 compliance assessment"},{"id":"t-2.1-9","name":"Apply Atana IM standards where EIR is silent"}]}]},{"num":"2.2","title":"BEP and delivery strategy","tasks":[{"id":"t-2.2-root","name":"Establish BEP & delivery strategy","children":[{"id":"t-2.2-0","name":"Define information requirements response"},{"id":"t-2.2-1","name":"Define exchange requirements response"},{"id":"t-2.2-2","name":"Define asset information response"},{"id":"t-2.2-3","name":"Define acceptance criteria"},{"id":"t-2.2-4","name":"Define delivery methodology"},{"id":"t-2.2-5","name":"Create requirements traceability matrix"},{"id":"t-2.2-bep","name":"Draft / maintain project BEP"}]}]},{"num":"2.6","title":"Information management assignment matrix","tasks":[{"id":"t-2.6-root","name":"IM assignment matrix","children":[{"id":"t-2.6-0","name":"Review standard IM responsibility matrix"},{"id":"t-2.6-1","name":"Verify roles (ISO functional roles)"},{"id":"t-2.6-2","name":"Verify authorities"},{"id":"t-2.6-3","name":"Verify responsibilities"},{"id":"t-2.6-m","name":"Maintain project IM assignment matrix"}]}]},{"num":"2.7","title":"Mobilisation (IM)","tasks":[{"id":"t-2.7-root","name":"Mobilise IM capability","children":[{"id":"t-2.7-0","name":"Confirm IM resource availability"},{"id":"t-2.7-1","name":"Mobilise information technology for CDE"},{"id":"t-2.7-2","name":"Test CDE information exchanges"},{"id":"t-2.7-3","name":"Identify IM training needs"}]}]}]},{"num":"3","title":"Information Standards & Convention","subs":[{"num":"3.1","title":"Naming and codes","tasks":[{"id":"t-3.1-root","name":"Configure naming convention system","children":[{"id":"t-2.8-0","name":"Configure naming tool"},{"id":"t-2.8-1","name":"Configure project codes"},{"id":"t-2.8-2","name":"Configure task teams / disciplines"},{"id":"t-2.8-3","name":"Configure work stages"},{"id":"t-2.8-4","name":"Verify naming outputs"},{"id":"t-3.1-del","name":"Define deliverable naming convention"},{"id":"t-3.1-ast","name":"Define asset naming convention"}]}]},{"num":"3.2","title":"Work stage and volume setup","tasks":[{"id":"t-3.2-root","name":"Configure stages & volumes","children":[{"id":"t-2.9-0","name":"Configure work stages"},{"id":"t-2.9-1","name":"Generate baseline deliverables list"},{"id":"t-3.2-vol","name":"Define volume / spatial strategy"}]}]},{"num":"3.3","title":"Classification and parameters","tasks":[{"id":"t-3.3-root","name":"Classification & shared parameters","children":[{"id":"t-3.3-0","name":"Define Uniclass / classification strategy"},{"id":"t-3.3-1","name":"Setup shared parameters (project)"},{"id":"t-3.3-2","name":"Setup shared parameters (client)","appClient":true},{"id":"t-3.3-tb","name":"Create project titleblock and drawing templates"},{"id":"t-3.3-tb-dist","name":"Distribute titleblocks and drawing templates to task teams"},{"id":"t-3.3-lib","name":"Setup shared content / family library"}]}]}]},{"num":"4","title":"Digital Plan of Works & LOIN","subs":[{"num":"4.1","title":"DPoW baseline","tasks":[{"id":"t-4.1-root","name":"Establish Digital Plan of Works","children":[{"id":"t-4.1-0","name":"Setup Digital Plan of Works (DPoW)"},{"id":"t-4.1-1","name":"Define LOIN template per work stage"},{"id":"t-4.1-2","name":"Define functional breakdown"},{"id":"t-4.1-3","name":"Define spatial breakdown"},{"id":"t-4.1-4","name":"Communicate LOIN guidance to task teams"}]}]},{"num":"4.2","title":"MIDP / TIDP systems","tasks":[{"id":"t-4.2-root","name":"Setup MIDP & TIDP systems","children":[{"id":"t-4.2-0","name":"Setup MIDP hosting system"},{"id":"t-4.2-1","name":"Setup TIDP templates and system"},{"id":"t-4.2-2","name":"Baseline MIDP deliverables and dates"}]}]}]},{"num":"5","title":"Information Quality Assurance (IQA)","subs":[{"num":"5.1","title":"Acceptance baseline","tasks":[{"id":"t-5.1-root","name":"Define IQA baseline","children":[{"id":"t-5.1-0","name":"Define information acceptance criteria"},{"id":"t-5.1-1","name":"Define suitability / status codes"}]}]}]},{"num":"6","title":"Design & Information Coordination (VDC)","subs":[{"num":"6.1","title":"Coordination strategy","tasks":[{"id":"t-6.1-root","name":"Define coordination strategy","children":[{"id":"t-6.1-0","name":"Define federation strategy"},{"id":"t-6.1-1","name":"Define clash detection strategy"},{"id":"t-6.1-2","name":"Define issue management workflow"},{"id":"t-6.1-3","name":"Define interface management approach"},{"id":"t-6.1-model","name":"Define central model and worksharing strategy"},{"id":"t-6.1-views","name":"Define standard coordination views (sections / ceiling plans)"}]}]}]}]},{"id":"S2","label":"Stage 2 — Concept","categories":[{"num":"1","title":"Common Data Environment (CDE)","subs":[{"num":"1.3","title":"CDE refinement","tasks":[{"id":"t-1.3-root","name":"Refine CDE for concept","children":[{"id":"t-1.3-0","name":"Refine CDE package structure for concept"},{"id":"t-1.3-1","name":"Update CDE workflows for concept exchanges"},{"id":"t-1.3-2","name":"Audit CDE access and permissions"},{"id":"t-S2-cde-autopub","name":"Set auto-publish of models in Collaboration space (weekly · Sundays)"},{"id":"t-S2-cde-offtake","name":"Capture static federation offtake after concept data drops"},{"id":"t-S2-cde-share","name":"Share complete federation package to Shared state"}]}]},{"num":"1.5","title":"User administration (task teams)","tasks":[{"id":"t-S2-inv-root","name":"Invite task teams & stakeholders","children":[{"id":"t-S2-inv-0","name":"Invite task team members (TTM, TTIM, IA)"},{"id":"t-S2-inv-1","name":"Invite peer reviewers"},{"id":"t-S2-inv-2","name":"Invite client / appointing party users as required"},{"id":"t-S2-inv-3","name":"Invite external third parties as required"},{"id":"t-S2-inv-4","name":"Assign task-team CDE permissions"}]}]}]},{"num":"2","title":"Information Delivery Planning","subs":[{"num":"2.3","title":"Confirm appointment information","tasks":[{"id":"t-2.3-root","name":"Confirm appointment information","children":[{"id":"t-2.3-0","name":"Confirm delivery team BEP"},{"id":"t-2.3-1","name":"Update high-level responsibility matrix"},{"id":"t-2.3-2","name":"Confirm production methods and procedures"},{"id":"t-2.3-3","name":"Confirm IT and software schedule"},{"id":"t-2.3-4","name":"Align information milestones with programme"}]}]},{"num":"2.4","title":"MIDP / TIDP concept","tasks":[{"id":"t-2.4-root","name":"Establish concept MIDP / TIDP","children":[{"id":"t-2.4-0","name":"Establish detailed TIDP templates"},{"id":"t-2.4-1","name":"Establish concept MIDP"},{"id":"t-2.4-2","name":"Inform task teams of MIDP baseline"}]}]}]},{"num":"3","title":"Information Standards & Convention","subs":[{"num":"3.4","title":"Standards alignment","tasks":[{"id":"t-3.4-root","name":"Align standards for concept","children":[{"id":"t-3.4-0","name":"Agree amendments to information standard"},{"id":"t-3.4-1","name":"Update shared resources for concept"},{"id":"t-3.4-2","name":"Security triage of project information"},{"id":"t-3.4-tb","name":"Confirm titleblocks and shared resources issued"}]}]}]},{"num":"4","title":"Digital Plan of Works & LOIN","subs":[{"num":"4.3","title":"Concept LOIN","tasks":[{"id":"t-4.3-root","name":"Update LOIN for concept","children":[{"id":"t-4.3-0","name":"Update DPoW for concept stage"},{"id":"t-4.3-1","name":"Set LOIN for concept deliverables"},{"id":"t-4.3-2","name":"Align functional breakdown to concept scope"}]}]}]},{"num":"5","title":"Information Quality Assurance (IQA)","subs":[{"num":"5.2","title":"Concept QA setup","tasks":[{"id":"t-5.2-root","name":"Setup concept QA","children":[{"id":"t-5.2-0","name":"Define concept QA checklist"},{"id":"t-5.2-1","name":"Configure model checking rules"}]}]}]},{"num":"6","title":"Design & Information Coordination (VDC)","subs":[{"num":"6.2","title":"Coordinates and phases","tasks":[{"id":"t-6.2-root","name":"Establish coordinates & phases","children":[{"id":"t-6.2-0","name":"Confirm survey / civil base data"},{"id":"t-6.2-1","name":"Set model coordinates (base and survey points)"},{"id":"t-6.2-2","name":"Setup project phases"},{"id":"t-6.2-3","name":"Hand over coordinates and phases to TTIMs"}]}]},{"num":"6.3","title":"Federation baseline","tasks":[{"id":"t-6.3-root","name":"Mobilise concept model federation","children":[{"id":"t-6.3-0","name":"Establish shared model spaces for concept federation"},{"id":"t-6.3-central","name":"Create central / shared concept coordination models"},{"id":"t-6.3-seed","name":"Create seed models per discipline (linked to central)"},{"id":"t-6.3-dist","name":"Distribute central models and links to task teams"},{"id":"t-6.3-verify","name":"Verify central model links and worksharing"}]}]}]}]},{"id":"S3","label":"Stage 3 — Developed Design","categories":[{"num":"1","title":"Common Data Environment (CDE)","subs":[{"num":"1.4","title":"CDE operations","tasks":[{"id":"t-S3-cde-root","name":"Maintain CDE operations","children":[{"id":"t-S3-cde-0","name":"Maintain CDE states and workflows"},{"id":"t-S3-cde-1","name":"Manage Shared and Published releases"},{"id":"t-S3-cde-2","name":"Monitor CDE audit trail"},{"id":"t-S3-cde-council","name":"Capture federation offtake for council permitting package"},{"id":"t-S3-cde-autopub","name":"Maintain weekly Sunday auto-publish of models in Collaboration space"}]}]},{"num":"1.5","title":"User administration (remaining teams)","tasks":[{"id":"t-S3-inv-root","name":"Invite remaining task teams for federation","children":[{"id":"t-S3-inv-0","name":"Invite remaining discipline task teams to CDE"},{"id":"t-S3-inv-1","name":"Onboard smaller task teams into federation"},{"id":"t-S3-inv-2","name":"Confirm auto-publish (Sundays) still active for new teams"}]}]}]},{"num":"2","title":"Information Delivery Planning","subs":[{"num":"2.0","title":"BIM / IM kick-off","tasks":[{"id":"t-S3-kick-root","name":"BIM / IM kick-off (start of Stage 3)","children":[{"id":"t-S3-kick-0","name":"Hold BIM / IM kick-off meeting"},{"id":"t-S3-kick-1","name":"Issue kick-off agenda and BEP overview"},{"id":"t-S3-kick-2","name":"Record kick-off actions and owners"},{"id":"t-S3-kick-3","name":"Confirm clash & issue cycle starts week 2 of Stage 3"}]}]},{"num":"2.5","title":"MIDP / TIDP stage update","tasks":[{"id":"t-S3-midp-root","name":"Update MIDP / TIDP for stage","children":[{"id":"t-S3-midp-0","name":"Update MIDP for work stage"},{"id":"t-S3-midp-1","name":"Coordinate TIDP status with TTMs"},{"id":"t-S3-midp-2","name":"Monitor information delivery vs milestones"},{"id":"t-S3-midp-3","name":"Report delivery risks to DTL / appointing party"}]}]}]},{"num":"4","title":"Digital Plan of Works & LOIN","subs":[{"num":"4.4","title":"Stage LOIN","tasks":[{"id":"t-S3-loin-root","name":"Update LOIN for stage","children":[{"id":"t-S3-loin-0","name":"Update DPoW for work stage"},{"id":"t-S3-loin-1","name":"Confirm LOIN for stage deliverables"},{"id":"t-S3-loin-2","name":"Communicate LOIN changes to task teams"}]}]}]},{"num":"5","title":"Information Quality Assurance (IQA)","subs":[{"num":"5.3","title":"Pre-share QA","tasks":[{"id":"t-S3-qa-root","name":"Pre-share information QA","children":[{"id":"t-S3-qa-0","name":"Undertake information QA check before Shared"},{"id":"t-S3-qa-1","name":"Validate deliverables against EIR and BEP"},{"id":"t-S3-qa-2","name":"Assign suitability status on containers"},{"id":"t-S3-qa-3","name":"Review information model for authorisation"}]}]},{"num":"5.4","title":"Model information audits","tasks":[{"id":"t-S3-aud-root","name":"Audit model information","children":[{"id":"t-S3-aud-0","name":"Audit model metadata"},{"id":"t-S3-aud-1","name":"Audit coordinates compliance"},{"id":"t-S3-aud-2","name":"Audit deliverable exports"},{"id":"t-S3-aud-3","name":"Audit MIDP/TIDP compliance"}]}]}]},{"num":"6","title":"Design & Information Coordination (VDC)","subs":[{"num":"6.3","title":"Structural openings & spatial enablement","tasks":[{"id":"t-S3-open-root","name":"Enable structural opening requirements","children":[{"id":"t-S3-open-0","name":"Issue structural opening requirements request to task teams"},{"id":"t-S3-open-1","name":"Collect service reticulation requirements within dedicated zones"},{"id":"t-S3-open-2","name":"Coordinate spatial requirements to structural engineer"},{"id":"t-S3-open-3","name":"Track structural opening mark-ups and acceptance"}]}]},{"num":"6.4","title":"Federation and clash","tasks":[{"id":"t-S3-fed-root","name":"Federation & clash management (P01–P02 in Stage 3)","children":[{"id":"t-S3-fed-0","name":"Federate remaining task team models"},{"id":"t-S3-fed-1","name":"Run clash detection — Priority 01 & 02 (complete before end of Stage 3)"},{"id":"t-S3-fed-2","name":"Manage issues for Priority 01 & 02 resolution"},{"id":"t-S3-fed-3","name":"Maintain interface register"},{"id":"t-S3-fed-4","name":"Support coordination meetings"},{"id":"t-S3-fed-5","name":"Produce Stage 3 coordination reports (P01–P02)"}]}]},{"num":"6.5","title":"Change and exchange","tasks":[{"id":"t-S3-chg-root","name":"Manage design change information","children":[{"id":"t-S3-chg-0","name":"Track design changes in CDE"},{"id":"t-S3-chg-1","name":"Assess information impacts of changes"},{"id":"t-S3-chg-2","name":"Communicate information exchanges"}]}]},{"num":"6.6","title":"Coordination drawings & sections","tasks":[{"id":"t-S3-coord-root","name":"Early Stage 3 coordination drawings (IM)","children":[{"id":"t-S3-sz","name":"Create Service Zone sections (early Stage 3)"},{"id":"t-S3-sz-pub","name":"Publish Service Zone sections to Shared"},{"id":"t-S3-ceil","name":"Create ceiling services void & combined ceiling coordination layouts (early Stage 3)"},{"id":"t-S3-ceil-pub","name":"Publish ceiling void & combined coordination layouts to Shared"},{"id":"t-S3-coord-issue","name":"Issue coordination drawings for task-team mark-up"},{"id":"t-S3-offtake","name":"Capture static federation offtake after each data drop / council package"},{"id":"t-S3-offtake-share","name":"Share complete federation package to Shared state"}]}]}]}]},{"id":"S4","label":"Stage 4 — Technical Design","categories":[{"num":"1","title":"Common Data Environment (CDE)","subs":[{"num":"1.4","title":"CDE operations","tasks":[{"id":"t-S4-cde-root","name":"Maintain CDE operations","children":[{"id":"t-S4-cde-0","name":"Maintain CDE states and workflows"},{"id":"t-S4-cde-1","name":"Manage Shared and Published releases"},{"id":"t-S4-cde-2","name":"Monitor CDE audit trail"},{"id":"t-S4-cde-offtake","name":"Capture static federation offtake after each Stage 4 data drop"},{"id":"t-S4-cde-share","name":"Share complete federation package to Shared state"}]}]}]},{"num":"2","title":"Information Delivery Planning","subs":[{"num":"2.5","title":"MIDP / TIDP stage update","tasks":[{"id":"t-S4-midp-root","name":"Update MIDP / TIDP for stage","children":[{"id":"t-S4-midp-0","name":"Update MIDP for work stage"},{"id":"t-S4-midp-1","name":"Coordinate TIDP status with TTMs"},{"id":"t-S4-midp-2","name":"Monitor information delivery vs milestones"},{"id":"t-S4-midp-3","name":"Report delivery risks to DTL / appointing party"}]}]}]},{"num":"4","title":"Digital Plan of Works & LOIN","subs":[{"num":"4.4","title":"Stage LOIN","tasks":[{"id":"t-S4-loin-root","name":"Update LOIN for stage","children":[{"id":"t-S4-loin-0","name":"Update DPoW for work stage"},{"id":"t-S4-loin-1","name":"Confirm LOIN for stage deliverables"},{"id":"t-S4-loin-2","name":"Communicate LOIN changes to task teams"}]}]}]},{"num":"5","title":"Information Quality Assurance (IQA)","subs":[{"num":"5.3","title":"Pre-share QA","tasks":[{"id":"t-S4-qa-root","name":"Pre-share information QA","children":[{"id":"t-S4-qa-0","name":"Undertake information QA check before Shared"},{"id":"t-S4-qa-1","name":"Validate deliverables against EIR and BEP"},{"id":"t-S4-qa-2","name":"Assign suitability status on containers"},{"id":"t-S4-qa-3","name":"Review information model for authorisation"}]}]},{"num":"5.4","title":"Model information audits","tasks":[{"id":"t-S4-aud-root","name":"Audit model information","children":[{"id":"t-S4-aud-0","name":"Audit model metadata"},{"id":"t-S4-aud-1","name":"Audit coordinates compliance"},{"id":"t-S4-aud-2","name":"Audit deliverable exports"},{"id":"t-S4-aud-3","name":"Audit MIDP/TIDP compliance"}]}]}]},{"num":"6","title":"Design & Information Coordination (VDC)","subs":[{"num":"6.4","title":"Federation and clash","tasks":[{"id":"t-S4-fed-root","name":"Federation & clash management (Priority 03+ in Stage 4)","children":[{"id":"t-S4-fed-0","name":"Federate task team models"},{"id":"t-S4-fed-1","name":"Run clash detection — Priority 03 and remaining (Stage 4)"},{"id":"t-S4-fed-2","name":"Manage issues for Priority 03+ resolution"},{"id":"t-S4-fed-3","name":"Maintain interface register"},{"id":"t-S4-fed-4","name":"Support coordination meetings"},{"id":"t-S4-fed-5","name":"Produce Stage 4 coordination reports (P03+)"}]}]},{"num":"6.5","title":"Change and exchange","tasks":[{"id":"t-S4-chg-root","name":"Manage design change information","children":[{"id":"t-S4-chg-0","name":"Track design changes in CDE"},{"id":"t-S4-chg-1","name":"Assess information impacts of changes"},{"id":"t-S4-chg-2","name":"Communicate information exchanges"}]}]},{"num":"6.6","title":"Coordination drawings & sections","tasks":[{"id":"t-S4-coord-root","name":"Update coordination drawing set","children":[{"id":"t-S4-sz","name":"Update Service Zone sections"},{"id":"t-S4-sz-pub","name":"Publish Service Zone sections to Shared"},{"id":"t-S4-ceil","name":"Update ceiling coordination plans"},{"id":"t-S4-ceil-pub","name":"Publish ceiling coordination plans to Shared"},{"id":"t-S4-coord-issue","name":"Issue technical coordination drawings for review"}]}]}]}]},{"id":"S5","label":"Stage 5 — Construction","categories":[{"num":"1","title":"Common Data Environment (CDE)","subs":[{"num":"1.6","title":"Construction CDE modules","tasks":[{"id":"t-1.6-root","name":"Configure construction CDE modules","children":[{"id":"t-1.6-0","name":"Configure issues module"},{"id":"t-1.6-1","name":"Configure snagging"},{"id":"t-1.6-2","name":"Configure RFIs"},{"id":"t-1.6-3","name":"Configure submittals"},{"id":"t-1.6-4","name":"Configure specifications exchange"},{"id":"t-1.6-5","name":"Configure reviews"},{"id":"t-1.6-6","name":"Configure correspondence"},{"id":"t-1.6-7","name":"Configure site instructions"}]}]},{"num":"1.5","title":"User administration (contractor)","tasks":[{"id":"t-S5-inv-root","name":"Invite contractor team","children":[{"id":"t-S5-inv-0","name":"Invite main contractor information team to CDE"},{"id":"t-S5-inv-1","name":"Invite contractor subcontractors / suppliers as required"},{"id":"t-S5-inv-2","name":"Assign contractor CDE permissions and containers"},{"id":"t-S5-inv-3","name":"Brief contractor on naming, states and exchange rules"}]}]}]},{"num":"2","title":"Information Delivery Planning","subs":[{"num":"2.10","title":"Construction information delivery","tasks":[{"id":"t-2.10-root","name":"Manage construction information delivery","children":[{"id":"t-2.10-0","name":"Update MIDP for construction exchanges"},{"id":"t-2.10-1","name":"Track contractor information deliverables"},{"id":"t-2.10-2","name":"Monitor construction information milestones"}]}]}]},{"num":"4","title":"Digital Plan of Works & LOIN","subs":[{"num":"4.5","title":"Construction LOIN","tasks":[{"id":"t-4.5-root","name":"Update LOIN for construction","children":[{"id":"t-4.5-0","name":"Update DPoW for construction / manufacture LOD"},{"id":"t-4.5-1","name":"Confirm LOIN for contractor models (LOD4/5 information)"}]}]}]},{"num":"5","title":"Information Quality Assurance (IQA)","subs":[{"num":"5.11","title":"Non-conformance information","tasks":[{"id":"t-5.11-root","name":"Manage information NCRs","children":[{"id":"t-5.11-0","name":"Record information NCRs"},{"id":"t-5.11-1","name":"Assign corrective actions"},{"id":"t-5.11-2","name":"Verify NCR close-out"}]}]}]},{"num":"6","title":"Design & Information Coordination (VDC)","subs":[{"num":"6.11","title":"Construction coordination","tasks":[{"id":"t-6.11-root","name":"Construction model coordination","children":[{"id":"t-6.11-0","name":"Federate construction models"},{"id":"t-6.11-1","name":"Track contractor model deliverables"},{"id":"t-6.11-2","name":"Coordinate site information exchanges"},{"id":"t-6.11-3","name":"Clash detection on contractor information (LOD4/5)"},{"id":"t-S5-offtake","name":"Capture static construction federation offtake after data drops"},{"id":"t-S5-offtake-share","name":"Share construction federation package to Shared state"}]}]},{"num":"6.11b","title":"Snagging mapping","tasks":[{"id":"t-S5-snag-map-root","name":"Snagging mapping (WS5 week 2)","est":40,"children":[{"id":"t-S5-snag-map","name":"Snagging mapping — map and record construction snags","est":40}]}]},{"num":"6.12","title":"RFI and site issues","tasks":[{"id":"t-6.12-root","name":"Track site information issues","children":[{"id":"t-6.12-0","name":"Track RFIs in CDE"},{"id":"t-6.12-1","name":"Track snags"},{"id":"t-6.12-2","name":"Track site issues"}]}]}]}]},{"id":"S6","label":"Stage 6 — Close-out","categories":[{"num":"1","title":"Common Data Environment (CDE)","subs":[{"num":"1.7","title":"Archive management","tasks":[{"id":"t-1.7-root","name":"Archive project information","children":[{"id":"t-1.7-0","name":"Archive deliverables"},{"id":"t-1.7-1","name":"Archive models"},{"id":"t-1.7-2","name":"Archive correspondence"},{"id":"t-1.7-3","name":"Verify CDE audit trail"}]}]}]},{"num":"5","title":"Information Quality Assurance (IQA)","subs":[{"num":"5.12","title":"Handover QA","tasks":[{"id":"t-5.12-root","name":"Handover information QA","children":[{"id":"t-5.12-0","name":"Audit final deliverables"},{"id":"t-5.12-1","name":"Audit AIM","appClient":true},{"id":"t-5.12-2","name":"Verify appointing party acceptance"}]}]}]},{"num":"6","title":"Design & Information Coordination (VDC)","subs":[{"num":"6.13","title":"Handover coordination","tasks":[{"id":"t-6.13-root","name":"Close-out coordination","children":[{"id":"t-6.13-2","name":"Verify handover readiness"},{"id":"t-6.13-1","name":"Verify final federation"},{"id":"t-6.13-0","name":"Verify information closure"},{"id":"t-6.13-ll","name":"Capture lessons learned (IM)"}]}]}]}]}];
 
 /* ===================== MIDP GENERATOR (project-linked) ===================== */
@@ -3006,11 +3025,14 @@ function renderMidpTool(project){
     try { openColumnSettings("acc", projectById(project.id) || project); }
     catch(e){ console.error(e); showToast("Columns: " + (e.message||e)); }
   };
-  try { enableDocsTableResizeIn(list); } catch(e){}
   try { bindDocsRowSelection(list); } catch(e){}
+  try { bindDocsDetailsResize(list); } catch(e){}
+  // Defer column resize — avoids main-thread stall on large tables
   try {
-    const sum = document.getElementById("midpDocsSummary");
-    if(sum) bindDocsRowSelection(sum);
+    if(window.__docsResizeTimer) clearTimeout(window.__docsResizeTimer);
+    window.__docsResizeTimer = setTimeout(() => {
+      try { enableDocsTableResizeIn(list); } catch(e){}
+    }, 100);
   } catch(e){}
   try {
     const summaryEl = document.getElementById("midpDocsSummary") || document.getElementById("midp-docs-summary");
@@ -3935,11 +3957,33 @@ function enableTableColumnResize(table){
     };
   });
 }
+
+function bindDocsDetailsResize(root){
+  if(!root || root.dataset.detailsResizeBound === "1") return;
+  root.dataset.detailsResizeBound = "1";
+  root.addEventListener("toggle", (e) => {
+    const d = e.target;
+    if(!d || d.tagName !== "DETAILS" || !d.open) return;
+    try {
+      d.querySelectorAll("table.clash-table, table.docs-table").forEach(t => {
+        enableTableColumnResize(t);
+        if(typeof bindCompareTableInteractions === "function") bindCompareTableInteractions(t);
+      });
+    } catch(err){}
+  }, true);
+}
 function enableDocsTableResizeIn(root){
   if(!root) return;
-  root.querySelectorAll("table.clash-table, table.docs-table").forEach(t => {
+  // Only bind resize on open/visible tables to keep scroll smooth
+  const tables = root.querySelectorAll("table.clash-table, table.docs-table");
+  let n = 0;
+  tables.forEach(t => {
+    const det = t.closest("details");
+    if(det && !det.open) return;
+    if(n > 12) return; // hard cap per pass
     enableTableColumnResize(t);
     if(typeof bindCompareTableInteractions === "function") bindCompareTableInteractions(t);
+    n++;
   });
 }
 function openColumnSettings(kind, project){
@@ -4411,43 +4455,76 @@ function docsFilterBarHtml(filesOrRows, view, stageId){
   </div>`;
 }
 
-/** Cross-tab document selection (Plan / FORMA / Compare) */
+
+/** Cross-tab document selection (Plan / FORMA / Compare) — event delegation for performance */
 window.__docsSelectedId = window.__docsSelectedId || "";
+window.__docsSelectedTr = null;
+
 function docsDocIdFromRow(tr){
   if(!tr) return "";
-  return String(tr.getAttribute("data-doc-id") || tr.dataset.docId || "").trim();
-}
-function highlightDocsSelection(root){
-  const id = window.__docsSelectedId || "";
-  (root || document).querySelectorAll("tr[data-doc-id]").forEach(tr => {
-    const match = id && docsDocIdFromRow(tr) === id;
-    tr.classList.toggle("docs-row-selected", !!match);
-  });
-  if(id){
-    const el = (root || document).querySelector('tr[data-doc-id="'+CSS.escape(id)+'"]');
-    if(el) try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch(e){}
+  let id = String(tr.getAttribute("data-doc-id") || "").trim();
+  if(id) return id;
+  const mono = tr.querySelector("td.mono");
+  const txt = (mono && (mono.getAttribute("title") || mono.textContent)) || (tr.cells[0] && tr.cells[0].textContent) || "";
+  id = String(txt).replace(/…/g,"").trim().split(/\s+/)[0];
+  if(id && id !== "—"){
+    if(typeof normalizeDocId === "function") id = normalizeDocId(id) || id;
+    tr.setAttribute("data-doc-id", id);
   }
+  return id || "";
 }
-function selectDocsRow(tr, copyCellText){
-  if(!tr) return;
-  const id = docsDocIdFromRow(tr);
-  window.__docsSelectedId = id;
-  document.querySelectorAll("tr.docs-row-selected").forEach(r => r.classList.remove("docs-row-selected"));
-  tr.classList.add("docs-row-selected");
-  if(copyCellText){
-    try {
-      navigator.clipboard.writeText(String(copyCellText).trim());
-      showToast("Copied");
-    } catch(e){
-      try {
-        const ta = document.createElement("textarea");
-        ta.value = String(copyCellText).trim();
-        document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
-        showToast("Copied");
-      } catch(err){}
+
+function highlightDocsSelection(root, opts){
+  const id = window.__docsSelectedId || "";
+  const forceScroll = !!(opts && opts.scroll);
+  // Fast path: only clear previous + mark new
+  if(window.__docsSelectedTr && window.__docsSelectedTr.isConnected){
+    window.__docsSelectedTr.classList.remove("docs-row-selected");
+  }
+  window.__docsSelectedTr = null;
+  if(!id) return;
+  const scope = root || document.getElementById("midpDocsList") || document;
+  let el = null;
+  try { el = scope.querySelector('tr[data-doc-id="'+CSS.escape(id)+'"]'); } catch(e){}
+  if(!el){
+    // fallback scan limited
+    const rows = scope.querySelectorAll("tr[data-doc-id]");
+    for(let i=0;i<rows.length;i++){
+      if(rows[i].getAttribute("data-doc-id") === id){ el = rows[i]; break; }
+    }
+  }
+  if(el){
+    el.classList.add("docs-row-selected");
+    window.__docsSelectedTr = el;
+    if(forceScroll){
+      let d = el.closest("details");
+      while(d){ d.open = true; d = d.parentElement && d.parentElement.closest("details"); }
+      try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch(e){}
     }
   }
 }
+
+function selectDocsRow(tr, copyCellText){
+  if(!tr || tr.classList.contains("docs-form-hdr")) return;
+  const id = docsDocIdFromRow(tr);
+  window.__docsSelectedId = id;
+  if(window.__docsSelectedTr && window.__docsSelectedTr !== tr && window.__docsSelectedTr.isConnected){
+    window.__docsSelectedTr.classList.remove("docs-row-selected");
+  }
+  tr.classList.add("docs-row-selected");
+  window.__docsSelectedTr = tr;
+  if(copyCellText && String(copyCellText).trim() && String(copyCellText).trim() !== "—"){
+    const t = String(copyCellText).trim();
+    try {
+      if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t);
+      else {
+        const ta = document.createElement("textarea");
+        ta.value = t; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+      }
+    } catch(e){}
+  }
+}
+
 function ensureDocsCtxMenu(){
   let m = document.getElementById("docsCtxMenu");
   if(m) return m;
@@ -4460,88 +4537,65 @@ function ensureDocsCtxMenu(){
     <button type="button" data-docs-go="compare">Go to Compare</button>
   `;
   document.body.appendChild(m);
-  m.onclick = (e) => {
+  m.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-docs-go]");
     if(!btn) return;
     const tab = btn.getAttribute("data-docs-go");
     m.style.display = "none";
+    window.__docsViewTab = tab;
     try {
-      window.__docsViewTab = tab;
       document.querySelectorAll("[data-docs-tab]").forEach(b => {
-        b.classList.toggle("active", b.getAttribute("data-docs-tab") === tab);
-        if(b.getAttribute("data-docs-tab") === tab) b.click();
-      });
-      // Also try radio/button patterns used in UI
-      document.querySelectorAll("[data-midp-docs-tab], [data-view]").forEach(b => {
-        const v = b.getAttribute("data-midp-docs-tab") || b.getAttribute("data-view");
-        if(v === tab || (tab==="acc" && (v==="forma"||v==="acc")) || (tab==="imported" && (v==="plan"||v==="imported"))){
-          try { b.click(); } catch(err){}
-        }
+        if(b.getAttribute("data-docs-tab") === tab) try { b.click(); } catch(err){}
       });
       const p = projectById(currentProjectId);
-      if(p && typeof renderAccDocsTracking === "function"){
-        renderAccDocsTracking(p);
-      }
-      setTimeout(() => {
-        const root = document.getElementById("midpDocsList") || document.getElementById("midpDocsSummary") || document;
-        highlightDocsSelection(root);
-        const id = window.__docsSelectedId;
-        if(id){
-          const el = root.querySelector('tr[data-doc-id="'+CSS.escape(id)+'"]');
-          if(el){
-            // expand parent details
-            let d = el.closest("details");
-            while(d){ d.open = true; d = d.parentElement && d.parentElement.closest("details"); }
-            el.scrollIntoView({ block: "center", behavior: "smooth" });
-            el.classList.add("docs-row-selected");
-          }
-        }
-      }, 80);
+      if(p && typeof renderAccDocsTracking === "function") renderAccDocsTracking(p);
+      setTimeout(() => highlightDocsSelection(document.getElementById("midpDocsList"), { scroll: true }), 60);
     } catch(err){ console.warn(err); }
-  };
-  document.addEventListener("click", () => { m.style.display = "none"; });
+  });
   return m;
 }
 
+/** One delegated listener per container — works with thousands of rows */
 function bindDocsRowSelection(root){
   if(!root) return;
-  root.querySelectorAll("table.docs-table, table.clash-table").forEach(table => {
-    table.classList.add("docs-selectable");
-    table.querySelectorAll("tbody tr").forEach(tr => {
-      if(tr.classList.contains("docs-form-hdr")) return;
-      if(!tr.getAttribute("data-doc-id")){
-        const mono = tr.querySelector("td.mono") || tr.children[0];
-        const txt = mono ? (mono.getAttribute("title") || mono.textContent || "") : "";
-        const id = String(txt || "").replace(/…/g,"").trim().split(/\s+/)[0];
-        if(id && id !== "—"){
-          const nid = (typeof normalizeDocId === "function") ? normalizeDocId(id) : id;
-          tr.setAttribute("data-doc-id", nid || id);
-        }
-      }
-      tr.style.cursor = "pointer";
-      tr.onclick = (e) => {
-        if(e.button !== 0) return;
-        const cell = e.target.closest("td");
-        const cellText = cell ? (cell.getAttribute("title") || cell.innerText || "") : "";
-        selectDocsRow(tr, cellText);
-      };
-      tr.oncontextmenu = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        selectDocsRow(tr, null);
-        const m = ensureDocsCtxMenu();
-        m.style.display = "block";
-        m.style.left = Math.min(e.clientX, window.innerWidth - 220) + "px";
-        m.style.top = Math.min(e.clientY, window.innerHeight - 160) + "px";
-      };
-    });
+  if(root.dataset.docsSelectBound === "1"){
+    // Still re-apply selection highlight after re-render
+    highlightDocsSelection(root);
+    return;
+  }
+  root.dataset.docsSelectBound = "1";
+  root.addEventListener("click", (e) => {
+    const tr = e.target.closest("tbody tr");
+    if(!tr || !root.contains(tr) || tr.classList.contains("docs-form-hdr")) return;
+    if(!tr.closest("table.docs-table, table.clash-table")) return;
+    const cell = e.target.closest("td");
+    // Don't steal real text selection drags
+    if(window.getSelection && String(window.getSelection()).length > 0) return;
+    const cellText = cell ? (cell.getAttribute("title") || cell.innerText || "") : "";
+    selectDocsRow(tr, cellText);
   });
+  root.addEventListener("contextmenu", (e) => {
+    const tr = e.target.closest("tbody tr");
+    if(!tr || !root.contains(tr) || tr.classList.contains("docs-form-hdr")) return;
+    if(!tr.closest("table.docs-table, table.clash-table")) return;
+    e.preventDefault();
+    selectDocsRow(tr, null);
+    const m = ensureDocsCtxMenu();
+    m.style.display = "block";
+    m.style.left = Math.min(e.clientX, window.innerWidth - 220) + "px";
+    m.style.top = Math.min(e.clientY, window.innerHeight - 160) + "px";
+  });
+  // Hide menu on outside click (once globally)
+  if(!window.__docsCtxHideBound){
+    window.__docsCtxHideBound = true;
+    document.addEventListener("click", () => {
+      const m = document.getElementById("docsCtxMenu");
+      if(m) m.style.display = "none";
+    });
+  }
   highlightDocsSelection(root);
 }
 
-
-
-/** Group rows by task team (role), optionally nested by Form under each team. */
 function groupDocsByRoleAndForm(rows, getRole, getForm){
   const byRole = {};
   (rows || []).forEach(r => {
@@ -4568,6 +4622,7 @@ function bindDocsFilters(project){
   if(gbf){
     gbf.onchange = () => {
       window.__docsGroupByForm = !!gbf.checked;
+      window.__midpRenderedFor = "";
       try { renderAccDocsTracking(projectById(project.id) || project); } catch(e){}
     };
   }
@@ -5201,6 +5256,10 @@ async function exportMidpDocsView(project){
 
 
 function renderAccDocsTracking(project){
+  try {
+    window.__midpRenderedFor = (project && project.id) + "|" + (window.__docsTrackStage || (project && project.currentStageId) || "") + "|" + (window.__docsViewTab || "acc");
+  } catch(e){}
+
   // Cross-gateway flow index (WIP → SHARED → PUBLISHED) for same Document ID
   try {
     const files = (project && project.accDeliverablesCache) || [];
@@ -5509,14 +5568,14 @@ function renderAccDocsTracking(project){
       if(!byRole[role]) byRole[role] = [];
       byRole[role].push(f);
     });
-    const LIMIT = 40;
+    const LIMIT = 25;
     const openRoles = window.__accOpenRoles || {};
     const curStage = stageId || project.currentStageId || "";
     list.innerHTML = docsCdeGatewayBarHtml(project, project.accDeliverablesCache || []) +
       docsFilterBarHtml(project.accDeliverablesCache || [], "acc", curStage) + Object.keys(byRole).sort().map(role => {
       const rr = byRole[role];
       const hasOpenState = Object.prototype.hasOwnProperty.call(openRoles, role);
-      const isOpen = hasOpenState ? !!openRoles[role] : (Object.keys(byRole).length <= 3);
+      const isOpen = hasOpenState ? !!openRoles[role] : false;
       const show = isOpen ? rr : rr.slice(0, LIMIT);
       const more = rr.length > LIMIT && !isOpen;
       return `<details class="acc-role-group" data-role="${escapeHtml(role)}" ${isOpen ? "open" : ""}>
@@ -11025,8 +11084,15 @@ function setActiveWsView(view){
     }
     if(main === "dpow" && typeof renderDpow === "function") renderDpow(project);
     if(main === "midp" && typeof renderMidpTool === "function"){
-      try { renderMidpTool(project); }
-      catch(err){ console.error("renderMidpTool", err); showToast("MIDP view error: " + (err.message||err)); }
+      try {
+        // Skip full rebuild if MIDP already mounted for this project/stage
+        const list = document.getElementById("midpDocsList");
+        const same = window.__midpRenderedFor === (project.id + "|" + (window.__docsTrackStage || project.currentStageId || "") + "|" + (window.__docsViewTab || "acc"));
+        if(!same || !list || !list.childElementCount){
+          renderMidpTool(project);
+          window.__midpRenderedFor = project.id + "|" + (window.__docsTrackStage || project.currentStageId || "") + "|" + (window.__docsViewTab || "acc");
+        }
+      } catch(err){ console.error("renderMidpTool", err); showToast("MIDP view error: " + (err.message||err)); }
     }
     if(main === "prjtools" && typeof bindProjectTools === "function") bindProjectTools(project);
     if(main === "prjdocs" && typeof bindProjectDocs === "function") bindProjectDocs(project);
