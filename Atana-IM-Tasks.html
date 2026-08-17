@@ -1301,12 +1301,12 @@
 <body>
 
 <div id="atanaBootBeacon" style="position:fixed;bottom:72px;right:12px;z-index:99998;background:#14532d;color:#fff;font:12px/1.3 system-ui,sans-serif;padding:8px 12px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.25);max-width:220px;">
-  Loading Atana IM <strong>3.0.5</strong>…
+  Loading Atana IM <strong>3.0.6</strong>…
 </div>
 <script>
 (function(){
   window.__ATANA_BOOT = Date.now();
-  document.documentElement.setAttribute("data-atana-version","3.0.5");
+  document.documentElement.setAttribute("data-atana-version","3.0.6");
   window.addEventListener("error", function(ev){
     var b = document.getElementById("atanaBootBeacon");
     if(b){ b.style.background="#7f1d1d"; b.innerHTML = "Boot error: " + (ev.message||"unknown"); }
@@ -1315,7 +1315,7 @@
     var b = document.getElementById("atanaBootBeacon");
     if(b){
       b.style.background="#14532d";
-      b.innerHTML = "Atana IM <strong>v3.0.5</strong> ready";
+      b.innerHTML = "Atana IM <strong>v3.0.6</strong> ready";
       setTimeout(function(){ try{ b.remove(); }catch(e){} }, 4000);
     }
     // Kill stale service workers on first load of 3.0.0
@@ -1881,8 +1881,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.0.5";
-const APP_BUILD = "2026-08-17-projlist";
+const APP_VERSION = "3.0.6";
+const APP_BUILD = "2026-08-17-folders";
 /** Safe DOM write — never throw on missing nodes */
 function setHtml(elOrId, html){
   try {
@@ -7166,7 +7166,7 @@ async function apsFetch(url, opts){
     // Default region for Data Management / ACC calls when caller did not set one
     try {
       if(!opts.headers || (!opts.headers.Region && !opts.headers["x-ads-region"])){
-        if(/\/project\/v1\//.test(url) || /\/construction\//.test(url) || /\/dm\//.test(url)){
+        if(/\/project\/v1\//.test(url) || /\/data\/v1\//.test(url) || /\/construction\//.test(url) || /\/dm\//.test(url)){
           const reg = apsPreferredRegion();
           base.Region = reg;
           base["x-ads-region"] = reg;
@@ -7432,16 +7432,44 @@ async function apsTopFolders(projectId){
   const pid = projectId.startsWith("b.") ? projectId : projectId;
   return apsFetch("https://developer.api.autodesk.com/project/v1/hubs/placeholder/projects/" + encodeURIComponent(pid) + "/topFolders").catch(() => null);
 }
+function apsNormalizeProjectId(projectId){
+  const id = String(projectId || "").trim();
+  if(!id) return id;
+  // Data Management / ACC project ids are usually b.{guid}
+  if(/^b\./i.test(id)) return id;
+  if(/^[0-9a-f-]{36}$/i.test(id)) return "b." + id;
+  return id;
+}
 async function apsProjectTopFolders(hubId, projectId){
-  const url = "https://developer.api.autodesk.com/project/v1/hubs/" + encodeURIComponent(hubId) + "/projects/" + encodeURIComponent(projectId) + "/topFolders";
-  const data = await apsFetch(url);
-  return data.data || [];
+  const reg = apsPreferredRegion();
+  const pid = apsNormalizeProjectId(projectId);
+  const hid = String(hubId || "").trim();
+  const url = "https://developer.api.autodesk.com/project/v1/hubs/" + encodeURIComponent(hid) +
+    "/projects/" + encodeURIComponent(pid) + "/topFolders";
+  // Explicit region (EMEA) — same requirement as hubs list
+  let auth = await apsRefreshIfNeeded();
+  if(!auth || !auth.access_token) throw new Error("Not signed in");
+  const headers = Object.assign(
+    { Authorization: "Bearer " + auth.access_token, Accept: "application/json" },
+    apsRegionHeaders(reg)
+  );
+  const res = await fetch(url, { headers });
+  const text = await res.text().catch(() => "");
+  let json = null;
+  try { json = text ? JSON.parse(text) : null; } catch(e){}
+  if(!res.ok){
+    throw new Error("topFolders HTTP " + res.status + " · region " + reg + " · " + (text || "").slice(0, 160));
+  }
+  const folders = (json && json.data) || [];
+  console.info("[APS topFolders]", { hubId: hid, projectId: pid, region: reg, count: folders.length });
+  return folders;
 }
 async function apsFolderContents(projectId, folderId, opts){
   // Data Management API — folders + tip items only (never version history rows)
   // https://aps.autodesk.com/en/docs/data/v2/reference/http/projects-project_id-folders-folder_id-contents-GET/
   opts = opts || {};
-  const base = "https://developer.api.autodesk.com/data/v1/projects/" + encodeURIComponent(projectId) +
+  const pid = typeof apsNormalizeProjectId === "function" ? apsNormalizeProjectId(projectId) : projectId;
+  const base = "https://developer.api.autodesk.com/data/v1/projects/" + encodeURIComponent(pid) +
     "/folders/" + encodeURIComponent(folderId) + "/contents";
   // filter[type]=items|folders — exclude "versions"
   const typeFilter = opts.itemsOnly ? "items" : (opts.foldersOnly ? "folders" : null);
@@ -7506,8 +7534,33 @@ async function openAccFolderPicker(project, kind){
   if(!project.accProjectId){ showToast("Link an ACC project first"); return; }
   if(!project.accHubId){ showToast("Missing ACC hub id — re-link the project"); return; }
   try {
-    showToast("Loading ACC folders…");
-    const tops = await apsProjectTopFolders(project.accHubId, project.accProjectId);
+    showToast("Loading ACC folders (" + apsPreferredRegion() + ")…");
+    if(!project.accHubId){
+      showToast("Missing hub id on this project — re-import/link the ACC project");
+      return;
+    }
+    let tops = [];
+    try {
+      tops = await apsProjectTopFolders(project.accHubId, project.accProjectId);
+    } catch(err){
+      console.error(err);
+      openSheet(`
+        <h2>ACC folders</h2>
+        <p class="section-sub" style="color:var(--danger);">Could not load top folders.</p>
+        <pre class="section-sub" style="white-space:pre-wrap;font-size:11px;">${escapeHtml(String(err && err.message || err))}</pre>
+        <p class="section-sub">Hub: ${escapeHtml(project.accHubId || "")}<br>Project: ${escapeHtml(project.accProjectId || "")}<br>Region: ${escapeHtml(apsPreferredRegion())}</p>
+        <div class="sheet-actions"><button class="btn btn-ghost" onclick="closeSheet()">Close</button></div>`);
+      return;
+    }
+    if(!tops.length){
+      openSheet(`
+        <h2>Select root Docs folder</h2>
+        <p class="section-sub">No top folders returned for this project.</p>
+        <p class="section-sub">Hub: ${escapeHtml(project.accHubId || "")}<br>Project: ${escapeHtml(project.accProjectId || "")}<br>Region: ${escapeHtml(apsPreferredRegion())}</p>
+        <p class="section-sub">Check that your user can open this project in ACC Docs, and that region is <strong>EMEA</strong>.</p>
+        <div class="sheet-actions"><button class="btn btn-ghost" onclick="closeSheet()">Close</button></div>`);
+      return;
+    }
     let stack = [{ id: null, name: "Top", folders: tops.map(accFolderDisplay) }];
     const render = () => {
       const cur = stack[stack.length - 1];
