@@ -1296,17 +1296,30 @@
     color: #94a3b8; font-style: italic;
   }
 
+
+.org-plate.multi-assigned{ border:2px solid #dc2626 !important; background:#fef2f2 !important; box-shadow:0 0 0 1px #fecaca; }
+.org-plate.multi-assigned .nm{ color:#b91c1c; font-weight:700; }
+.org-role-col.slot-overfilled .role-title{ color:#b91c1c; font-weight:700; }
+.org-plate.ghost{
+  opacity:0.45; border:1px dashed #94a3b8 !important; background:#f8fafc !important;
+  pointer-events:none;
+}
+.org-plate.ghost .nm{ font-style:italic; color:#64748b; }
+.org-plate.ghost::after{ content:" ACC"; font-size:9px; color:#94a3b8; }
+.catalog-row{ display:grid; padding:6px 4px; border-bottom:1px solid var(--slate-100); }
+.catalog-row .code{ font-weight:700; color:var(--purple-950); }
+.catalog-row .lbl{ font-size:13px; color:var(--slate-700); }
 </style>
 </head>
 <body>
 
 <div id="atanaBootBeacon" style="position:fixed;bottom:72px;right:12px;z-index:99998;background:#14532d;color:#fff;font:12px/1.3 system-ui,sans-serif;padding:8px 12px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.25);max-width:220px;">
-  Loading Atana IM <strong>3.0.8</strong>…
+  Loading Atana IM <strong>3.1.0</strong>…
 </div>
 <script>
 (function(){
   window.__ATANA_BOOT = Date.now();
-  document.documentElement.setAttribute("data-atana-version","3.0.8");
+  document.documentElement.setAttribute("data-atana-version","3.1.0");
   window.addEventListener("error", function(ev){
     var b = document.getElementById("atanaBootBeacon");
     if(b){ b.style.background="#7f1d1d"; b.innerHTML = "Boot error: " + (ev.message||"unknown"); }
@@ -1315,7 +1328,7 @@
     var b = document.getElementById("atanaBootBeacon");
     if(b){
       b.style.background="#14532d";
-      b.innerHTML = "Atana IM <strong>v3.0.8</strong> ready";
+      b.innerHTML = "Atana IM <strong>v3.1.0</strong> ready";
       setTimeout(function(){ try{ b.remove(); }catch(e){} }, 4000);
     }
     // Kill stale service workers on first load of 3.0.0
@@ -1881,8 +1894,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.0.8";
-const APP_BUILD = "2026-08-17-sync-emea";
+const APP_VERSION = "3.1.0";
+const APP_BUILD = "2026-08-18-settings-org";
 /** Safe DOM write — never throw on missing nodes */
 function setHtml(elOrId, html){
   try {
@@ -2012,7 +2025,7 @@ function documentSeriesStep(seriesCode, catalog){
 const DEFAULT_ROLES = [
   ["ST","Structural"], ["AR","Architecture"], ["EE","Electrical"], ["CV","Civil"], ["YS","Security Specialist"],
   ["FP","Fire Protection"], ["PE","Process Engineer"], ["ME","Mechanical"], ["PD","Public Health"], ["FD","Fire Detection"],
-  ["YC","Data Centre Systems"], ["IC","Building Controls / BMS"], ["YI","ICT / Data Infrastructure"],
+  ["YC","Data Centre Systems"],
   ["IM","Information Management"], ["ZZ","General / Multi-Disciplinary"],
 ];
 
@@ -7259,14 +7272,24 @@ async function apsDmFetch(url, opts){
     apsRegionHeaders(reg),
     opts.headers || {}
   );
-  const res = await fetch(url, { method: opts.method || "GET", headers, body: opts.body });
-  const text = await res.text().catch(() => "");
-  let json = null;
-  try { json = text ? JSON.parse(text) : null; } catch(e){}
-  if(!res.ok){
-    throw new Error("ACC " + res.status + " · " + reg + " · " + (text || "").slice(0, 180));
+  const timeoutMs = opts.timeoutMs != null ? opts.timeoutMs : 28000;
+  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch(e){} }, timeoutMs) : null;
+  try {
+    const res = await fetch(url, { method: opts.method || "GET", headers, body: opts.body, signal: ctrl ? ctrl.signal : undefined });
+    const text = await res.text().catch(() => "");
+    let json = null;
+    try { json = text ? JSON.parse(text) : null; } catch(e){}
+    if(!res.ok){
+      throw new Error("ACC " + res.status + " · " + reg + " · " + (text || "").slice(0, 180));
+    }
+    return json;
+  } catch(e){
+    if(e && e.name === "AbortError") throw new Error("ACC timeout after " + timeoutMs + "ms · " + reg);
+    throw e;
+  } finally {
+    if(timer) clearTimeout(timer);
   }
-  return json;
 }
 
 /** Low-level hubs call that keeps status even when empty */
@@ -7544,26 +7567,30 @@ async function apsListChildFolders(projectId, folderId){
 }
 
 async function apsFolderItemsAndFolders(projectId, folderId){
-  // Sync walk entry — same EMEA region path as folder picker
+  // Sync walk — always region-aware via apsFolderContents → apsDmFetch
   const pid = typeof apsNormalizeProjectId === "function" ? apsNormalizeProjectId(projectId) : projectId;
-  // Two filtered calls is more reliable than one mixed contents (avoids versions)
-  const [folders, items] = await Promise.all([
-    apsFolderContents(pid, folderId, { foldersOnly: true }).catch(() => []),
-    apsFolderContents(pid, folderId, { itemsOnly: true }).catch(() => [])
-  ]);
-  // Fallback if filter unsupported: one unfiltered call, client-side filter
-  if(!folders.length && !items.length){
-    const mixed = await apsFolderContents(projectId, folderId, {});
-    const fs = [], its = [];
-    mixed.forEach(it => {
-      const t = String(it.type || "").toLowerCase();
-      if(t === "folders" || t === "folder" || String(it.id||"").includes("fs.folder")) fs.push(it);
-      else if(t === "items" || t === "item" || String(it.id||"").includes("fs.file")) its.push(it);
-      // skip versions
-    });
-    return { folders: fs, items: its };
+  let folders = await apsFolderContents(pid, folderId, { foldersOnly: true }).catch(() => []);
+  let items = await apsFolderContents(pid, folderId, { itemsOnly: true }).catch(() => []);
+  // If either side empty, mixed contents is more reliable on EMEA (filter can return [])
+  if(!folders.length || !items.length){
+    try {
+      const mixed = await apsFolderContents(pid, folderId, {});
+      const fs = [], its = [];
+      mixed.forEach(it => {
+        const t = String(it.type || "").toLowerCase();
+        const id = String(it.id || "");
+        if(t === "folders" || t === "folder" || id.includes("fs.folder")) fs.push(it);
+        else if(t === "versions" || t === "version") return;
+        else if(t === "items" || t === "item" || id.includes("fs.file") || id.includes("dm.lineage")) its.push(it);
+        else if(t) its.push(it); // unknown types treated as items for listing
+      });
+      if(!folders.length) folders = fs;
+      if(!items.length) items = its;
+    } catch(e){
+      console.warn("mixed contents", folderId, e);
+    }
   }
-  return { folders, items };
+  return { folders: folders || [], items: items || [] };
 }
 function accFolderDisplay(f){
   const attrs = f.attributes || {};
@@ -9595,8 +9622,14 @@ async function loadAccDeliverables(project, force){
     project.accDeliverablesCache = live.accDeliverablesCache;
     project.accDeliverablesSyncedAt = live.accDeliverablesSyncedAt;
     project.accDeliverablesFolderCount = folderCount;
-    // memory only until enrich finishes — avoids quota mid-scan
-    showToast("Found " + lean.length + " files in " + folderCount + " folders" + (apiErrors ? " (" + apiErrors + " folder errors)" : "") + " — enriching metadata…");
+    // WRITE IMMEDIATELY so a failed enrich still leaves a usable list
+    try {
+      await persistAccDeliverables(live, lean);
+      showToast("Saved " + lean.length + " files — enriching metadata…");
+    } catch(e){
+      console.warn("early persist", e);
+      showToast("Found " + lean.length + " files (save deferred) — enriching…");
+    }
     try {
       if(typeof renderAccDocsTracking === "function" && currentWsView === "midp")
         renderAccDocsTracking(live);
@@ -9604,9 +9637,8 @@ async function loadAccDeliverables(project, force){
 
     // Pass 2 — enrich tip + custom attributes (best effort; keep lean on failure)
     const files = [];
-    // Parallel enrich: tip + custom attrs + per-file approval-statuses (official API).
-    // Skip full reviews-list map (slow on large projects); per-file endpoint is enough.
-    const batch = 40;
+    // Smaller batches on EMEA to avoid rate-limit hangs after large scans
+    const batch = 8;
     const approvalMap = new Map();
     showToast("Enriching " + fileItems.length + " files (batch " + batch + ")…");
     if(typeof setFormaSyncProgress === "function") setFormaSyncProgress(15, "Found " + fileItems.length + " files — enriching…");
@@ -9620,7 +9652,7 @@ async function loadAccDeliverables(project, force){
       const enriched = await Promise.all(slice.map(async ({ item, folderPath, cdeState }, idx) => {
         const base = lean[i + idx];
         try {
-          const rec = await enrichAccItem(projectId, item, approvalMap, cdeState || base.cdeState || "", { skipTip: false });
+          const rec = await enrichAccItem(projectId, item, approvalMap, cdeState || base.cdeState || "", { skipTip: false, forceTip: false });
           rec.folderPath = folderPath || base.folderPath || "";
           rec.folderId = base.folderId || rec.folderId || "";
           rec.cdeState = cdeState || base.cdeState || detectCdeStateFromPath(rec.folderPath) || "";
@@ -9706,25 +9738,9 @@ async function loadAccDeliverables(project, force){
       project.accCustomAttributeDefinitions = slimDefs;
       saveData(DATA);
       if(slimDefs.length){
-        // Auto-download definitions for mapping
-        const payload = {
-          generatedAt: new Date().toISOString(),
-          projectId: live.accProjectId,
-          definitions: slimDefs,
-          sourceUrl: defResult.sourceUrl,
-          region: defResult.region,
-          attempts: defResult.attempts
-        };
-        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = "FORMA-custom-attribute-definitions.json";
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { try{ URL.revokeObjectURL(a.href); a.remove(); }catch(e){} }, 1200);
-        showToast("ACC sync done: " + slimFiles.length + " docs · " + slimDefs.length + " attribute definitions downloaded");
+        showToast("ACC sync done: " + slimFiles.length + " docs · " + slimDefs.length + " attribute definitions");
       } else {
-        showToast("ACC sync done: " + slimFiles.length + " docs · attribute definitions empty (see console attempts)");
+        showToast("ACC sync done: " + slimFiles.length + " docs");
         console.warn("custom-attribute-definitions attempts", defResult.attempts);
       }
     } catch(e){
@@ -9741,10 +9757,18 @@ async function loadAccDeliverables(project, force){
     window.__apsSyncInProgress = false;
     return files;
   } catch(e){
-    console.error(e);
+    console.error("[loadAccDeliverables]", e);
     window.__apsSyncInProgress = false;
+    if(typeof setFormaSyncProgress === "function") setFormaSyncProgress(100, "Sync error");
     showToast("Docs sync failed: " + (e.message || e));
+    // Keep whatever was already persisted (lean list)
+    try {
+      if(typeof renderAccDocsTracking === "function" && currentWsView === "midp")
+        renderAccDocsTracking(live);
+    } catch(err){}
     return live.accDeliverablesCache || [];
+  } finally {
+    window.__apsSyncInProgress = false;
   }
 }
 
@@ -16473,27 +16497,28 @@ function readClientAppFromForm(){
 }
 
 function catalogEditorHtml(list, idPrefix, title){
-  const rows = (list || []).map((item, i) => `
-    <div class="catalog-row" data-idx="${i}" style="grid-template-columns:52px 1fr auto auto;">
-      <span class="code" title="${escapeHtml(item.code)}">${escapeHtml(item.code)}</span>
-      <div class="lbl-wrap">
-        <span class="lbl" title="${escapeHtml(item.label)}">${escapeHtml(item.label)}</span>
-        ${item.description ? `<div class="desc">${escapeHtml(item.description)}</div>` : ""}
-      </div>
+  // Value (=code) + Description (=label). Description field removed — maps cleanly to FORMA attributes.
+  const rows = (list || []).map((item, i) => {
+    const value = item.code || "";
+    const desc = item.label || item.description || "";
+    return `
+    <div class="catalog-row" data-idx="${i}" style="grid-template-columns:88px 1fr auto auto;align-items:center;gap:8px;">
+      <span class="code mono" title="Value">${escapeHtml(value)}</span>
+      <span class="lbl" title="Description">${escapeHtml(desc)}</span>
       <button type="button" class="cat-edit" data-cat-edit="${idPrefix}" data-idx="${i}">Edit</button>
       <button type="button" class="cat-edit" data-cat-del="${idPrefix}" data-idx="${i}" style="color:#b91c1c;border-color:#fecaca;" title="Delete">Del</button>
-    </div>`).join("");
+    </div>`;
+  }).join("");
   return `
-    <div class="field" style="margin-bottom:12px;">
-      <label>${title}</label>
-      <p class="section-sub" style="margin:0 0 6px;">Edit code, label &amp; description, or delete. Activate for a batch under <strong>MIDP</strong> only.</p>
-      <div class="catalog-editor" id="cat-list-${idPrefix}">${rows || '<span class="section-sub">None yet</span>'}</div>
-      <div class="catalog-add">
-        <div class="row">
-          <input type="text" id="cat-code-${idPrefix}" class="mono" placeholder="Code" style="width:72px;flex:0 0 72px;">
-          <input type="text" id="cat-label-${idPrefix}" placeholder="Name">
+    <div class="field catalog-block" style="margin-bottom:14px;">
+      <label style="margin-bottom:4px;">${title}</label>
+      <p class="section-sub" style="margin:0 0 8px;">Edit value &amp; description. Activate for a batch under MIDP only.</p>
+      <div class="catalog-list" style="max-height:220px;overflow:auto;border:1px solid var(--slate-100);border-radius:10px;padding:4px 6px;">${rows || '<span class="section-sub">None yet</span>'}</div>
+      <div class="catalog-add" style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+        <div class="row" style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="cat-code-${idPrefix}" class="mono" placeholder="Value" style="width:88px;flex:0 0 88px;" title="Value (FORMA code)">
+          <input type="text" id="cat-label-${idPrefix}" placeholder="Description" style="flex:1;" title="Description (FORMA display name)">
         </div>
-        <input type="text" id="cat-desc-${idPrefix}" placeholder="Description (optional)">
         <button type="button" class="btn btn-primary btn-xs" data-cat-add="${idPrefix}" style="align-self:flex-start;">+ Add</button>
       </div>
     </div>`;
@@ -16585,8 +16610,8 @@ function bindCatalogEditors(initialCatalog){
       const prefix = add.getAttribute("data-cat-add");
       const code = (document.getElementById("cat-code-" + prefix)?.value || "").trim().toUpperCase();
       const label = (document.getElementById("cat-label-" + prefix)?.value || "").trim().toUpperCase() || code;
-      const description = (document.getElementById("cat-desc-" + prefix)?.value || "").trim();
-      if(!code){ showToast("Enter a code"); return; }
+      const description = "";
+      if(!code){ showToast("Enter a value"); return; }
       if(!cat[keyMap[prefix]]) cat[keyMap[prefix]] = [];
       const list = cat[keyMap[prefix]];
       if(list.some(x => x.code === code)){ showToast("Code already exists"); return; }
@@ -16617,12 +16642,11 @@ function bindCatalogEditors(initialCatalog){
       const idx = parseInt(editBtn.getAttribute("data-idx"), 10);
       const item = cat[keyMap[prefix]][idx];
       if(!item) return;
-      const newCode = prompt("Code", item.code);
+      const newCode = prompt("Value", item.code);
       if(newCode === null) return;
-      const newLabel = prompt("Name / label", item.label);
+      const newLabel = prompt("Description", item.label || item.description || "");
       if(newLabel === null) return;
-      const newDesc = prompt("Description (optional)", item.description || "");
-      if(newDesc === null) return;
+      const newDesc = "";
       const code = (newCode.trim() || item.code).toUpperCase();
       const list = cat[keyMap[prefix]];
       if(list.some((x, j) => j !== idx && String(x.code).toUpperCase() === code)){
@@ -16905,12 +16929,37 @@ function renderProjectTeamPanel(project){
   const team = window.__projectTeamDraft || ensureProjectTeam(project);
   window.__projectTeamDraft = team;
   const activeRoles = (cat.roles||[]).filter(r => r.selected !== false);
+  const CRITICAL_SLOTS = new Set(["DTL","PDM","TTM","TTIM","PEER"]);
   const byBucket = (func, disc) => team.members.filter(m => m.func===func && (disc ? m.discipline===disc : ["DTL","PDM","IM","DM"].includes(m.func)));
-  const plate = (m) => `<div class="org-plate" draggable="true" data-member-id="${escapeHtml(m.id)}" title="${escapeHtml(m.email||"")}">
-      <button type="button" class="org-plate-x" data-remove-member="${escapeHtml(m.id)}" title="Remove">×</button>
+  const accMembers = (project.accOrganogram && Array.isArray(project.accOrganogram.members)) ? project.accOrganogram.members : [];
+  const byAccBucket = (func, disc) => accMembers.filter(m => m.func===func && (disc ? m.discipline===disc : ["DTL","PDM","IM","DM"].includes(m.func)));
+  const emailKey = (m) => String(m.email || m.name || "").toLowerCase().trim();
+  const appEmailsIn = (func, disc) => new Set(byBucket(func, disc).map(emailKey).filter(Boolean));
+  const plate = (m, opts) => {
+    opts = opts || {};
+    const multi = !!opts.multi;
+    const ghost = !!opts.ghost;
+    const cls = "org-plate" + (multi ? " multi-assigned" : "") + (ghost ? " ghost" : "");
+    const drag = ghost ? "" : ` draggable="true" data-member-id="${escapeHtml(m.id)}"`;
+    const rm = ghost ? "" : `<button type="button" class="org-plate-x" data-remove-member="${escapeHtml(m.id)}" title="Remove">×</button>`;
+    return `<div class="${cls}"${drag} title="${escapeHtml((ghost ? "ACC: " : "") + (m.email||m.roleName||""))}">
+      ${rm}
       <span class="nm">${escapeHtml(m.name)}</span>
-      <span class="em">${escapeHtml(m.func)}${m.discipline && !["DTL","PDM","IM","DM"].includes(m.func) ? " · "+escapeHtml(m.discipline) : ""} · ${escapeHtml(m.email||"")}</span>
+      <span class="em">${escapeHtml(m.func)}${m.discipline && !["DTL","PDM","IM","DM"].includes(m.func) ? " · "+escapeHtml(m.discipline) : ""}${m.email ? " · "+escapeHtml(m.email) : ""}${ghost ? " · ACC" : ""}</span>
     </div>`;
+  };
+  const renderSlot = (func, disc) => {
+    const appList = byBucket(func, disc);
+    const multi = CRITICAL_SLOTS.has(func) && appList.length > 1;
+    const multiAcc = CRITICAL_SLOTS.has(func) && byAccBucket(func, disc).length > 1;
+    const emails = appEmailsIn(func, disc);
+    const ghosts = byAccBucket(func, disc).filter(m => !emails.has(emailKey(m)));
+    const over = multi || multiAcc;
+    return {
+      multi: over,
+      html: appList.map(m => plate(m, { multi })).join("") + ghosts.map(m => plate(m, { ghost: true, multi: multiAcc })).join("")
+    };
+  };
   let html = `<div class="settings-section">
     <h3>Project team</h3>
     <p class="section-sub">Members can appear on multiple teams. Drag plates to move a placement. Use × to remove (with confirm).</p>
@@ -16931,6 +16980,7 @@ function renderProjectTeamPanel(project){
       <div class="team-search-results" id="f-pt-search-results"></div>
     </div>
   </div>
+  <p class="section-sub" style="margin:0 0 8px;">Red outline = DTL / PDM / TTM / TTIM / Peer Reviewer has <strong>more than one</strong> assignee (fix on ACC). Ghosted plates = on ACC organogram, not yet on project organogram.</p>
   <div class="org-board" id="f-pt-board">
     <div class="org-band">
       <h4>Enabling team (Management)</h4>
@@ -16938,7 +16988,7 @@ function renderProjectTeamPanel(project){
         <div class="org-wf-node">
           <div class="org-role-col" data-drop-func="DTL" data-drop-disc="DTL" style="min-width:160px;">
             <div class="role-title">DTL — Delivery Team Lead</div>
-            ${byBucket("DTL").map(plate).join("") || '<span class="section-sub">Drop here</span>'}
+            ${(function(){ const s=renderSlot("DTL"); return s.html || '<span class="section-sub">Drop here</span>'; })()}
           </div>
           <div class="org-wf-connector"></div>
         </div>
@@ -16946,9 +16996,9 @@ function renderProjectTeamPanel(project){
           ${["PDM","IM","DM"].map(fn => {
             const labels = {PDM:"PDM — Project Delivery Manager", IM:"IM — Information Manager", DM:"DM — Document Manager"};
             return `<div class="org-wf-col"><div class="org-wf-connector"></div>
-              <div class="org-role-col" data-drop-func="${fn}" data-drop-disc="${fn}">
+              <div class="org-role-col${(function(){ const s=renderSlot(fn); return s.multi ? ' slot-overfilled' : ''; })()}" data-drop-func="${fn}" data-drop-disc="${fn}">
                 <div class="role-title">${labels[fn]}</div>
-                ${byBucket(fn).map(plate).join("") || '<span class="section-sub">Drop here</span>'}
+                ${(function(){ const s=renderSlot(fn); return s.html || '<span class="section-sub">Drop here</span>'; })()}
               </div></div>`;
           }).join("")}
         </div>
@@ -16963,23 +17013,23 @@ function renderProjectTeamPanel(project){
             <div class="org-tt-top">
               <div class="org-role-col" data-drop-func="TTM" data-drop-disc="${escapeHtml(r.code)}">
                 <div class="role-title">TTM</div>
-                ${byBucket("TTM", r.code).map(plate).join("") || '<span class="section-sub">Drop</span>'}
+                ${(function(){ const s=renderSlot("TTM", r.code); return s.html || '<span class="section-sub">Drop</span>'; })()}
               </div>
               <div class="org-peer-gap" title="Peer review link"></div>
               <div class="org-role-col org-peer" data-drop-func="PEER" data-drop-disc="${escapeHtml(r.code)}">
                 <div class="role-title">Peer reviewer</div>
-                ${byBucket("PEER", r.code).map(plate).join("") || '<span class="section-sub">Drop</span>'}
+                ${(function(){ const s=renderSlot("PEER", r.code); return s.html || '<span class="section-sub">Drop</span>'; })()}
               </div>
             </div>
             <div class="org-wf-connector" style="margin:4px auto;"></div>
             <div class="org-role-col" data-drop-func="TTIM" data-drop-disc="${escapeHtml(r.code)}">
               <div class="role-title">TTIM</div>
-              ${byBucket("TTIM", r.code).map(plate).join("") || '<span class="section-sub">Drop</span>'}
+              ${(function(){ const s=renderSlot("TTIM", r.code); return s.html || '<span class="section-sub">Drop</span>'; })()}
             </div>
             <div class="org-wf-connector" style="margin:4px auto;"></div>
             <div class="org-role-col" data-drop-func="IA" data-drop-disc="${escapeHtml(r.code)}">
               <div class="role-title">IA</div>
-              ${byBucket("IA", r.code).map(plate).join("") || '<span class="section-sub">Drop</span>'}
+              ${(function(){ const s=renderSlot("IA", r.code); return s.html || '<span class="section-sub">Drop</span>'; })()}
             </div>
           </div>`).join("") || '<p class="section-sub">Enable task teams under the Task teams tab.</p>'}
       </div>
@@ -17341,6 +17391,9 @@ function extractAccRoles(u){
     return true;
   });
 }
+function toCapitalCase(s){
+  return String(s == null ? "" : s).trim().toUpperCase();
+}
 function normalizeAccUser(u){
   const name = u.name || u.displayName || [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.email || "Unknown";
   const email = String(u.email || u.emailId || "").toLowerCase().trim();
@@ -17435,21 +17488,49 @@ async function importAccOrganogram(project){
       };
     });
     if(!selected) return null;
-    const members = all.filter(m => selected.has(m.company || "(No company)")).map(m => ({
-      id: m.id,
-      name: m.name,
-      email: m.email,
-      company: m.company,
-      role: m.primaryRole || m.role || m.roleName || m.roleCode || "",
-      roleName: m.primaryRole || m.roleName || m.role || "",
-      primaryRole: m.primaryRole || m.role || "",
-      roleCode: m.roleCode,
-      func: m.func || "OTHER",
-      discipline: m.discipline || "",
-      status: m.status,
-      source: "acc",
-      rawRoles: m.rawRoles || []
-    }));
+    const members = [];
+    all.filter(m => selected.has(m.company || "(No company)")).forEach(m => {
+      const roleLabels = [];
+      const seenR = new Set();
+      const pushR = (x) => {
+        const s = String(x || "").trim();
+        if(!s) return;
+        const k = s.toLowerCase();
+        if(seenR.has(k)) return;
+        seenR.add(k);
+        roleLabels.push(s);
+      };
+      (m.rawRoles || m.allRoleLabels || []).forEach(pushR);
+      pushR(m.primaryRole || m.role || m.roleName);
+      if(!roleLabels.length) roleLabels.push("");
+      roleLabels.forEach(rl => {
+        let matched = matchAccRoleLabel(rl);
+        let func = (matched && matched.func) || m.func || "OTHER";
+        let disc = (matched && (matched.disc || matched.code)) || m.discipline || "";
+        let roleCode = (matched && matched.code) || m.roleCode || "";
+        if(!matched && rl){
+          const parsed = parseHubRole(rl);
+          func = parsed.func || func;
+          disc = parsed.disc || parsed.code || disc;
+          roleCode = parsed.code || roleCode;
+        }
+        members.push({
+          id: String(m.id || m.email || m.name) + "::" + func + "::" + (disc || roleCode || "x"),
+          name: toCapitalCase(m.name),
+          email: m.email,
+          company: toCapitalCase(m.company),
+          role: rl,
+          roleName: toCapitalCase(rl),
+          primaryRole: toCapitalCase(rl),
+          roleCode: roleCode,
+          func: func,
+          discipline: disc,
+          status: m.status,
+          source: "acc",
+          rawRoles: roleLabels
+        });
+      });
+    });
     project.accOrganogram = {
       importedAt: Date.now(),
       members,
@@ -17457,7 +17538,7 @@ async function importAccOrganogram(project){
       companies: [...selected]
     };
     saveData(DATA);
-    showToast("ACC organogram: " + members.length + " members (snapshot only)");
+    showToast("ACC organogram: " + members.length + " role placements (multi-role expanded, capitalised)");
     try {
       window.__editProjectTab = "team";
       if(typeof openEditProjectSheet === "function") openEditProjectSheet(project);
@@ -17934,18 +18015,20 @@ function openEditProjectSheet(project){
         <div class="field"><label>Root Docs folder <span style="font-weight:400;text-transform:none;">(deliverables tracking)</span></label>
           <input type="text" id="f-acc-root-path" value="${escapeHtml(project.accRootFolderPath||"")}" placeholder="e.g. Project Files / 03 Published" readonly>
           <input type="hidden" id="f-acc-root-id" value="${escapeHtml(project.accRootFolderId||"")}">
-          <label style="display:flex;align-items:flex-start;gap:8px;margin-top:8px;font-size:12px;line-height:1.35;">
-            <input type="checkbox" id="f-acc-iso-gateways" ${project.accIso19650Gateways ? "checked" : ""} style="margin-top:2px;">
-            <span><strong>ISO 19650 Gateways</strong> (WIP / SHARED / PUBLISHED / ARCHIVED under root, then task teams)</span>
-          </label>
-          <label style="display:flex;align-items:flex-start;gap:8px;margin-top:6px;font-size:12px;line-height:1.35;">
-            <input type="checkbox" id="f-acc-team-filter" ${project.accFilterByTaskTeams ? "checked" : ""} style="margin-top:2px;">
-            <span>Limit ACC sync to project task-team subfolders</span>
-          </label>
-          <label style="display:flex;align-items:flex-start;gap:8px;margin-top:6px;font-size:12px;line-height:1.35;">
-            <input type="checkbox" id="f-acc-naming" ${project.accOnlyCompliantNames ? "checked" : ""} style="margin-top:2px;">
-            <span>Only import naming-convention compliant files</span>
-          </label>
+                    <div class="settings-check-list" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
+            <label class="settings-check" style="display:grid;grid-template-columns:18px 1fr;gap:10px;align-items:start;font-size:12px;line-height:1.4;text-transform:none;letter-spacing:0;font-weight:500;color:var(--slate-700);white-space:normal;">
+              <input type="checkbox" id="f-acc-iso-gateways" ${project.accIso19650Gateways ? "checked" : ""} style="margin-top:3px;width:16px;height:16px;">
+              <span><strong style="font-weight:700;">ISO 19650 Gateways</strong> — WIP / SHARED / PUBLISHED / ARCHIVED under root, then task teams</span>
+            </label>
+            <label class="settings-check" style="display:grid;grid-template-columns:18px 1fr;gap:10px;align-items:start;font-size:12px;line-height:1.4;text-transform:none;letter-spacing:0;font-weight:500;color:var(--slate-700);white-space:normal;">
+              <input type="checkbox" id="f-acc-team-filter" ${project.accFilterByTaskTeams ? "checked" : ""} style="margin-top:3px;width:16px;height:16px;">
+              <span>Limit ACC sync to project task-team subfolders</span>
+            </label>
+            <label class="settings-check" style="display:grid;grid-template-columns:18px 1fr;gap:10px;align-items:start;font-size:12px;line-height:1.4;text-transform:none;letter-spacing:0;font-weight:500;color:var(--slate-700);white-space:normal;">
+              <input type="checkbox" id="f-acc-naming" ${project.accOnlyCompliantNames ? "checked" : ""} style="margin-top:3px;width:16px;height:16px;">
+              <span>Only import naming-convention compliant files</span>
+            </label>
+          </div>
           <div style="margin-top:10px;padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
             <div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#64748b;margin-bottom:8px;">FORMA sync file types</div>
             <p class="section-sub" style="margin:0 0 8px;">Only these extensions are collected. Default is PDF only (faster sync).</p>
