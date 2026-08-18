@@ -2003,8 +2003,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.2.6";
-const APP_BUILD = "2026-08-18-pub-review";
+const APP_VERSION = "3.2.7";
+const APP_BUILD = "2026-08-18-flow-status";
 
 /** Atana IM Framework — path relative to app (same folder on GitHub Pages / local). */
 const IM_FRAMEWORK_URL = "Atana-IM-Framework.html";
@@ -3833,54 +3833,108 @@ function buildGatewayFlowMap(accFiles){
     const entry = map.get(id);
     const prev = entry.gateways[gw];
     const added = f.versionAddedAt || f.createTime || f.lastModified || "";
-    if(!prev || (added && (!prev.versionAddedAt || new Date(added) > new Date(prev.versionAddedAt)))){
-      entry.gateways[gw] = {
-        cdeState: gw,
-        reviewStatus: (typeof displayReviewStatus === "function" ? displayReviewStatus(f) : (f.reviewStatus || "")),
-        reviewStatusRaw: f.reviewStatusRaw || f.reviewStatus || "",
-        versionAddedAt: added,
-        revision: f.revision || "",
-        status: f.status || ""
-      };
+    // Prefer explicit reviewStatus (after QMS mapping); fall back to display helper / raw
+    let st = String(f.reviewStatus || f.approvalStatusValue || "").trim();
+    if(!st && typeof displayReviewStatus === "function") st = String(displayReviewStatus(f) || "").trim();
+    if(!st && f.reviewStatusRaw) st = String(f.reviewStatusRaw).trim();
+    // Published + A* suitability → authorised when still blank
+    if(!st && gw === "PUBLISHED"){
+      const code = String(f.status || f.Status || "").trim().toUpperCase();
+      if(/^A\d/.test(code) || code === "CR") st = "AUTHORISED (PUBLISHED)";
+    }
+    const next = {
+      cdeState: gw,
+      reviewStatus: st,
+      reviewStatusRaw: f.reviewStatusRaw || st,
+      versionAddedAt: added,
+      revision: f.revision || "",
+      status: f.status || ""
+    };
+    if(!prev){
+      entry.gateways[gw] = next;
+    } else {
+      // Keep newer version; also upgrade empty status when newer mapping filled it
+      const newer = added && prev.versionAddedAt && new Date(added) > new Date(prev.versionAddedAt);
+      const fillStatus = !prev.reviewStatus && next.reviewStatus;
+      if(newer || fillStatus){
+        entry.gateways[gw] = Object.assign({}, prev, next, {
+          versionAddedAt: newer ? added : (prev.versionAddedAt || added),
+          reviewStatus: next.reviewStatus || prev.reviewStatus
+        });
+      }
     }
   });
   return map;
 }
-function gatewayFlowHtml(docId, flowMap){
+function gatewayFlowHtml(docId, flowMap, accFiles){
   const id = String(docId || "").toUpperCase().replace(/\.[^.]+$/, "");
-  const entry = flowMap && (flowMap.get(id) || flowMap.get(String(docId || "").toUpperCase()));
+  // Live rebuild from files when map missing status (keeps pills in sync with Review status column)
+  let entry = flowMap && (flowMap.get(id) || flowMap.get(String(docId || "").toUpperCase()));
+  if(accFiles && Array.isArray(accFiles)){
+    const live = { documentId: id, gateways: {} };
+    accFiles.forEach(f => {
+      const fid = (typeof normalizeDocId === "function" ? normalizeDocId(f.name || f.documentId || "") : String(f.name || "").replace(/\.[^.]+$/, "")).toUpperCase();
+      if(fid !== id) return;
+      const gw = String(f.cdeState || (typeof detectCdeStateFromPath === "function" ? detectCdeStateFromPath(f.folderPath) : "") || "").toUpperCase();
+      if(!gw || gw === "ARCHIVED") return;
+      let st = String(f.reviewStatus || f.approvalStatusValue || f.reviewStatusRaw || "").trim();
+      if(!st && gw === "PUBLISHED"){
+        const code = String(f.status || f.Status || "").trim().toUpperCase();
+        if(/^A\d/.test(code) || code === "CR") st = "AUTHORISED (PUBLISHED)";
+      }
+      const prev = live.gateways[gw];
+      if(!prev || (st && !prev.reviewStatus)) live.gateways[gw] = { cdeState: gw, reviewStatus: st };
+      else if(!prev) live.gateways[gw] = { cdeState: gw, reviewStatus: st };
+      else if(!live.gateways[gw]) live.gateways[gw] = { cdeState: gw, reviewStatus: st };
+      else if(st) live.gateways[gw].reviewStatus = st;
+    });
+    // merge live over map so workflow text always current
+    if(!entry) entry = live;
+    else {
+      entry = { documentId: id, gateways: Object.assign({}, entry.gateways || {}) };
+      Object.keys(live.gateways).forEach(gw => {
+        const L = live.gateways[gw];
+        const M = entry.gateways[gw];
+        entry.gateways[gw] = {
+          cdeState: gw,
+          reviewStatus: (L && L.reviewStatus) || (M && M.reviewStatus) || ""
+        };
+      });
+    }
+  }
   const gws = ["WIP", "SHARED", "PUBLISHED"];
   return `<div class="gateway-flow" style="display:flex;flex-wrap:wrap;align-items:center;gap:2px;">` +
     gws.map((gw, i) => {
       const g = entry && entry.gateways ? entry.gateways[gw] : null;
       const present = !!g;
-      const st = present ? String(g.reviewStatus || "").trim() : "";
-      const hasWorkflow = !!(st && st !== "—" && !/^on forma$/i.test(st));
-      const label = present ? (st || "On FORMA") : "—";
+      let st = present ? String(g.reviewStatus || "").trim() : "";
+      if(st === "—" || /^on forma$/i.test(st)) st = "";
+      const hasWorkflow = !!st;
+      // Pill text: gateway + status when known
+      const shortSt = st
+        ? st.replace(/\s*\(PUBLISHED\)/i, "").replace(/\s*\(SHARED\)/i, "").replace(/\s*\(WIP\)/i, "").trim()
+        : "";
+      const label = present
+        ? (hasWorkflow ? (gw + ": " + shortSt) : (gw + ": On FORMA"))
+        : (gw + ": —");
       let bg = "#f1f5f9", color = "#94a3b8", weight = "600";
       const inRev = /in\s*review/i.test(st);
       if(present && hasWorkflow){
-        bg = "#dbeafe"; color = "#1e3a8a";
-        if(inRev){ bg = "#fee2e2"; color = "#b91c1c"; weight = "700"; } // in review → red text
-        else if(/authoris|authoriz/i.test(st)){ bg = "#dbeafe"; color = "#1d4ed8"; weight = "700"; }
-        else if(/approv/i.test(st)){ bg = "#dcfce7"; color = "#15803d"; weight = "700"; }
+        bg = "#dbeafe"; color = "#1e3a8a"; weight = "700";
+        if(inRev){ bg = "#fee2e2"; color = "#b91c1c"; }
+        else if(/authoris|authoriz/i.test(st)){ bg = "#dbeafe"; color = "#1d4ed8"; }
+        else if(/approv/i.test(st)){ bg = "#dcfce7"; color = "#15803d"; }
         else if(/reject/i.test(st)){ bg = "#fee2e2"; color = "#b91c1c"; }
+        else if(/review/i.test(st)){ bg = "#e0e7ff"; color = "#3730a3"; }
       } else if(present){
-        // On FORMA without review status → grey pill, keep readable text colour
-        bg = "#e2e8f0"; color = "#0369a1";
+        bg = "#e2e8f0"; color = "#64748b"; weight = "600";
       }
-      const title = present ? (gw + ": " + label + (g.versionAddedAt ? (" · " + new Date(g.versionAddedAt).toLocaleDateString()) : "")) : (gw + ": not on FORMA");
-      const chip = `<span title="${escapeHtml(title)}" style="display:inline-block;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:${weight};background:${bg};color:${color};white-space:nowrap;box-shadow:0 1px 2px rgba(15,23,42,.18),0 2px 4px rgba(15,23,42,.08),inset 0 1px 0 rgba(255,255,255,.55);border:1px solid rgba(15,23,42,.08);">${gw}${present ? ": " + escapeHtml(String(label).slice(0, 18)) : ""}</span>`;
-      return chip + (i < gws.length - 1 ? `<span style="color:#94a3b8;margin:0 2px;">→</span>` : "");
+      const arrow = i < gws.length - 1 ? `<span style="color:#cbd5e1;margin:0 1px;">→</span>` : "";
+      return `<span class="gw-pill" title="${escapeHtml(gw + (st ? (": " + st) : present ? ": on FORMA" : ": not on FORMA"))}" style="display:inline-block;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:${weight};background:${bg};color:${color};box-shadow:0 1px 2px rgba(15,23,42,.12);white-space:nowrap;">${escapeHtml(label)}</span>${arrow}`;
     }).join("") + `</div>`;
 }
 
-/**
- * NEVER invent Review Status (e.g. "Authorised (A5)" from suitability).
- * Only show the exact ACC Reviews API label/value.
- * Workflows start under WIP/SHARED only; Published copies inherit the ACC outcome
- * from that workflow (e.g. "AUTHORISED (PUBLISHED)") via version approval-statuses.
- */
+
 function normalizeReviewStatusForGateway(status, cdeState, suitability){
   return String(status || "").trim(); // passthrough — ACC only
 }
@@ -3964,8 +4018,9 @@ function displayReviewStatus(f){
   let v = String(f.reviewStatus || f.approvalStatusValue || "").trim();
   if(gw === "PUBLISHED" && typeof classifyReviewStatusLabel === "function"){
     const cls = classifyReviewStatusLabel(v);
-    // Never show APPROVED (SHARED) / IN REVIEW under Published
-    if(v && !reviewStatusCompatibleWithGateway(cls, "PUBLISHED")) return "";
+    // Never show APPROVED (SHARED) under Published — map to authorised text
+    if(v && (cls.kind === "approved_shared" || cls.kind === "approved_generic")) return "AUTHORISED (PUBLISHED)";
+    if(v && cls.kind === "in_review") return "AUTHORISED (PUBLISHED)";
   }
   return v;
 }
@@ -5738,8 +5793,10 @@ function renderAccDocsTracking(project){
       else if(typeof backfillPublishedReviewFromAccLabels === "function") backfillPublishedReviewFromAccLabels(files);
       window.__gatewayFlowMap = (typeof buildGatewayFlowMap === "function") ? buildGatewayFlowMap(files) : new Map();
       window.__gatewayFlowFp = fp;
-    } else if(!window.__gatewayFlowMap){
-      window.__gatewayFlowMap = (typeof buildGatewayFlowMap === "function") ? buildGatewayFlowMap(files) : new Map();
+    } else {
+      // Same cache: still refresh flow map so approval-flow pills pick up mapped reviewStatus
+      if(typeof applyQmsReviewStatusMapping === "function") applyQmsReviewStatusMapping(files);
+      window.__gatewayFlowMap = (typeof buildGatewayFlowMap === "function") ? buildGatewayFlowMap(files) : (window.__gatewayFlowMap || new Map());
     }
   } catch(e){ window.__gatewayFlowMap = new Map(); }
   const list = document.getElementById("midp-docs-list");
@@ -6117,7 +6174,7 @@ function renderAccDocsTracking(project){
               }
               if(c.key === "approvalFlow"){
                 const docId = typeof normalizeDocId === "function" ? normalizeDocId(f.name || "") : (f.name || "");
-                const flow = (window.__gatewayFlowMap && typeof gatewayFlowHtml === "function") ? gatewayFlowHtml(docId, window.__gatewayFlowMap) : "—";
+                const flow = (window.__gatewayFlowMap && typeof gatewayFlowHtml === "function") ? gatewayFlowHtml(docId, window.__gatewayFlowMap, (projectById(currentProjectId)||{}).accDeliverablesCache) : "—";
                 return `<td>${flow || "—"}</td>`;
               }
               if(c.key === "folderPath"){
@@ -6260,7 +6317,7 @@ function renderAccDocsTracking(project){
               const gw = (f.gatewaysPresent || []).join(", ") || f.accGateway || "—";
               const flags = (f.flags || []).map(x => x.replace(/_/g," ")).join(", ");
               const rowCls = (f.bucket === "stuck_wip" || (f.flags||[]).includes("stuck_wip")) ? "row-no-review" : ((f.flags||[]).includes("wrong_workstage") ? "row-no-review" : (f.bucket === "published" ? "row-ws-match" : ""));
-              const flow = (window.__gatewayFlowMap && typeof gatewayFlowHtml==="function")?gatewayFlowHtml(docId, window.__gatewayFlowMap):"—";
+              const flow = (window.__gatewayFlowMap && typeof gatewayFlowHtml==="function")?gatewayFlowHtml(docId, window.__gatewayFlowMap, (projectById(currentProjectId)||{}).accDeliverablesCache):"—";
               return `<tr class="${rowCls}" data-doc-id="${escapeHtml(docId)}">
               <td>${flow}</td>
               <td style="${bucketStyle[f.bucket]||""}">${escapeHtml(bucketLabel[f.bucket]||f.bucket||"—")}</td>
