@@ -1359,6 +1359,20 @@
     margin-bottom: 12px;
     padding: 8px;
   }
+
+  .midp-docs-toolbar-one-row{
+    display:flex !important;flex-direction:row !important;flex-wrap:wrap;align-items:center;gap:6px;
+    padding:8px 10px;border-radius:12px;border:1px solid #e2e8f0;background:#f8fafc;
+    box-shadow:0 2px 8px rgba(15,23,42,.08);
+    margin:10px 0 12px;
+  }
+  .midp-docs-toolbar-one-row .stage-picker{
+    display:flex;flex-wrap:nowrap;gap:4px;margin:0;
+  }
+  .midp-docs-toolbar-one-row .midp-view-tabs{
+    display:flex;flex-wrap:nowrap;gap:4px;align-items:center;
+  }
+  .midp-docs-toolbar-one-row .btn{ white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -1752,9 +1766,6 @@
         </div>
       </div><!-- /plansub-wbs -->
         <div id="plansub-gantt" style="display:none;">
-          <div class="card" style="margin-bottom:12px;">
-            
-          </div>
           <div id="wbsGantt"></div>
         </div>
         <div id="plansub-clash" style="display:none;">
@@ -1992,8 +2003,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.2.2";
-const APP_BUILD = "2026-08-18-myday-toolbar";
+const APP_VERSION = "3.2.4";
+const APP_BUILD = "2026-08-18-docs-page";
 
 /** Atana IM Framework — path relative to app (same folder on GitHub Pages / local). */
 const IM_FRAMEWORK_URL = "Atana-IM-Framework.html";
@@ -3324,6 +3335,30 @@ function renderMidpTool(project){
     if(docsList){
       if(docsList.dataset.docsSelectBound !== "1") bindDocsRowSelection(docsList);
       else if(typeof highlightDocsSelection === "function") highlightDocsSelection(docsList);
+    }
+  } catch(e){}
+
+  // Docs list pagination footer
+  try {
+    const listEl = document.getElementById("midp-docs-list");
+    const tab = window.__docsViewTab || "compare";
+    const total = window.__docsLastTotal || 0;
+    const shown = window.__docsLastShown || 0;
+    if(listEl && total > 0){
+      const existing = listEl.querySelector(".docs-page-footer");
+      if(existing) existing.remove();
+      const wrap = document.createElement("div");
+      wrap.className = "docs-page-footer";
+      wrap.innerHTML = docsMoreButtonHtml(tab, total, shown);
+      listEl.appendChild(wrap);
+      wrap.querySelectorAll("[data-docs-show-more]").forEach(btn => {
+        btn.onclick = () => {
+          const t = btn.getAttribute("data-docs-show-more") || tab;
+          window.__docsShowLimit = window.__docsShowLimit || {};
+          window.__docsShowLimit[t] = (Number(window.__docsShowLimit[t]) || DOCS_PAGE_SIZE) + DOCS_PAGE_SIZE;
+          try{ renderAccDocsTracking(projectById(project.id) || project); }catch(err){ console.error(err); }
+        };
+      });
     }
   } catch(e){}
 }
@@ -4910,8 +4945,11 @@ function ensureDocsCtxMenu(){
     m.style.display = "none";
     window.__docsViewTab = tab;
     try {
-      document.querySelectorAll("[data-docs-tab]").forEach(b => {
-        if(b.getAttribute("data-docs-tab") === tab) try { b.click(); } catch(err){}
+      try{ docsEnsureRowVisible(tab, window.__docsSelectedId || window.__docsFocusId); }catch(e){}
+      document.querySelectorAll("#midpDocsViewTabs [data-docs-tab]").forEach(b => {
+        const on = b.getAttribute("data-docs-tab") === tab;
+        b.classList.toggle("btn-primary", on);
+        b.classList.toggle("btn-ghost", !on);
       });
       const p = projectById(currentProjectId);
       if(p && typeof renderAccDocsTracking === "function") renderAccDocsTracking(p);
@@ -5636,14 +5674,67 @@ async function exportMidpDocsView(project){
 }
 
 
+
+const DOCS_PAGE_SIZE = 30;
+function docsShowLimit(viewTab){
+  if(!window.__docsShowLimit) window.__docsShowLimit = {};
+  const k = viewTab || "compare";
+  if(!window.__docsShowLimit[k] || window.__docsShowLimit[k] < DOCS_PAGE_SIZE) window.__docsShowLimit[k] = DOCS_PAGE_SIZE;
+  return window.__docsShowLimit[k];
+}
+function docsResetShowLimit(viewTab){
+  if(!window.__docsShowLimit) window.__docsShowLimit = {};
+  if(viewTab) window.__docsShowLimit[viewTab] = DOCS_PAGE_SIZE;
+  else window.__docsShowLimit = { imported: DOCS_PAGE_SIZE, acc: DOCS_PAGE_SIZE, compare: DOCS_PAGE_SIZE };
+}
+function docsEnsureRowVisible(viewTab, docId){
+  if(!docId) return;
+  window.__docsFocusId = String(docId).toUpperCase().replace(/\.[^.]+$/, "");
+  if(!window.__docsShowLimit) window.__docsShowLimit = {};
+  const k = viewTab || window.__docsViewTab || "compare";
+  window.__docsShowLimit[k] = Math.max(docsShowLimit(k), 500);
+}
+function docsMoreButtonHtml(viewTab, total, shown){
+  if(shown >= total) return total ? `<p class="section-sub" style="margin:10px 0;">Showing all ${total} file${total===1?"":"s"}.</p>` : "";
+  const left = total - shown;
+  const next = Math.min(DOCS_PAGE_SIZE, left);
+  return `<div style="margin:12px 0;text-align:center;">
+    <p class="section-sub" style="margin:0 0 8px;">Showing ${shown} of ${total}</p>
+    <button type="button" class="btn btn-primary btn-xs" data-docs-show-more="${viewTab}">Show ${next} more</button>
+  </div>`;
+}
+function bindDocsViewTabs(project){
+  document.querySelectorAll("#midpDocsViewTabs [data-docs-tab]").forEach(btn => {
+    btn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const tab = btn.getAttribute("data-docs-tab") || "compare";
+      if(window.__docsViewTab !== tab) docsResetShowLimit(tab);
+      window.__docsViewTab = tab;
+      document.querySelectorAll("#midpDocsViewTabs [data-docs-tab]").forEach(b => {
+        const on = b.getAttribute("data-docs-tab") === tab;
+        b.classList.toggle("btn-primary", on);
+        b.classList.toggle("btn-ghost", !on);
+      });
+      try { renderAccDocsTracking(projectById(project.id) || project); } catch(err){ console.error(err); }
+    };
+  });
+}
+
 function renderAccDocsTracking(project){
 
-  // Cross-gateway flow index (WIP → SHARED → PUBLISHED) for same Document ID
+  // Cross-gateway flow — only when cache fingerprint changes (stops freeze on tab switch)
   try {
     const files = (project && project.accDeliverablesCache) || [];
-    if(typeof applyQmsReviewStatusMapping === "function") applyQmsReviewStatusMapping(files);
-    else if(typeof backfillPublishedReviewFromAccLabels === "function") backfillPublishedReviewFromAccLabels(files);
-    window.__gatewayFlowMap = (typeof buildGatewayFlowMap === "function") ? buildGatewayFlowMap(files) : new Map();
+    const fp = files.length + ":" + (project.accSyncedAt || project.accLastSync || "");
+    if(window.__gatewayFlowFp !== fp){
+      if(typeof applyQmsReviewStatusMapping === "function") applyQmsReviewStatusMapping(files);
+      else if(typeof backfillPublishedReviewFromAccLabels === "function") backfillPublishedReviewFromAccLabels(files);
+      window.__gatewayFlowMap = (typeof buildGatewayFlowMap === "function") ? buildGatewayFlowMap(files) : new Map();
+      window.__gatewayFlowFp = fp;
+    } else if(!window.__gatewayFlowMap){
+      window.__gatewayFlowMap = (typeof buildGatewayFlowMap === "function") ? buildGatewayFlowMap(files) : new Map();
+    }
   } catch(e){ window.__gatewayFlowMap = new Map(); }
   const list = document.getElementById("midp-docs-list");
   const meta = document.getElementById("midp-docs-meta");
@@ -5690,7 +5781,8 @@ function renderAccDocsTracking(project){
       b.classList.toggle("btn-primary", on);
       b.classList.toggle("btn-ghost", !on);
     });
-  } catch(e){}
+    bindDocsViewTabs(project);
+  } catch(e){ try{ bindDocsViewTabs(project); }catch(e2){} }
   summary.innerHTML = `
       <!-- view tabs live in midpDocsToolbar -->
       <div class="card" style="margin:0 0 12px;padding:12px;">
@@ -5847,6 +5939,16 @@ function renderAccDocsTracking(project){
     if(sortSt.key){
       rows = sortDocsRows(rows, sortSt.key, sortSt.dir, (row, key) => row[key] || "");
     }
+    const focusIdPlan = window.__docsFocusId || "";
+    if(focusIdPlan){
+      const idx = rows.findIndex(r => String(r.documentId || r.name || "").toUpperCase().replace(/\.[^.]+$/, "") === focusIdPlan);
+      if(idx >= 0){ window.__docsShowLimit = window.__docsShowLimit || {}; window.__docsShowLimit.imported = Math.max(docsShowLimit("imported"), idx + 1); }
+    }
+    const totalPlan = rows.length;
+    const limitPlan = docsShowLimit("imported");
+    rows = rows.slice(0, limitPlan);
+    window.__docsLastTotal = totalPlan;
+    window.__docsLastShown = rows.length;
     const byRole = {};
     rows.forEach(r => {
       const role = r.role || parseIsoRoleFromDocId(r.documentId) || "OTHER";
@@ -5942,13 +6044,22 @@ function renderAccDocsTracking(project){
         return (typeof accCellValue === "function") ? accCellValue(row, col) : (row[key] || "");
       });
     }
+    const focusIdAcc = window.__docsFocusId || "";
+    if(focusIdAcc){
+      const idx = files.findIndex(f => String(f.name || f.documentId || "").toUpperCase().replace(/\.[^.]+$/, "") === focusIdAcc);
+      if(idx >= 0){ window.__docsShowLimit = window.__docsShowLimit || {}; window.__docsShowLimit.acc = Math.max(docsShowLimit("acc"), idx + 1); }
+    }
+    const totalAcc = files.length;
+    const limitAcc = docsShowLimit("acc");
+    files = files.slice(0, limitAcc);
+    window.__docsLastTotal = totalAcc;
+    window.__docsLastShown = files.length;
     const byRole = {};
     files.forEach(f => {
       const role = f.role || "OTHER";
       if(!byRole[role]) byRole[role] = [];
       byRole[role].push(f);
     });
-    const LIMIT = 40;
     const openRoles = window.__accOpenRoles || {};
     const curStage = stageId || project.currentStageId || "";
     list.innerHTML = docsCdeGatewayBarHtml(project, project.accDeliverablesCache || []) +
@@ -5956,8 +6067,8 @@ function renderAccDocsTracking(project){
       const rr = byRole[role];
       const hasOpenState = Object.prototype.hasOwnProperty.call(openRoles, role);
       const isOpen = hasOpenState ? !!openRoles[role] : (Object.keys(byRole).length <= 3);
-      const show = isOpen ? rr : rr.slice(0, LIMIT);
-      const more = rr.length > LIMIT && !isOpen;
+      const show = rr;
+      const more = false;
       return `<details class="acc-role-group" data-role="${escapeHtml(role)}" ${isOpen ? "open" : ""}>
         <summary style="cursor:pointer;font-weight:700;padding:8px 0;">${escapeHtml(roleLabel(role))} · ${rr.length}</summary>
         <div class="docs-table-wrap"><table class="docs-table clash-table" data-docs-view="acc">
@@ -6102,6 +6213,16 @@ function renderAccDocsTracking(project){
     wip: "color:#64748b;",
     acc_only: "color:var(--slate-500);"
   };
+  const focusIdCmp = window.__docsFocusId || "";
+  if(focusIdCmp){
+    const idx = items.findIndex(it => String(it.documentId || it.docId || it.name || "").toUpperCase().replace(/\.[^.]+$/, "") === focusIdCmp);
+    if(idx >= 0){ window.__docsShowLimit = window.__docsShowLimit || {}; window.__docsShowLimit.compare = Math.max(docsShowLimit("compare"), idx + 1); }
+  }
+  const totalCmp = items.length;
+  const limitCmp = docsShowLimit("compare");
+  items = items.slice(0, limitCmp);
+  window.__docsLastTotal = totalCmp;
+  window.__docsLastShown = items.length;
   const byRole = {};
   items.forEach(it => {
     if(!byRole[it.role]) byRole[it.role] = [];
@@ -6772,6 +6893,7 @@ function normalizeProject(p){
     projectType: p.projectType || "",
     businessUnit: p.businessUnit || "",
     projectImage: p.projectImage || "",
+    projectIcon: p.projectIcon || "",
     accProjectId: p.accProjectId || "",
     accHubId: p.accHubId || "",
     accHubName: p.accHubName || "",
@@ -6858,9 +6980,10 @@ function toggleMyDay(project, taskId){
   } else {
     st.myDayDate = today;
     st.manualStart = today;
-    if(!st.manualEnd) st.manualEnd = today;
+    st.manualEnd = today;
   }
   try{ saveData(DATA); }catch(e){}
+  try{ refreshTaskViews(project); }catch(e){ try{ renderWorkspace(); }catch(e2){} }
   return st.myDayDate === today;
 }
 function ensureTaskState(project, taskId){
@@ -7782,6 +7905,9 @@ function bindProjectImageFields(project){
       };
     });
   }
+  const iconEl = document.getElementById("f-p-icon-data");
+  const iconCropBtn = document.getElementById("f-p-image-icon-crop");
+  if(iconEl && project.projectIcon) iconEl.value = project.projectIcon;
   if(pick && file){
     pick.onclick = () => file.click();
     file.onchange = async () => {
@@ -7790,20 +7916,30 @@ function bindProjectImageFields(project){
       if(!f) return;
       if(f.size > 6e6){ showToast("Image too large (max ~6MB)"); return; }
       const reader = new FileReader();
-      reader.onload = async () => {
+      reader.onload = () => {
         const raw = String(reader.result || "");
-        const cropped = await openImageCropper(raw);
-        if(!cropped) return;
-        if(dataEl){ dataEl.value = cropped; dataEl.dataset.cleared = ""; }
-        if(prev) prev.innerHTML = `<img src="${cropped}" alt="" style="max-width:100%;max-height:100%;object-fit:cover;border-radius:12px;">`;
-        showToast("Project icon cropped");
+        if(dataEl){ dataEl.value = raw; dataEl.dataset.cleared = ""; }
+        if(prev) prev.innerHTML = `<img src="${raw}" alt="" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;">`;
+        showToast("Project image set — use Icon Crop for the tile icon");
       };
       reader.readAsDataURL(f);
+    };
+  }
+  if(iconCropBtn){
+    iconCropBtn.onclick = async () => {
+      const src = (dataEl && dataEl.value) || project.projectImage || "";
+      if(!src){ showToast("Upload a project image first"); return; }
+      const cropped = await openImageCropper(src);
+      if(!cropped) return;
+      if(iconEl){ iconEl.value = cropped; iconEl.dataset.cleared = ""; }
+      if(prev) prev.innerHTML = `<img src="${cropped}" alt="" style="max-width:100%;max-height:100%;object-fit:cover;border-radius:12px;">`;
+      showToast("Icon crop saved for project tile");
     };
   }
   if(clear){
     clear.onclick = () => {
       if(dataEl){ dataEl.value = ""; dataEl.dataset.cleared = "1"; }
+      if(iconEl){ iconEl.value = ""; iconEl.dataset.cleared = "1"; }
       if(prev) prev.innerHTML = `<span class="section-sub">None</span>`;
     };
   }
@@ -11467,13 +11603,28 @@ function autoScheduleProject(project){
 
       let endEx = addDaysISO(taskEndInc, 1);
       const st = project.tasks[t.id] || {};
-      // Manual date overrides from task editor
-      if(st.manualStart){
-        taskStart = ensureWorkDay(st.manualStart) || st.manualStart;
-        startHour = 0;
-      }
-      if(st.manualEnd){
-        taskEndInc = st.manualEnd;
+      // Manual / My Day overrides — rebuild daySlices so Progress weekly hours update
+      if(st.manualStart || st.manualEnd){
+        if(st.manualStart){
+          taskStart = ensureWorkDay(st.manualStart) || st.manualStart;
+          startHour = 0;
+        }
+        if(st.manualEnd) taskEndInc = st.manualEnd;
+        daySlices.length = 0;
+        let left = estH;
+        let d = taskStart;
+        let guard = 0;
+        while(left > 0.001 && d && guard++ < 400){
+          const work = (typeof isWorkDay !== "function") || isWorkDay(d);
+          if(work){
+            const take = Math.min(left, HOURS_PER_DAY);
+            daySlices.push({ date: d, hours: Math.round(take * 100) / 100 });
+            left -= take;
+            taskEndInc = d;
+            endHour = take;
+          }
+          d = (typeof nextWorkDay === "function") ? nextWorkDay(d) : addDaysISO(d, 1);
+        }
         endEx = addDaysISO(taskEndInc, 1);
       }
       out.set(t.id, {
@@ -12250,8 +12401,8 @@ function renderProjects(){
     return `
     <div class="card project-card" data-open-project="${p.id}">
       <div class="pc-cover">
-        ${p.projectImage
-          ? `<img src="${p.projectImage}" alt="">`
+        ${(p.projectIcon || p.projectImage)
+          ? `<img src="${p.projectIcon || p.projectImage}" alt="">`
           : `<div class="pc-cover-fallback">${escapeHtml(initials(p.name) || "P")}</div>`}
       </div>
       <div class="pc-body">
@@ -14841,6 +14992,41 @@ function renderWbsTree(project){
   restoreOpenKeys(el, openKeys);
 }
 
+function enableGanttLabelResize(root){
+  if(!root) return;
+  const key = "atana-gantt-label-w";
+  let w = 200;
+  try { w = parseInt(localStorage.getItem(key) || "200", 10) || 200; } catch(e){}
+  w = Math.max(120, Math.min(480, w));
+  root.style.setProperty("--gantt-label-w", w + "px");
+  const label = root.querySelector(".gantt-row.stage-row .gantt-label") || root.querySelector(".gantt-label");
+  if(!label) return;
+  label.style.position = "relative";
+  let handle = label.querySelector(".gantt-label-resizer");
+  if(!handle){
+    handle = document.createElement("span");
+    handle.className = "gantt-label-resizer";
+    handle.title = "Drag to resize name column";
+    label.appendChild(handle);
+  }
+  handle.onmousedown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.pageX;
+    const startW = w;
+    const onMove = (ev) => {
+      w = Math.max(120, Math.min(480, startW + (ev.pageX - startX)));
+      root.style.setProperty("--gantt-label-w", w + "px");
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      try { localStorage.setItem(key, String(w)); } catch(err){}
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+}
 function renderWbsGantt(project){
   const el = document.getElementById("wbsGantt");
   if(!el) return;
@@ -15064,8 +15250,6 @@ function renderWbsGantt(project){
     <div class="card" style="margin-bottom:12px;padding:10px 12px;">
       <div class="ms-label">${escapeHtml(sysLabel === "SA" ? "SACAP" : sysLabel === "RIBA" ? "RIBA Plan of Work" : "SA + RIBA")} · Gantt</div>
       <div class="ms-dates">${escapeHtml(fmtDate(project.startDate))} → ${escapeHtml(fmtDate(project.endDate))} · ${totalStageMonths(project)} months</div>
-      <p class="section-sub" style="margin:8px 0 0;">Single-resource <strong>waterfall</strong> by <strong>dependency order</strong> within each work stage (e.g. CDE workspace → naming → team roles). Packs into <strong>8h days, Mon–Fri</strong>. Parent bars encapsulate children.</p>
-      <p class="section-sub" style="margin-top:10px;">Stage dates: use <strong>Edit stage dates</strong> at the bottom of the WBS page.</p>
     </div>
     <div class="gantt-zoom-bar">
       <label for="ganttZoomSlider">Scale</label>
@@ -15099,6 +15283,7 @@ function renderWbsGantt(project){
       renderWbsGantt(project);
     };
   });
+  try{ enableGanttLabelResize(el); }catch(e){}
 }
 
 function renderWsTeamAssign(project){
@@ -16806,8 +16991,8 @@ function openEditTaskSheet(project, taskId){
       const today = (typeof todayISO === "function") ? todayISO() : new Date().toISOString().slice(0,10);
       if(myDayEl.checked){
         st2.myDayDate = today;
-        if(!st2.manualStart) st2.manualStart = today;
-        if(!st2.manualEnd) st2.manualEnd = today;
+        st2.manualStart = today;
+        st2.manualEnd = today;
       } else if(st2.myDayDate === today){
         delete st2.myDayDate;
       }
@@ -16815,12 +17000,34 @@ function openEditTaskSheet(project, taskId){
     const dis = !!document.getElementById("f-task-disabled").checked;
     if(dis){ st2.disabled = true; st2.forceEnabled = false; }
     else { st2.disabled = false; st2.forceEnabled = true; }
-    syncParentCompletion(project, taskId);
+    try{ syncParentCompletion(project, taskId); }catch(e){}
     saveData(DATA);
     closeSheet();
-    renderWorkspace();
+    try{ refreshTaskViews(project); }catch(e){ try{ renderWorkspace(); }catch(e2){} }
     showToast("Task updated");
   };
+}
+
+function refreshTaskViews(project){
+  const p = projectById((project && project.id) || currentProjectId) || project;
+  if(!p) return;
+  try{ renderWorkspace(); }catch(e){}
+  try{ if(typeof renderWbsTree === "function") renderWbsTree(p); }catch(e){}
+  try{ if(typeof renderWbsGantt === "function") renderWbsGantt(p); }catch(e){ console.error(e); }
+  try{ if(typeof renderProgressPanel === "function") renderProgressPanel(p); }catch(e){}
+  try{ if(typeof renderTaskTree === "function") renderTaskTree(p); }catch(e){}
+  try{
+    const main = currentWsView || "imtasks";
+    const planSub = window.__planSub || "wbs";
+    const ganttEl = document.getElementById("wbsGantt");
+    const pg = document.getElementById("plansub-gantt");
+    if(ganttEl) ganttEl.style.display = (main === "planner" && planSub === "gantt") ? "block" : (ganttEl.style.display || "");
+    if(pg) pg.style.display = (main === "planner" && planSub === "gantt") ? "block" : (pg.style.display || "");
+    if(main === "planner" && planSub === "gantt"){
+      if(ganttEl) ganttEl.style.display = "block";
+      if(pg) pg.style.display = "block";
+    }
+  }catch(e){}
 }
 
 function bindScopeModeToggles(root){
@@ -18712,6 +18919,9 @@ function openEditProjectSheet(project){
     const imgEl = document.getElementById("f-p-image-data");
     if(imgEl && imgEl.value) project.projectImage = imgEl.value;
     else if(imgEl && imgEl.dataset.cleared === "1") project.projectImage = "";
+    const iconData = document.getElementById("f-p-icon-data");
+    if(iconData && iconData.value) project.projectIcon = iconData.value;
+    else if(iconData && iconData.dataset.cleared === "1") project.projectIcon = "";
     const accPid = document.getElementById("f-acc-project-id");
     if(accPid) project.accProjectId = accPid.value || "";
     const accHid = document.getElementById("f-acc-hub-id");
