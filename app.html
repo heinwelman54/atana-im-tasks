@@ -2003,8 +2003,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.2.4";
-const APP_BUILD = "2026-08-18-docs-page";
+const APP_VERSION = "3.2.5";
+const APP_BUILD = "2026-08-18-per-team-page";
 
 /** Atana IM Framework — path relative to app (same folder on GitHub Pages / local). */
 const IM_FRAMEWORK_URL = "Atana-IM-Framework.html";
@@ -3338,29 +3338,6 @@ function renderMidpTool(project){
     }
   } catch(e){}
 
-  // Docs list pagination footer
-  try {
-    const listEl = document.getElementById("midp-docs-list");
-    const tab = window.__docsViewTab || "compare";
-    const total = window.__docsLastTotal || 0;
-    const shown = window.__docsLastShown || 0;
-    if(listEl && total > 0){
-      const existing = listEl.querySelector(".docs-page-footer");
-      if(existing) existing.remove();
-      const wrap = document.createElement("div");
-      wrap.className = "docs-page-footer";
-      wrap.innerHTML = docsMoreButtonHtml(tab, total, shown);
-      listEl.appendChild(wrap);
-      wrap.querySelectorAll("[data-docs-show-more]").forEach(btn => {
-        btn.onclick = () => {
-          const t = btn.getAttribute("data-docs-show-more") || tab;
-          window.__docsShowLimit = window.__docsShowLimit || {};
-          window.__docsShowLimit[t] = (Number(window.__docsShowLimit[t]) || DOCS_PAGE_SIZE) + DOCS_PAGE_SIZE;
-          try{ renderAccDocsTracking(projectById(project.id) || project); }catch(err){ console.error(err); }
-        };
-      });
-    }
-  } catch(e){}
 }
 
 
@@ -5676,33 +5653,63 @@ async function exportMidpDocsView(project){
 
 
 const DOCS_PAGE_SIZE = 30;
-function docsShowLimit(viewTab){
-  if(!window.__docsShowLimit) window.__docsShowLimit = {};
-  const k = viewTab || "compare";
-  if(!window.__docsShowLimit[k] || window.__docsShowLimit[k] < DOCS_PAGE_SIZE) window.__docsShowLimit[k] = DOCS_PAGE_SIZE;
-  return window.__docsShowLimit[k];
+function docsRoleLimitKey(viewTab, role){
+  return String(viewTab || "compare") + "::" + String(role || "OTHER");
+}
+function docsRoleShowLimit(viewTab, role){
+  if(!window.__docsRoleShowLimit) window.__docsRoleShowLimit = {};
+  const k = docsRoleLimitKey(viewTab, role);
+  if(!window.__docsRoleShowLimit[k] || window.__docsRoleShowLimit[k] < DOCS_PAGE_SIZE){
+    window.__docsRoleShowLimit[k] = DOCS_PAGE_SIZE;
+  }
+  return window.__docsRoleShowLimit[k];
 }
 function docsResetShowLimit(viewTab){
-  if(!window.__docsShowLimit) window.__docsShowLimit = {};
-  if(viewTab) window.__docsShowLimit[viewTab] = DOCS_PAGE_SIZE;
-  else window.__docsShowLimit = { imported: DOCS_PAGE_SIZE, acc: DOCS_PAGE_SIZE, compare: DOCS_PAGE_SIZE };
+  if(!window.__docsRoleShowLimit) window.__docsRoleShowLimit = {};
+  if(!viewTab){ window.__docsRoleShowLimit = {}; return; }
+  const prefix = String(viewTab) + "::";
+  Object.keys(window.__docsRoleShowLimit).forEach(k => {
+    if(k.indexOf(prefix) === 0) delete window.__docsRoleShowLimit[k];
+  });
 }
-function docsEnsureRowVisible(viewTab, docId){
+function docsEnsureRowVisible(viewTab, docId, role){
   if(!docId) return;
   window.__docsFocusId = String(docId).toUpperCase().replace(/\.[^.]+$/, "");
-  if(!window.__docsShowLimit) window.__docsShowLimit = {};
-  const k = viewTab || window.__docsViewTab || "compare";
-  window.__docsShowLimit[k] = Math.max(docsShowLimit(k), 500);
+  if(role != null && String(role) !== ""){
+    if(!window.__docsRoleShowLimit) window.__docsRoleShowLimit = {};
+    const k = docsRoleLimitKey(viewTab || window.__docsViewTab || "compare", role);
+    window.__docsRoleShowLimit[k] = Math.max(docsRoleShowLimit(viewTab, role), 500);
+  }
 }
-function docsMoreButtonHtml(viewTab, total, shown){
-  if(shown >= total) return total ? `<p class="section-sub" style="margin:10px 0;">Showing all ${total} file${total===1?"":"s"}.</p>` : "";
+function docsRoleMoreButtonHtml(viewTab, role, total, shown){
+  if(shown >= total){
+    return total ? `<p class="section-sub" style="margin:8px 0 4px;">Showing all ${total} in this task team</p>` : "";
+  }
   const left = total - shown;
   const next = Math.min(DOCS_PAGE_SIZE, left);
-  return `<div style="margin:12px 0;text-align:center;">
-    <p class="section-sub" style="margin:0 0 8px;">Showing ${shown} of ${total}</p>
-    <button type="button" class="btn btn-primary btn-xs" data-docs-show-more="${viewTab}">Show ${next} more</button>
+  const safeRole = String(role || "").replace(/"/g, "&quot;");
+  const safeTab = String(viewTab || "").replace(/"/g, "&quot;");
+  return `<div style="margin:8px 0 12px;text-align:center;">
+    <p class="section-sub" style="margin:0 0 6px;">Showing ${shown} of ${total} in this task team</p>
+    <button type="button" class="btn btn-primary btn-xs" data-docs-role-more="${safeRole}" data-docs-view-tab="${safeTab}">Show ${next} more</button>
   </div>`;
 }
+function bindDocsRoleMoreButtons(project, listEl){
+  if(!listEl) return;
+  listEl.querySelectorAll("[data-docs-role-more]").forEach(btn => {
+    btn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const role = btn.getAttribute("data-docs-role-more") || "OTHER";
+      const tab = btn.getAttribute("data-docs-view-tab") || window.__docsViewTab || "compare";
+      if(!window.__docsRoleShowLimit) window.__docsRoleShowLimit = {};
+      const k = docsRoleLimitKey(tab, role);
+      window.__docsRoleShowLimit[k] = (Number(window.__docsRoleShowLimit[k]) || DOCS_PAGE_SIZE) + DOCS_PAGE_SIZE;
+      try{ renderAccDocsTracking(projectById(project.id) || project); }catch(err){ console.error(err); }
+    };
+  });
+}
+
 function bindDocsViewTabs(project){
   document.querySelectorAll("#midpDocsViewTabs [data-docs-tab]").forEach(btn => {
     btn.onclick = (e) => {
@@ -5939,16 +5946,6 @@ function renderAccDocsTracking(project){
     if(sortSt.key){
       rows = sortDocsRows(rows, sortSt.key, sortSt.dir, (row, key) => row[key] || "");
     }
-    const focusIdPlan = window.__docsFocusId || "";
-    if(focusIdPlan){
-      const idx = rows.findIndex(r => String(r.documentId || r.name || "").toUpperCase().replace(/\.[^.]+$/, "") === focusIdPlan);
-      if(idx >= 0){ window.__docsShowLimit = window.__docsShowLimit || {}; window.__docsShowLimit.imported = Math.max(docsShowLimit("imported"), idx + 1); }
-    }
-    const totalPlan = rows.length;
-    const limitPlan = docsShowLimit("imported");
-    rows = rows.slice(0, limitPlan);
-    window.__docsLastTotal = totalPlan;
-    window.__docsLastShown = rows.length;
     const byRole = {};
     rows.forEach(r => {
       const role = r.role || parseIsoRoleFromDocId(r.documentId) || "OTHER";
@@ -5968,10 +5965,19 @@ function renderAccDocsTracking(project){
             return `<th data-sort-key="${escapeHtml(c.key)}" style="position:relative;"><span class="th-label">${escapeHtml(c.label)}</span><span class="th-sort">${arrow}</span><span class="col-resizer"></span></th>`;
           }).join("")}</tr></thead>
                     <tbody>${(() => {
-            const ordered = rr.slice();
+            let ordered = rr.slice();
             if(window.__docsGroupByForm){
               ordered.sort((a,b) => String(a.form||"").localeCompare(String(b.form||"")) || String(a.documentId||"").localeCompare(String(b.documentId||"")));
             }
+            const focusId = window.__docsFocusId || "";
+            if(focusId){
+              const idx = ordered.findIndex(r => String(r.documentId || r.name || "").toUpperCase().replace(/\.[^.]+$/, "") === focusId);
+              if(idx >= 0){
+                if(!window.__docsRoleShowLimit) window.__docsRoleShowLimit = {};
+                window.__docsRoleShowLimit[docsRoleLimitKey("imported", role)] = Math.max(docsRoleShowLimit("imported", role), idx + 1);
+              }
+            }
+            ordered = ordered.slice(0, docsRoleShowLimit("imported", role));
             let lastForm = null;
             return ordered.map(r => {
             let formHdr = "";
@@ -6000,9 +6006,11 @@ function renderAccDocsTracking(project){
             }).join("")}</tr>`;
           }).join("")})()}</tbody>
         </table></div>
+      ${docsRoleMoreButtonHtml("imported", role, rr.length, Math.min(rr.length, docsRoleShowLimit("imported", role)))}
       </details>`;
     }).join("");
     bindDocsFilters(project);
+    try{ bindDocsRoleMoreButtons(project, list); }catch(e){}
     list.querySelectorAll("table[data-docs-view='plan']").forEach(t => bindDocsTableInteractions(t, "plan", project));
 
     list.querySelectorAll("details.acc-role-group[data-role]").forEach(d => {
@@ -6044,16 +6052,6 @@ function renderAccDocsTracking(project){
         return (typeof accCellValue === "function") ? accCellValue(row, col) : (row[key] || "");
       });
     }
-    const focusIdAcc = window.__docsFocusId || "";
-    if(focusIdAcc){
-      const idx = files.findIndex(f => String(f.name || f.documentId || "").toUpperCase().replace(/\.[^.]+$/, "") === focusIdAcc);
-      if(idx >= 0){ window.__docsShowLimit = window.__docsShowLimit || {}; window.__docsShowLimit.acc = Math.max(docsShowLimit("acc"), idx + 1); }
-    }
-    const totalAcc = files.length;
-    const limitAcc = docsShowLimit("acc");
-    files = files.slice(0, limitAcc);
-    window.__docsLastTotal = totalAcc;
-    window.__docsLastShown = files.length;
     const byRole = {};
     files.forEach(f => {
       const role = f.role || "OTHER";
@@ -6077,10 +6075,19 @@ function renderAccDocsTracking(project){
             return `<th data-sort-key="${escapeHtml(c.key)}" style="position:relative;"><span class="th-label">${escapeHtml(c.label)}</span><span class="th-sort">${arrow}</span><span class="col-resizer"></span></th>`;
           }).join("")}</tr></thead>
           <tbody>${(() => {
-            const ordered = show.slice();
+            let ordered = (show || rr || []).slice();
             if(window.__docsGroupByForm){
               ordered.sort((a,b) => String(a.form||a.Form||"").localeCompare(String(b.form||b.Form||"")) || String(a.name||"").localeCompare(String(b.name||"")));
             }
+            const focusId = window.__docsFocusId || "";
+            if(focusId){
+              const idx = ordered.findIndex(f => String(f.name || f.documentId || "").toUpperCase().replace(/\.[^.]+$/, "") === focusId);
+              if(idx >= 0){
+                if(!window.__docsRoleShowLimit) window.__docsRoleShowLimit = {};
+                window.__docsRoleShowLimit[docsRoleLimitKey("acc", role)] = Math.max(docsRoleShowLimit("acc", role), idx + 1);
+              }
+            }
+            ordered = ordered.slice(0, docsRoleShowLimit("acc", role));
             let lastForm = null;
             return ordered.map(f => {
             let formHdr = "";
@@ -6140,17 +6147,11 @@ function renderAccDocsTracking(project){
             }).join("")}</tr>`;
           }).join("")})()}</tbody>
         </table>
-        ${more ? `<button type="button" class="btn btn-ghost btn-xs" data-acc-more="${escapeHtml(role)}" style="margin:8px 0;">Show all ${rr.length}</button>` : ""}
+        ${docsRoleMoreButtonHtml("acc", role, rr.length, Math.min(rr.length, docsRoleShowLimit("acc", role)))}
         </div>
       </details>`;
     }).join("");
-    list.querySelectorAll("[data-acc-more]").forEach(btn => {
-      btn.onclick = () => {
-        window.__accOpenRoles = window.__accOpenRoles || {};
-        window.__accOpenRoles[btn.getAttribute("data-acc-more")] = true;
-        renderAccDocsTracking(project);
-      };
-    });
+    try{ bindDocsRoleMoreButtons(project, list); }catch(e){}
     list.querySelectorAll("tr[data-row-id]").forEach(tr => {
       tr.onclick = (e) => {
         if(e.target && e.target.closest && e.target.closest("a")) return;
@@ -6213,26 +6214,25 @@ function renderAccDocsTracking(project){
     wip: "color:#64748b;",
     acc_only: "color:var(--slate-500);"
   };
-  const focusIdCmp = window.__docsFocusId || "";
-  if(focusIdCmp){
-    const idx = items.findIndex(it => String(it.documentId || it.docId || it.name || "").toUpperCase().replace(/\.[^.]+$/, "") === focusIdCmp);
-    if(idx >= 0){ window.__docsShowLimit = window.__docsShowLimit || {}; window.__docsShowLimit.compare = Math.max(docsShowLimit("compare"), idx + 1); }
-  }
-  const totalCmp = items.length;
-  const limitCmp = docsShowLimit("compare");
-  items = items.slice(0, limitCmp);
-  window.__docsLastTotal = totalCmp;
-  window.__docsLastShown = items.length;
   const byRole = {};
   items.forEach(it => {
     if(!byRole[it.role]) byRole[it.role] = [];
     byRole[it.role].push(it);
   });
   list.innerHTML = Object.keys(byRole).sort().map(role => {
-    const rows = byRole[role];
-      const due = rows.filter(r => r.bucket === "outstanding" || r.bucket === "outdated" || r.bucket === "stuck_wip").length;
+    const allRows = byRole[role];
+      const due = allRows.filter(r => r.bucket === "outstanding" || r.bucket === "outdated" || r.bucket === "stuck_wip").length;
+    const focusId = window.__docsFocusId || "";
+    if(focusId){
+      const idx = allRows.findIndex(it => String(it.documentId || it.docId || it.name || "").toUpperCase().replace(/\.[^.]+$/, "") === focusId);
+      if(idx >= 0){
+        if(!window.__docsRoleShowLimit) window.__docsRoleShowLimit = {};
+        window.__docsRoleShowLimit[docsRoleLimitKey("compare", role)] = Math.max(docsRoleShowLimit("compare", role), idx + 1);
+      }
+    }
+    const rows = allRows.slice(0, docsRoleShowLimit("compare", role));
     return `<details class="midp-docs-group" open>
-      <summary style="cursor:pointer;font-weight:700;color:var(--purple-950);padding:8px 0;">${escapeHtml(roleLabel(role))} · ${rows.length} · <span style="color:var(--danger);">${due} due</span></summary>
+      <summary style="cursor:pointer;font-weight:700;color:var(--purple-950);padding:8px 0;">${escapeHtml(roleLabel(role))} · ${allRows.length} · <span style="color:var(--danger);">${due} due</span></summary>
       <div style="overflow:auto;">
         <table class="clash-table" style="width:100%;font-size:11px;min-width:1100px;">
           <thead><tr>
@@ -6284,8 +6284,10 @@ function renderAccDocsTracking(project){
           </tbody>
         </table>
       </div>
+      ${docsRoleMoreButtonHtml("compare", role, allRows.length, rows.length)}
     </details>`;
   }).join("");
+  try{ bindDocsRoleMoreButtons(project, list); }catch(e){}
 }
 
 function exportMidpCsv(){
