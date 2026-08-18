@@ -1753,7 +1753,7 @@
       </div><!-- /plansub-wbs -->
         <div id="plansub-gantt" style="display:none;">
           <div class="card" style="margin-bottom:12px;">
-            <p class="section-sub" style="margin:0;">Gantt shows the dependency waterfall schedule within each work stage (8h · Mon–Fri).</p>
+            
           </div>
           <div id="wbsGantt"></div>
         </div>
@@ -1771,34 +1771,24 @@
         <div class="midp-wrap" id="midpRoot">
           <div class="midp-title">MIDP · work stage tracking</div>
           <div class="midp-sub" style="display:none;"></div>
-          <div class="stage-picker-wrap" style="margin:8px 0;">
-            <div class="stage-picker-label">Work stage</div>
-            <div class="stage-picker" id="midpDocsStagePicker"></div>
-          </div>
-          <div class="midp-docs-toolbar">
-            <div class="midp-docs-actions">
-              <div class="btn-group plan-group" role="group" aria-label="Plan MIDP TIDP">
-                <div class="btn-group-row">
-                  <button type="button" class="btn btn-primary btn-xs" id="midp-docs-import">Import MIDP/TIDP</button>
-                  <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-clear-plan" title="Clear imported plan for the selected work stage">Clear plan</button>
-                  <button type="button" class="btn btn-ghost btn-xs" id="midp-ttm-email" title="Email TTM with outstanding items">Email TTM</button>
-                  <span class="btn-group-meta" id="plan-last-import-meta"></span>
-                </div>
-              </div>
-              <div class="btn-group forma-group" role="group" aria-label="FORMA CDE">
-                <div class="btn-group-row">
-                  <button type="button" class="btn btn-gold btn-xs" id="midp-docs-refresh">Sync FORMA</button>
-                  <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-clear-acc" title="Clear FORMA file cache">Clear FORMA cache</button>
-                  <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-cols" title="Show/hide columns">⚙ Columns</button>
-                  <span class="btn-group-meta" id="forma-last-sync-meta"></span>
-                </div>
-              </div>
-              <div class="btn-group export-group" role="group" aria-label="Export">
-                <div class="btn-group-row">
-                  <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-export" title="Export current view (respects filters)">Export view…</button>
-                </div>
-              </div>
+          <div class="midp-docs-toolbar-one-row border-frame" id="midpDocsToolbar">
+            <div class="stage-picker" id="midpDocsStagePicker" title="Work stage"></div>
+            <span style="width:1px;height:22px;background:#e2e8f0;"></span>
+            <div class="midp-view-tabs" id="midpDocsViewTabs">
+              <button type="button" class="btn btn-xs btn-ghost" data-docs-tab="imported">Imported plan</button>
+              <button type="button" class="btn btn-xs btn-ghost" data-docs-tab="acc">FORMA</button>
+              <button type="button" class="btn btn-xs btn-ghost" data-docs-tab="compare">Comparison</button>
             </div>
+            <span style="width:1px;height:22px;background:#e2e8f0;"></span>
+            <button type="button" class="btn btn-primary btn-xs" id="midp-docs-import">Import plan</button>
+            <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-clear-plan" title="Clear imported plan for selected work stage">Clear plan</button>
+            <button type="button" class="btn btn-gold btn-xs" id="midp-docs-refresh">Sync FORMA</button>
+            <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-clear-acc" title="Clear FORMA cache">Clear cache</button>
+            <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-export" title="Export current view">Export view</button>
+            <button type="button" class="btn btn-ghost btn-xs" id="midp-docs-cols" title="Columns">⚙</button>
+            <button type="button" class="btn btn-ghost btn-xs" id="midp-ttm-email" title="Email TTM">Email TTM</button>
+            <span class="btn-group-meta" id="plan-last-import-meta"></span>
+            <span class="btn-group-meta" id="forma-last-sync-meta"></span>
             <input type="file" id="importDeliverablesFile" accept=".xlsx,.xls,.csv" style="display:none;">
           </div>
           <div id="midp-docs-summary"></div>
@@ -2002,8 +1992,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.2.1";
-const APP_BUILD = "2026-08-18-cols-review";
+const APP_VERSION = "3.2.2";
+const APP_BUILD = "2026-08-18-myday-toolbar";
 
 /** Atana IM Framework — path relative to app (same folder on GitHub Pages / local). */
 const IM_FRAMEWORK_URL = "Atana-IM-Framework.html";
@@ -5694,13 +5684,15 @@ function renderAccDocsTracking(project){
   const viewTab = window.__docsViewTab || "compare"; // imported | acc | compare
 
   if(summary){
-    summary.innerHTML = `
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-        <button type="button" class="btn btn-xs ${viewTab==="imported"?"btn-primary":"btn-ghost"}" data-docs-tab="imported">Imported plan</button>
-        <button type="button" class="btn btn-xs ${viewTab==="acc"?"btn-primary":"btn-ghost"}" data-docs-tab="acc">FORMA (CDE)</button>
-        <button type="button" class="btn btn-xs ${viewTab==="compare"?"btn-primary":"btn-ghost"}" data-docs-tab="compare">Comparison</button>
-        <button type="button" class="btn btn-ghost btn-xs" id="midp-compare-cols" title="Comparison / FORMA columns">⚙ Columns</button>
-      </div>
+    try {
+    document.querySelectorAll("#midpDocsViewTabs [data-docs-tab]").forEach(b => {
+      const on = b.getAttribute("data-docs-tab") === viewTab;
+      b.classList.toggle("btn-primary", on);
+      b.classList.toggle("btn-ghost", !on);
+    });
+  } catch(e){}
+  summary.innerHTML = `
+      <!-- view tabs live in midpDocsToolbar -->
       <div class="card" style="margin:0 0 12px;padding:12px;">
         <div style="display:flex;flex-wrap:wrap;gap:10px;">
           <div style="flex:1;min-width:80px;text-align:center;">
@@ -6850,6 +6842,26 @@ function isTaskDisabled(project, task){
   if(st.disabled === true) return true;
   if(!project.clientAppRequirements && isAppClientTask(task)) return true;
   return false;
+}
+function isMyDayTask(project, taskId){
+  try {
+    const st = ensureTaskState(project, taskId);
+    const today = (typeof todayISO === "function") ? todayISO() : new Date().toISOString().slice(0, 10);
+    return !!(st && st.myDayDate && st.myDayDate === today);
+  } catch(e){ return false; }
+}
+function toggleMyDay(project, taskId){
+  const st = ensureTaskState(project, taskId);
+  const today = (typeof todayISO === "function") ? todayISO() : new Date().toISOString().slice(0, 10);
+  if(st.myDayDate === today){
+    delete st.myDayDate;
+  } else {
+    st.myDayDate = today;
+    st.manualStart = today;
+    if(!st.manualEnd) st.manualEnd = today;
+  }
+  try{ saveData(DATA); }catch(e){}
+  return st.myDayDate === today;
 }
 function ensureTaskState(project, taskId){
   if(!project.tasks) project.tasks = {};
@@ -11416,6 +11428,11 @@ function autoScheduleProject(project){
     // Dependency order within the stage (respect work stage boundary)
     const ordered = stageTasksDependencyOrder(stage, project);
     ordered.forEach(({ t, cat, sub }) => {
+      // Parents = sum of children only — do not double-count toward stage capacity
+      if(typeof isParentTask === "function" && isParentTask(t)) return;
+      if(typeof isTaskDisabled === "function" && isTaskDisabled(project, t)) return;
+      const stLeaf = ensureTaskState(project, t.id);
+      if(stLeaf && stLeaf.done) return; // completed work not in remaining capacity pressure
       const estH = Math.max(0.5, taskEst(project, t.id));
       required += estH;
       let hoursLeft = estH;
@@ -14609,8 +14626,9 @@ function renderTaskRow(project, task, taskSched, wbsCode){
   if(parent && state.done !== showDone){ state.done = showDone; }
   const dateRowCls = taskDateToneClass(project, task.id, taskSched);
   return `
-    <div class="task-row ${showDone ? "done" : ""} ${late ? "late" : ""} ${disabled ? "disabled-task" : ""} ${isBlocker ? "blocker" : ""} ${parent ? "parent-task" : ""} depth-${depth} ${dateRowCls}" data-task-id="${task.id}" data-edit-task="${task.id}">
+    <div class="task-row ${showDone ? "done" : ""} ${late ? "late" : ""} ${disabled ? "disabled-task" : ""} ${isBlocker ? "blocker" : ""} ${parent ? "parent-task" : ""} ${isMyDayTask(project, task.id) ? "my-day" : ""} depth-${depth} ${dateRowCls}" data-task-id="${task.id}" data-edit-task="${task.id}">
       <div class="task-row-main">
+        <button type="button" class="btn-star ${isMyDayTask(project, task.id) ? "on" : ""}" data-my-day="${task.id}" title="Add to my day" aria-label="Add to my day">${isMyDayTask(project, task.id) ? "★" : "☆"}</button>
         <button class="task-check ${showDone ? "checked" : ""}" data-toggle-task="${task.id}" aria-label="Toggle done" ${disabled || parent ? "disabled" : ""}>${showDone ? "&#10003;" : ""}</button>
         <div class="task-name">${code ? `<span class="wbs-code small">${escapeHtml(code)}</span>` : ""}${escapeHtml(displayName)}${msDate?` <span class="ms-date-inline">${escapeHtml(fmtMilestoneDate(msDate))}</span>`:""}${isRepeating ? ` <span class="rep-badge">REPEATING</span>` : ""}${state.milestone ? ` <span class="iso-badge on" title="Milestone">⚑</span>` : ""}${isBlocker ? ` <span class="blocker-badge">BLOCKER</span>` : ""}${task.custom ? ` <span class="iso-badge">Custom</span>` : ""}${appTask ? ` <span class="iso-badge ${project.clientAppRequirements ? "on" : ""}" title="Depends on appointing party / client requirements">APP</span>` : ""}${late ? `<span class="late-badge">LATE</span>` : ""}${disabled ? ` <span class="iso-badge">Off</span>` : ""}</div>
         <div class="task-row-actions">
@@ -16751,6 +16769,8 @@ function openEditTaskSheet(project, taskId){
       <span>Flag as milestone (shows on roadmap)</span></label>
     <label class="checklabel" style="margin:8px 0;"><input type="checkbox" id="f-task-disabled" ${disabled?"checked":""}>
       <span>Disable task</span></label>
+    <label class="checklabel" style="margin:8px 0;"><input type="checkbox" id="f-task-myday" ${isMyDayTask(project, taskId)?"checked":""}>
+      <span>★ Add to my day (schedule today)</span></label>
     <label class="checklabel" style="margin:8px 0;"><input type="checkbox" id="f-task-done" ${st.done?"checked":""} ${isParent?"disabled":""}>
       <span>Mark complete</span></label>
     <div class="sheet-actions" style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
@@ -16781,6 +16801,17 @@ function openEditTaskSheet(project, taskId){
     const asg = document.getElementById("f-task-assignee").value || null;
     st2.assignee = asg;
     st2.milestone = !!document.getElementById("f-task-milestone").checked;
+    const myDayEl = document.getElementById("f-task-myday");
+    if(myDayEl){
+      const today = (typeof todayISO === "function") ? todayISO() : new Date().toISOString().slice(0,10);
+      if(myDayEl.checked){
+        st2.myDayDate = today;
+        if(!st2.manualStart) st2.manualStart = today;
+        if(!st2.manualEnd) st2.manualEnd = today;
+      } else if(st2.myDayDate === today){
+        delete st2.myDayDate;
+      }
+    }
     const dis = !!document.getElementById("f-task-disabled").checked;
     if(dis){ st2.disabled = true; st2.forceEnabled = false; }
     else { st2.disabled = false; st2.forceEnabled = true; }
@@ -20138,6 +20169,17 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    const myDayBtn = e.target.closest("[data-my-day]");
+    if(myDayBtn){
+      e.preventDefault();
+      e.stopPropagation();
+      const id = myDayBtn.getAttribute("data-my-day");
+      if(id){
+        toggleMyDay(project, id);
+        try{ renderWorkspace(); }catch(err){}
+      }
+      return;
+    }
     const toggleBtn = e.target.closest("[data-toggle-task]");
     // (parent sync wired below when toggle runs)
     if(toggleBtn){
