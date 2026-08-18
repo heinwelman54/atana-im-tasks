@@ -1314,12 +1314,12 @@
 <body>
 
 <div id="atanaBootBeacon" style="position:fixed;bottom:72px;right:12px;z-index:99998;background:#14532d;color:#fff;font:12px/1.3 system-ui,sans-serif;padding:8px 12px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.25);max-width:220px;">
-  Loading Atana IM <strong>3.1.0</strong>…
+  Loading Atana IM <strong>3.1.1</strong>…
 </div>
 <script>
 (function(){
   window.__ATANA_BOOT = Date.now();
-  document.documentElement.setAttribute("data-atana-version","3.1.0");
+  document.documentElement.setAttribute("data-atana-version","3.1.1");
   window.addEventListener("error", function(ev){
     var b = document.getElementById("atanaBootBeacon");
     if(b){ b.style.background="#7f1d1d"; b.innerHTML = "Boot error: " + (ev.message||"unknown"); }
@@ -1328,7 +1328,7 @@
     var b = document.getElementById("atanaBootBeacon");
     if(b){
       b.style.background="#14532d";
-      b.innerHTML = "Atana IM <strong>v3.1.0</strong> ready";
+      b.innerHTML = "Atana IM <strong>v3.1.1</strong> ready";
       setTimeout(function(){ try{ b.remove(); }catch(e){} }, 4000);
     }
     // Kill stale service workers on first load of 3.0.0
@@ -1894,8 +1894,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.1.0";
-const APP_BUILD = "2026-08-18-settings-org";
+const APP_VERSION = "3.1.1";
+const APP_BUILD = "2026-08-18-naming-override";
 /** Safe DOM write — never throw on missing nodes */
 function setHtml(elOrId, html){
   try {
@@ -6422,24 +6422,30 @@ function defaultMidpCatalog(){
     documentSeries: defaultDocumentSeries()
   };
 }
-function normalizeMidpCatalog(src){
+function normalizeMidpCatalog(src, opts){
+  opts = opts || {};
+  const strict = !!opts.strict; // after Forma override: do not re-inject defaults
   const d = defaultMidpCatalog();
   if(!src || typeof src !== "object") return d;
   const mapList = (arr, fallback) => {
-    if(!Array.isArray(arr) || !arr.length) return fallback.map(x => Object.assign({description:""}, x));
+    if(!Array.isArray(arr) || !arr.length){
+      return strict ? [] : fallback.map(x => Object.assign({description:""}, x));
+    }
     return arr.map(x => ({
-      code: String(x.code || "").toUpperCase(),
-      label: String(x.label || x.code || "").toUpperCase(),
-      description: String(x.description || ""),
-      selected: !!x.selected
+      code: String(x.code || x.value || "").toUpperCase().trim(),
+      label: String(x.label || x.description || x.code || "").toUpperCase().trim(),
+      description: String(x.description || x.label || "").trim(),
+      selected: x.selected === false ? false : true
     })).filter(x => x.code);
   };
-  // If roles missing, use full DEFAULT_ROLES; if partial, merge so all defaults available
+  // If roles missing, use full DEFAULT_ROLES; if partial, merge so all defaults available (unless strict)
   let roles = mapList(src.roles, d.roles);
-  const have = new Set(roles.map(r => r.code));
-  DEFAULT_ROLES.forEach(([code,label]) => {
-    if(!have.has(code)) roles.push({code, label, selected:false});
-  });
+  if(!strict){
+    const have = new Set(roles.map(r => r.code));
+    DEFAULT_ROLES.forEach(([code,label]) => {
+      if(!have.has(code)) roles.push({code, label: String(label).toUpperCase(), description: "", selected:false});
+    });
+  }
   const out = {
     functionalList: mapList(src.functionalList, d.functionalList),
     levels: mapList(src.levels, d.levels),
@@ -15360,16 +15366,29 @@ function guessFormaSheetRole(sheetName){
 
 function mergeCatalogList(existing, incoming, mode){
   // mode: override | merge
-  if(mode === "override") return incoming.map(x => Object.assign({}, x));
+  if(mode === "override") return (incoming || []).map(x => Object.assign({}, x, {
+    code: String(x.code || "").toUpperCase().trim(),
+    label: String(x.label || x.description || x.code || "").toUpperCase().trim(),
+    description: String(x.description || x.label || "").toUpperCase().trim(),
+    selected: true
+  })).filter(x => x.code);
   const map = new Map();
   (existing||[]).forEach(x => map.set(String(x.code).toUpperCase(), Object.assign({}, x)));
   (incoming||[]).forEach(x => {
-    const k = String(x.code).toUpperCase();
+    const k = String(x.code || "").toUpperCase().trim();
+    if(!k) return;
+    const label = String(x.label || x.description || k).toUpperCase().trim();
+    const description = String(x.description || x.label || "").toUpperCase().trim();
     if(map.has(k)){
       const cur = map.get(k);
-      map.set(k, Object.assign({}, cur, { label: x.label || cur.label, description: x.description || cur.description, selected: true }));
+      // Incoming values always win on merge when provided
+      map.set(k, Object.assign({}, cur, {
+        label: label || cur.label,
+        description: description || cur.description,
+        selected: true
+      }));
     } else {
-      map.set(k, Object.assign({}, x, { selected: true }));
+      map.set(k, { code: k, label, description, selected: true });
     }
   });
   return Array.from(map.values());
@@ -15377,12 +15396,13 @@ function mergeCatalogList(existing, incoming, mode){
 async function handleFormaNamingImport(file, project, mode, sheetMap, colMaps){
   try {
     if(!project){ showToast("No project selected"); return; }
+    mode = (mode === "override") ? "override" : "merge";
     await loadSheetJS();
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: "array" });
-    const cat = normalizeMidpCatalog(project.midpCatalog || defaultMidpCatalog());
+    // Start from current catalog; override mode will replace lists entirely
+    const cat = normalizeMidpCatalog(project.midpCatalog || defaultMidpCatalog(), { strict: mode === "override" });
     const names = wb.SheetNames || [];
-    // Auto sheet map if not provided
     const auto = {};
     names.forEach(n => {
       const role = guessFormaSheetRole(n);
@@ -15393,46 +15413,71 @@ async function handleFormaNamingImport(file, project, mode, sheetMap, colMaps){
       const sn = map[role];
       if(!sn || !wb.Sheets[sn]) return [];
       const cm = (colMaps && colMaps[role]) || null;
-      return parseFormaSheetRows(wb.Sheets[sn], cm);
+      const rows = parseFormaSheetRows(wb.Sheets[sn], cm);
+      // Capitalise value + description for FORMA consistency
+      return rows.map(r => ({
+        code: String(r.code || "").toUpperCase().trim(),
+        label: String(r.label || r.description || r.code || "").toUpperCase().trim(),
+        description: String(r.description || r.label || "").toUpperCase().trim(),
+        selected: true
+      })).filter(r => r.code);
     };
-    if(map.functional) cat.functionalList = mergeCatalogList(cat.functionalList, parseSheet("functional"), mode);
-    if(map.spatial) cat.levels = mergeCatalogList(cat.levels, parseSheet("spatial"), mode);
-    if(map.role) cat.roles = mergeCatalogList(cat.roles, parseSheet("role"), mode);
-    if(map.originator){
-      cat.originators = mergeCatalogList(cat.originators || [], parseSheet("originator"), mode);
-    }
-    if(map.form){
-      cat.forms = mergeCatalogList(cat.forms || [], parseSheet("form"), mode);
-    }
-    if(map.status){
-      cat.statuses = mergeCatalogList(cat.statuses || [], parseSheet("status"), mode);
-    }
-    if(map.revision){
-      cat.revisions = mergeCatalogList(cat.revisions || [], parseSheet("revision"), mode);
-    }
+    const counts = {};
+    const applyList = (key, roleKey) => {
+      if(!map[roleKey]) return;
+      const incoming = parseSheet(roleKey);
+      counts[roleKey] = incoming.length;
+      if(mode === "override"){
+        // Full replace for this attribute bucket
+        cat[key] = incoming.slice();
+      } else {
+        cat[key] = mergeCatalogList(cat[key] || [], incoming, "merge");
+      }
+    };
+    applyList("functionalList", "functional");
+    applyList("levels", "spatial");
+    applyList("roles", "role");
+    applyList("originators", "originator");
+    applyList("forms", "form");
+    applyList("statuses", "status");
+    applyList("revisions", "revision");
     if(map.workstage){
       const stages = parseSheet("workstage");
+      counts.workstage = stages.length;
       if(!project.stageLabels) project.stageLabels = {};
       stages.forEach(st => {
         const mapWs = { WS1:"S1", WS2:"S2", WS3:"S3", WS4:"S4", WS5:"S5", WS6:"S6",
-          "1":"S1","2":"S2","3":"S3","4":"S4","5":"S5","6":"S6" };
+          "1":"S1","2":"S2","3":"S3","4":"S4","5":"S5","6":"S6",
+          S1:"S1",S2:"S2",S3:"S3",S4:"S4",S5:"S5",S6:"S6" };
         const sid = mapWs[String(st.code).toUpperCase()] || mapWs[String(st.code)];
         if(sid) project.stageLabels[sid] = st.label;
       });
     }
+    // Mark catalog as Forma-imported so later normalize can stay strict when desired
+    cat._formaImportedAt = Date.now();
+    cat._formaImportMode = mode;
     project.midpCatalog = cat;
-    try { project.taskTeams = projectTaskTeams(project); } catch(e){}
+    // Live project in DATA
+    const live = projectById(project.id) || project;
+    live.midpCatalog = cat;
+    if(project.stageLabels) live.stageLabels = project.stageLabels;
+    try { live.taskTeams = projectTaskTeams(live); } catch(e){}
+    // Critical: update open editor draft so UI shows new values immediately
+    try {
+      window.__midpCatalogDraft = JSON.parse(JSON.stringify(cat));
+    } catch(e){ window.__midpCatalogDraft = cat; }
     saveData(DATA);
-    showToast("Naming standard " + mode + "d from Excel");
+    const summary = Object.keys(counts).map(k => k + ":" + counts[k]).join(" · ") || "no sheets mapped";
+    showToast((mode === "override" ? "Overrode" : "Merged") + " naming — " + summary);
+    console.info("[Forma naming import]", mode, counts, map);
     try {
       if(currentProjectId === project.id && typeof renderWorkspace === "function") renderWorkspace();
     } catch(e){ console.warn(e); }
     try { if(typeof renderSettings === "function") renderSettings(); } catch(e){}
-    // Re-open edit sheet so user sees updated lists
-    try { if(typeof openEditProjectSheet === "function") openEditProjectSheet(project); } catch(e){}
+    try { if(typeof openEditProjectSheet === "function") openEditProjectSheet(live); } catch(e){}
   } catch(e){
     console.error(e);
-    showToast("Import failed: " + (e.message || "unknown"));
+    showToast("Import failed: " + (e.message || e));
   }
 }
 function openImportNamingSheet(proj){
@@ -15442,8 +15487,8 @@ function openImportNamingSheet(proj){
     <h2>Import Forma naming Excel</h2>
     <p class="section-sub">Target: <strong>${escapeHtml(project.name)}</strong>. If sheet names or column titles differ, map them after choosing the file.</p>
     <div class="field"><label>Mode</label>
-      <label style="display:block;margin:6px 0;font-weight:500;"><input type="radio" name="f-imp-mode" value="merge" checked> Merge (add / update codes, keep others)</label>
-      <label style="display:block;margin:6px 0;font-weight:500;"><input type="radio" name="f-imp-mode" value="override"> Override (replace those lists entirely)</label>
+      <label style="display:block;margin:6px 0;font-weight:500;"><input type="radio" name="f-imp-mode" value="override" checked> Override (replace those lists entirely)</label>
+      <label style="display:block;margin:6px 0;font-weight:500;"><input type="radio" name="f-imp-mode" value="merge"> Merge (add / update codes, keep others)</label>
     </div>
     <div class="sheet-actions">
       <button class="btn btn-ghost" id="f-imp-cancel">Cancel</button>
@@ -15454,7 +15499,7 @@ function openImportNamingSheet(proj){
   if(cancelBtn) cancelBtn.onclick = () => { try{ openEditProjectSheet(project); }catch(e){ closeSheet(); } };
   const pickBtn = document.getElementById("f-imp-pick");
   if(pickBtn) pickBtn.onclick = () => {
-    const mode = (document.querySelector('input[name="f-imp-mode"]:checked') || {}).value || "merge";
+    const mode = (document.querySelector('input[name="f-imp-mode"]:checked') || {}).value || "override";
     const input = document.getElementById("importNamingFile");
     if(!input){ showToast("File input missing — reload the app"); return; }
     input.onchange = async () => {
