@@ -2003,8 +2003,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.2.5";
-const APP_BUILD = "2026-08-18-per-team-page";
+const APP_VERSION = "3.2.6";
+const APP_BUILD = "2026-08-18-pub-review";
 
 /** Atana IM Framework — path relative to app (same folder on GitHub Pages / local). */
 const IM_FRAMEWORK_URL = "Atana-IM-Framework.html";
@@ -3630,31 +3630,22 @@ function normalizeCandidate(c){
  */
 function resolveReviewStatusForGateway(gateway, candidates){
   const gw = String(gateway || "").toUpperCase();
-  let ranked = (candidates || []).map(normalizeCandidate).filter(c => c.label);
+  // Keep rows that have a label OR a workflow name (FOR PUBLISHING inference)
+  let ranked = (candidates || []).map(normalizeCandidate).filter(c => c.label || c.reviewName);
 
-  // Published: newest completed authorised workflow; if latest empty, walk history
+  // PUBLISHED: show AUTHORISED only — never APPROVED (SHARED)
   if(gw === "PUBLISHED"){
-    // Exclude active in-review; keep completed outcomes from any gateway copy
-    const completed = ranked
+    const hist = ranked
       .filter(c => !c.inProgress && c.cls.kind !== "in_review")
       .sort((a, b) => (b.ts - a.ts) || (b.cls.rank - a.cls.rank));
-    // Walk newest → oldest for authorised / FOR PUBLISHING
-    for(const c of completed){
-      if(c.cls.kind === "authorised_published" || /authoris|authoriz/i.test(c.label || "")){
-        return c.label;
-      }
-      if(/FOR\s*PUBLISH/i.test(c.reviewName || "")){
-        return c.label || "AUTHORISED (PUBLISHED)";
+    for(const c of hist){
+      if(c.cls.kind === "authorised_published") return c.label || "AUTHORISED (PUBLISHED)";
+      if(/authoris|authoriz/i.test(c.label || "")) return c.label;
+      if(/FOR\s*PUBLISH/i.test(c.reviewName || "") || /FOR\s*PUBLISH/i.test(c.label || "")){
+        return (c.label && /authoris|authoriz/i.test(c.label)) ? c.label : "AUTHORISED (PUBLISHED)";
       }
     }
-    // Second pass: any candidate (including those with only reviewName) sorted by time
-    const allHist = ranked.slice().sort((a, b) => (b.ts - a.ts) || (b.cls.rank - a.cls.rank));
-    for(const c of allHist){
-      if(c.inProgress || c.cls.kind === "in_review") continue;
-      if(c.cls.kind === "authorised_published" || /authoris|authoriz/i.test(c.label || "")) return c.label;
-      if(/FOR\s*PUBLISH/i.test(c.reviewName || "")) return c.label || "AUTHORISED (PUBLISHED)";
-    }
-    return ""; // never APPROVED (SHARED) on Published column
+    return "";
   }
 
   if(gw === "SHARED"){
@@ -3763,53 +3754,61 @@ function applyQmsReviewStatusMapping(accFiles){
 
       let resolved = resolveReviewStatusForGateway(gw, pool);
 
-      // Published: inherit authorised from any sibling gateway (newest first), then history
-      if(!resolved && gw === "PUBLISHED"){
-        const sibs = group
-          .map(s => ({
-            label: String(s.reviewStatusRaw || s.reviewStatus || s.approvalStatusValue || "").trim(),
-            reviewName: s.reviewName || s.workflowName || "",
-            ts: typeof eventTs === "function" ? eventTs(s) : (Date.parse(s.reviewEventAt || s.versionAddedAt || s.lastModified || "") || 0),
-            inProgress: String(s.reviewState || "").toUpperCase() === "IN_REVIEW",
-            cdeState: String(s.cdeState || "").toUpperCase()
-          }))
-          .filter(x => x.label || x.reviewName)
-          .map(x => normalizeCandidate(x))
-          .sort((a, b) => b.ts - a.ts);
+      // PUBLISHED recovery when API left the copy blank:
+      // 1) any sibling copy with AUTHORISED
+      // 2) sibling / own workflow named FOR PUBLISHING
+      // 3) suitability Status A* / CR (ISO contractual published)
+      if(gw === "PUBLISHED" && !resolved){
+        const sibs = group.map(s => ({
+          label: String(s.reviewStatusRaw || s.reviewStatus || s.approvalStatusValue || "").trim(),
+          reviewName: s.reviewName || s.workflowName || "",
+          ts: Date.parse(s.reviewEventAt || s.versionAddedAt || s.lastModified || s.createTime || "") || 0,
+          inProgress: String(s.reviewState || "").toUpperCase() === "IN_REVIEW",
+          status: String(s.status || s.Status || "").trim()
+        })).sort((a,b) => b.ts - a.ts);
+
         for(const x of sibs){
-          if(x.inProgress || x.cls.kind === "in_review") continue;
-          if(x.cls.kind === "authorised_published" || /authoris|authoriz/i.test(x.label || "")){
-            resolved = x.label;
-            break;
-          }
-          if(/FOR\s*PUBLISH/i.test(x.reviewName || "")){
-            resolved = x.label || "AUTHORISED (PUBLISHED)";
-            break;
+          if(x.inProgress) continue;
+          if(/authoris|authoriz/i.test(x.label)){ resolved = x.label; break; }
+          if(/FOR\s*PUBLISH/i.test(x.reviewName || "")){ resolved = "AUTHORISED (PUBLISHED)"; break; }
+        }
+        if(!resolved){
+          const st = String(f.status || f.Status || "").trim().toUpperCase();
+          // A1, A2, A5… and CR = contractual published codes
+          if(/^A\d/.test(st) || st === "CR" || /^A\d/.test(String(own).toUpperCase())){
+            resolved = "AUTHORISED (PUBLISHED)";
           }
         }
       }
 
+      // SHARED: if a Published sibling already exists for this doc, prefer AUTHORISED when not in-review
+      if(gw === "SHARED" && !resolved){
+        const hasPublished = group.some(s => String(s.cdeState || "").toUpperCase() === "PUBLISHED");
+        const auth = group
+          .map(s => String(s.reviewStatusRaw || s.reviewStatus || s.approvalStatusValue || "").trim())
+          .find(l => /authoris|authoriz/i.test(l));
+        if(hasPublished && auth) resolved = auth;
+      }
+
       if(resolved){
-        // Final guard: Published never keeps APPROVED (SHARED)
+        // Published must never display APPROVED (SHARED)
         if(gw === "PUBLISHED"){
           const cls = classifyReviewStatusLabel(resolved);
-          if(cls.kind !== "authorised_published"){
-            f.reviewStatus = "";
-            f.reviewStatusRaw = own || resolved;
-            f.approvalStatusSource = (f.approvalStatusSource || "acc") + "+qms-published-blocked";
-            return;
+          if(cls.kind === "approved_shared" || cls.kind === "approved_generic"){
+            resolved = "AUTHORISED (PUBLISHED)";
+          } else if(cls.kind === "in_review"){
+            // in-review does not belong on Published copy for display — keep searching already done
+            resolved = "AUTHORISED (PUBLISHED)";
+          } else if(cls.kind !== "authorised_published" && /authoris|authoriz/i.test(resolved)){
+            // keep exact ACC text
+          } else if(cls.kind !== "authorised_published"){
+            // suitability-driven default already set above; keep AUTHORISED text
+            if(!/authoris|authoriz/i.test(resolved)) resolved = "AUTHORISED (PUBLISHED)";
           }
         }
         f.reviewStatus = resolved;
         if(!f.reviewStatusRaw) f.reviewStatusRaw = own || resolved;
         f.approvalStatusSource = (f.approvalStatusSource || "acc") + "+qms-" + gw.toLowerCase();
-      } else if(gw === "PUBLISHED"){
-        // Leave blank — never invent APPROVED (SHARED)
-        const ownCls = classifyReviewStatusLabel(own);
-        if(ownCls.kind === "approved_shared" || ownCls.kind === "approved_generic" || ownCls.kind === "in_review"){
-          f.reviewStatus = "";
-          f.reviewStatusRaw = own;
-        }
       }
     });
   });
@@ -5733,7 +5732,7 @@ function renderAccDocsTracking(project){
   // Cross-gateway flow — only when cache fingerprint changes (stops freeze on tab switch)
   try {
     const files = (project && project.accDeliverablesCache) || [];
-    const fp = files.length + ":" + (project.accSyncedAt || project.accLastSync || "");
+    const fp = files.length + ":" + (project.accSyncedAt || project.accLastSync || "") + ":v326";
     if(window.__gatewayFlowFp !== fp){
       if(typeof applyQmsReviewStatusMapping === "function") applyQmsReviewStatusMapping(files);
       else if(typeof backfillPublishedReviewFromAccLabels === "function") backfillPublishedReviewFromAccLabels(files);
