@@ -240,10 +240,26 @@ details.guide .body code{background:#f5f3ff;padding:1px 5px;border-radius:4px;fo
       <div style="margin-top:14px">
         <label style="display:flex;align-items:center;gap:8px;">
           <span class="seq-num" style="position:static;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--brand);font-size:11px;font-weight:900;box-shadow:0 2px 6px rgba(213,196,39,.45);">5</span>
-          Object (Subtype) · task-team list · Uniclass Pr
+          Object (Subtype) · filtered by Category · Uniclass Pr
         </label>
         <input class="search" id="objectSearch" type="text" placeholder="Filter objects…" style="margin-bottom:8px"/>
         <select id="object" size="11" style="height:210px"></select>
+        <p class="hint" id="objectFilterHint" style="margin-top:6px">Select a Category to filter objects to that system (e.g. Air Terminals).</p>
+      </div>
+      <div class="card" style="margin-top:12px;padding:12px;background:linear-gradient(180deg,#faf6f9,#fff);border:1px solid #e5d6e2;box-shadow:var(--field-shadow)">
+        <div style="font-weight:800;font-size:12px;color:var(--brand-dark);margin-bottom:8px">Add object to this task team</div>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
+          <div>
+            <label>Proposed name / description</label>
+            <input type="text" id="addObjInput" placeholder="e.g. linear slot diffuser" autocomplete="off"/>
+          </div>
+          <button type="button" class="btn btn-ghost" id="btnSuggestObj">Suggest Pr</button>
+        </div>
+        <div id="addObjSuggest" class="hint" style="margin-top:8px"></div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+          <button type="button" class="btn btn-primary" id="btnAddObj">Add object</button>
+        </div>
+        <div class="status" id="addObjStatus"></div>
       </div>
       <div class="hint">Differentiator is not part of the family name — size / variant belongs on the <strong>Revit type</strong>.</div>
 
@@ -265,8 +281,9 @@ details.guide .body code{background:#f5f3ff;padding:1px 5px;border-radius:4px;fo
       <table class="table">
         <tr><th>System</th><th>Value</th></tr>
         <tr><td>Uniclass Ss</td><td id="clsSs">—</td></tr>
-        <tr><td>Uniclass Ma/Pr</td><td id="clsMa">—</td></tr>
+        <tr><td>Uniclass EF</td><td id="clsEf">—</td></tr>
         <tr><td>Uniclass Pr</td><td id="clsPr">—</td></tr>
+        <tr><td>Uniclass Ma/Pr <span style="opacity:.6">(display only)</span></td><td id="clsMa">—</td></tr>
         <tr><td>IFC4</td><td id="clsIfc">—</td></tr>
         <tr><td>Revit Category</td><td id="clsRev">—</td></tr>
       </table>
@@ -444,6 +461,7 @@ async function loadData(){
     const cached = localStorage.getItem(LS_KEY);
     if(cached){
       DATA = JSON.parse(cached);
+      mergeLocalObjects();
       document.getElementById('dataStatus').textContent = 'Data: local override (imported)';
       init();
       return;
@@ -456,6 +474,7 @@ async function loadData(){
       const res = await fetch(p + '?v=' + Date.now());
       if(!res.ok) throw new Error(p + ' ' + res.status);
       DATA = await res.json();
+      mergeLocalObjects();
       document.getElementById('dataStatus').textContent = 'Data: ' + p + ' · v' + (DATA.version||'?');
       init();
       return;
@@ -529,18 +548,58 @@ function init(){
   updatePreview();
 }
 
+const LS_OBJ_KEY = 'atanaAssetNamingLocalObjectsV1';
+
+function loadLocalObjectOverrides(){
+  try { return JSON.parse(localStorage.getItem(LS_OBJ_KEY) || '{}') || {}; } catch(e){ return {}; }
+}
+function saveLocalObjectOverrides(map){
+  localStorage.setItem(LS_OBJ_KEY, JSON.stringify(map || {}));
+}
+function mergeLocalObjects(){
+  if(!DATA || !DATA.objectsByTaskTeam) return;
+  const loc = loadLocalObjectOverrides();
+  Object.keys(loc).forEach(team=>{
+    if(!DATA.objectsByTaskTeam[team]) DATA.objectsByTaskTeam[team] = [];
+    (loc[team]||[]).forEach(it=>{
+      if(!(DATA.objectsByTaskTeam[team]||[]).some(x => x.name === it.name)){
+        DATA.objectsByTaskTeam[team].push(it);
+      }
+    });
+  });
+}
+
 function currentObjects(){
   const team = document.getElementById('taskTeam').value;
-  return (DATA.objectsByTaskTeam && DATA.objectsByTaskTeam[team]) || [];
+  let items = (DATA.objectsByTaskTeam && DATA.objectsByTaskTeam[team]) || [];
+  const cat = document.getElementById('category').value;
+  if(cat){
+    items = items.filter(it => {
+      if(it.categoryCode && String(it.categoryCode).toUpperCase() === String(cat).toUpperCase()) return true;
+      // fallback: group name contains category label tokens
+      const c = findCat(cat);
+      if(!c) return true;
+      const lab = (c.label||'').toLowerCase();
+      const g = (it.group||'').toLowerCase();
+      const name = (it.name||'').toLowerCase();
+      if(lab && (g.includes(lab.split('(')[0].trim()) || name.includes((c.code||'').toLowerCase()))) return true;
+      // Air Terminal special: AIR + air terminal*
+      if((c.code||'').toUpperCase()==='AIR' && (g.includes('air terminal') || name.includes('airterminal'))) return true;
+      return false;
+    });
+  }
+  return items;
 }
 
 function refreshObjects(){
   const q = (document.getElementById('objectSearch').value||'').toLowerCase();
   const sel = document.getElementById('object');
+  const cat = document.getElementById('category').value;
   const items = currentObjects().filter(it => {
     if(!q) return true;
     return (it.name||'').toLowerCase().includes(q) || (it.uniclassPr||'').toLowerCase().includes(q) || (it.uniclassDescription||'').toLowerCase().includes(q);
   });
+  const prev = sel.value;
   sel.innerHTML = '';
   let lastGroup = null;
   items.forEach(it=>{
@@ -557,8 +616,18 @@ function refreshObjects(){
   });
   if(!items.length){
     const o=document.createElement('option');
-    o.disabled=true; o.textContent='(No objects for this task team)';
+    o.disabled=true;
+    o.textContent = cat ? '(No objects for this Category in task team — use Add object)' : '(No objects for this task team)';
     sel.appendChild(o);
+  } else if(prev && [...sel.options].some(o=>o.value===prev)){
+    sel.value = prev;
+  }
+  const hint = document.getElementById('objectFilterHint');
+  if(hint){
+    const c = findCat(cat);
+    hint.textContent = cat
+      ? ('Filtered to Category '+cat+(c && c.label ? ' — '+(c.label.split('(')[0].trim()) : '')+' · '+items.length+' objects')
+      : 'Select a Category to filter objects to that system (e.g. Air Terminals).';
   }
   updatePreview();
 }
@@ -598,6 +667,12 @@ function updatePreview(){
   const mat = findMat(document.getElementById('material').value);
   const obj = findObj(document.getElementById('object').value);
   document.getElementById('clsSs').textContent = cat ? ((cat.uniclassSs||'—') + (cat.uniclassDescription? ' — '+cat.uniclassDescription:'')) : '—';
+  const efEl = document.getElementById('clsEf');
+  if(efEl){
+    const ef = (cat && (cat.uniclassEf || cat.ef)) || (obj && obj.uniclassEf) || null;
+    const efd = (cat && cat.uniclassEfDescription) || '';
+    efEl.textContent = ef ? (ef + (efd ? ' — '+efd : '')) : '—';
+  }
   document.getElementById('clsMa').textContent = mat ? ((mat.uniclassCode||'—') + (mat.uniclassDescription? ' — '+mat.uniclassDescription:'')) : '—';
   document.getElementById('clsPr').textContent = obj ? ((obj.uniclassPr||'—') + (obj.uniclassDescription? ' — '+obj.uniclassDescription:'')) : '—';
   document.getElementById('clsIfc').textContent = (obj && obj.ifc4) || '—';
@@ -756,9 +831,10 @@ function exportFormaTemplate(){
 
 document.getElementById('taskTeam').onchange = ()=>{ document.getElementById('objectSearch').value=''; refreshObjects(); };
 document.getElementById('objectSearch').oninput = refreshObjects;
-['originator','source','category','material','object'].forEach(id=>{
+['originator','source','material','object'].forEach(id=>{
   document.getElementById(id).addEventListener('change', updatePreview);
 });
+document.getElementById('category').addEventListener('change', function(){ refreshObjects(); updatePreview(); });
 document.getElementById('btnCopy').onclick = async ()=>{
   const n = buildName();
   if(!n) return alert('Select all fields first');
@@ -770,8 +846,17 @@ document.getElementById('btnCopyClass').onclick = async ()=>{
   const mat=findMat(document.getElementById('material').value);
   const obj=findObj(document.getElementById('object').value);
   await navigator.clipboard.writeText(JSON.stringify({
-    name:buildName(), uniclassSs:cat&&cat.uniclassSs, uniclassMaterial:mat&&mat.uniclassCode,
-    uniclassPr:obj&&obj.uniclassPr, ifc4:obj&&obj.ifc4, revitCategory:obj&&obj.revitCategory
+    name:buildName(),
+    uniclassSs:cat&&cat.uniclassSs,
+    uniclassSsDescription:cat&&cat.uniclassDescription,
+    uniclassEf:cat&&cat.uniclassEf,
+    uniclassEfDescription:cat&&cat.uniclassEfDescription,
+    uniclassPr:obj&&obj.uniclassPr,
+    uniclassPrDescription:obj&&obj.uniclassDescription,
+    uniclassMaterial:mat&&mat.uniclassCode,
+    ifc4:obj&&obj.ifc4,
+    revitCategory:obj&&obj.revitCategory,
+    writeParams:['Classification.Uniclass.Ss.Number','Classification.Uniclass.Ss.Description','Classification.Uniclass.EF.Number','Classification.Uniclass.EF.Description','Classification.Uniclass.Pr.Number','Classification.Uniclass.Pr.Description']
   },null,2));
   setStatus('Classification JSON copied', true);
 };
@@ -779,7 +864,108 @@ document.getElementById('btnExportData').onclick = exportDataExcel;
 document.getElementById('btnImportData').onclick = ()=>document.getElementById('fileImport').click();
 document.getElementById('fileImport').onchange = e=>{ const f=e.target.files&&e.target.files[0]; if(f) importDataExcel(f); e.target.value=''; };
 document.getElementById('btnExportForma').onclick = exportFormaTemplate;
-document.getElementById('btnReload').onclick = ()=>{ localStorage.removeItem(LS_KEY); loadData(); setStatus('Reloaded file data', true); };
+document.getElementById('btnReload').onclick = ()=>{ localStorage.removeItem(LS_KEY); 
+function toPascalCase(str){
+  return String(str||'').replace(/[^a-zA-Z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join('');
+}
+function scorePrMatch(query, item){
+  const q = query.toLowerCase();
+  const name = (item.name||'').toLowerCase();
+  const desc = (item.uniclassDescription||'').toLowerCase();
+  const pr = (item.uniclassPr||'').toLowerCase();
+  let s = 0;
+  if(name === q) s += 100;
+  if(name.includes(q) || q.includes(name)) s += 40;
+  q.split(/\s+/).forEach(t=>{ if(t.length>2 && (name.includes(t)||desc.includes(t))) s += 8; });
+  if(desc.includes(q)) s += 20;
+  return s;
+}
+function suggestObjectFromInput(){
+  const raw = (document.getElementById('addObjInput').value||'').trim();
+  const box = document.getElementById('addObjSuggest');
+  if(!raw){ box.innerHTML = 'Type a description to match closest Pr.'; return null; }
+  const team = document.getElementById('taskTeam').value;
+  const cat = document.getElementById('category').value;
+  let pool = (DATA.objectsByTaskTeam[team]||[]).slice();
+  // prefer same category if set
+  if(cat){
+    const same = pool.filter(it => (it.categoryCode||'').toUpperCase()===cat.toUpperCase());
+    if(same.length) pool = same.concat(pool.filter(it => !(it.categoryCode||'').toUpperCase()===cat.toUpperCase()));
+  }
+  // also search all teams for Pr pool
+  const all = [];
+  Object.keys(DATA.objectsByTaskTeam||{}).forEach(t=>{
+    (DATA.objectsByTaskTeam[t]||[]).forEach(it => all.push(it));
+  });
+  const ranked = all.map(it => ({it, s: scorePrMatch(raw, it)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,6);
+  const pascal = toPascalCase(raw);
+  if(!ranked.length){
+    box.innerHTML = 'No close Pr match. Proposed name: <strong>'+pascal+'</strong> (you can still add with empty Pr)';
+    return { name: pascal, uniclassPr: null, uniclassDescription: raw, ifc4: null, categoryCode: cat||null, group: cat||'CUSTOM', local: true };
+  }
+  const best = ranked[0].it;
+  box.innerHTML = 'Closest Pr: <strong>'+(best.uniclassPr||'—')+'</strong> — '+(best.uniclassDescription||best.name)+
+    '<br>Proposed PascalCase name: <strong>'+pascal+'</strong>'+
+    '<br>Alternatives: '+ranked.slice(1,4).map(x=>x.it.uniclassPr||x.it.name).join(', ');
+  return {
+    name: pascal,
+    uniclassPr: best.uniclassPr||null,
+    uniclassDescription: best.uniclassDescription || raw,
+    ifc4: best.ifc4||null,
+    revitCategory: best.revitCategory||null,
+    categoryCode: cat || best.categoryCode || null,
+    group: best.group || cat || 'CUSTOM',
+    local: true
+  };
+}
+function addObjectToDb(){
+  const suggestion = suggestObjectFromInput();
+  if(!suggestion || !suggestion.name){ setAddStatus('Enter a name first', false); return; }
+  const team = document.getElementById('taskTeam').value;
+  if(!team){ setAddStatus('Select task team', false); return; }
+  if(!DATA.objectsByTaskTeam[team]) DATA.objectsByTaskTeam[team] = [];
+  if((DATA.objectsByTaskTeam[team]||[]).some(x => x.name === suggestion.name)){
+    setAddStatus('Object name already exists in this task team', false); return;
+  }
+  if(!confirm('Add object "'+suggestion.name+'" to task team '+team+'?\nPr: '+(suggestion.uniclassPr||'—')+'\n\nSaved in this browser now. Download JSON for SharePoint / site update.')) return;
+  DATA.objectsByTaskTeam[team].push(suggestion);
+  const loc = loadLocalObjectOverrides();
+  if(!loc[team]) loc[team] = [];
+  loc[team].push(suggestion);
+  saveLocalObjectOverrides(loc);
+  // also persist full data override for session continuity
+  try { localStorage.setItem(LS_KEY, JSON.stringify(DATA)); } catch(e){}
+  refreshObjects();
+  document.getElementById('object').value = suggestion.name;
+  updatePreview();
+  setAddStatus('Added locally. Download JSON and upload to SharePoint Data folder, then email Heinz to update the live site DB.', true);
+  // download json
+  try {
+    const blob = new Blob([JSON.stringify(DATA,null,2)], {type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='asset-naming-data.json'; a.click();
+  } catch(e){}
+  alert(
+    'Object added in this browser.\n\n'+
+    '1) Upload the downloaded asset-naming-data.json to:\n'+
+    '   SharePoint → KTG_BIM_Execution-IMTeam → AtanaIM/Data\n\n'+
+    '2) Email Heinz to update the GitHub site source with the new DB.\n\n'+
+    'Until the site is updated, this browser keeps your new object.'
+  );
+}
+function setAddStatus(msg, ok){
+  const el = document.getElementById('addObjStatus');
+  if(!el) return;
+  el.textContent = msg||'';
+  el.style.color = ok===false ? '#b91c1c' : (ok ? '#047857' : '');
+}
+
+
+loadData();
+document.getElementById('btnSuggestObj') && document.getElementById('btnSuggestObj').addEventListener('click', suggestObjectFromInput);
+document.getElementById('btnAddObj') && document.getElementById('btnAddObj').addEventListener('click', addObjectToDb);
+document.getElementById('addObjInput') && document.getElementById('addObjInput').addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); suggestObjectFromInput(); }});
+ setStatus('Reloaded file data', true); };
 document.getElementById('btnPop').onclick = ()=>{ const w=window.open(location.href,'atana-asset-naming','width=1100,height=900'); if(!w) alert('Pop-out blocked'); };
 
 loadData();

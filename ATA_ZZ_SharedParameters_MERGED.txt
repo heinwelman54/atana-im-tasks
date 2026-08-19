@@ -1,0 +1,95 @@
+# This is a Revit shared parameter file.
+# Merged: ATA-SHARED PARAMETERS + Parameters service export
+# Do not edit manually.
+*META	VERSION	MINVERSION
+META	2	1
+*GROUP	ID	NAME
+GROUP	1	Exported Parameters
+*PARAM	GUID	NAME	DATATYPE	DATACATEGORY	GROUP	VISIBLE	DESCRIPTION	USERMODIFIABLE	HIDEWHENNOVALUE
+PARAM	f16eb500-0976-4c80-b5d1-082470821ef8	Classification.Uniclass.Ss.Number	TEXT		1	1	Created and used by the Autodesk Classification Manager for Revit	1	0
+PARAM	1e11c20e-c7b7-4b74-af15-4cfcc40afbd5	ATA_ZZ_DraftStamp	YESNO		1	1		1	0
+PARAM	909b2d12-29b3-4446-add1-d8824dad6a59	ATA_ZZ_SheetStatus	TEXT		1	1	ISO19650 Status	1	0
+PARAM	d2419913-cfac-48c8-a4ed-68cd9ba34d22	Classification.MasterFormat.Description	TEXT		1	1	Created and used by the Autodesk Classification Manager for Revit	1	0
+PARAM	6d634519-17e7-435f-8fb6-aedc588c88da	ATA_ZZ_SheetSize	TEXT		1	1	Sheet Size	1	0
+PARAM	28b55e4c-650c-4af5-aae2-5ae0a0cda589	ATA_ZZ_ClientContractNumber	TEXT		1	1		1	0
+PARAM	9ecb2267-95ee-4bfc-994c-21035d452bd0	Classification.MasterFormat.Number	TEXT		1	1	Created and used by the Autodesk Classification Manager for Revit	1	0
+PARAM	55425773-5e60-45ab-a79d-4f1cc9f0f64a	Classification.Space.Number	TEXT		1	1	Created and used by the Autodesk Classification Manager for Revit	1	0
+PARAM	60119a77-63b3-451e-969d-768d3b01fce0	ATA_ZZ_ProjectDiscipline	TEXT		1	1		1	0
+PARAM	ff6c009e-dc8a-40f7-8689-d840451c70b4	ATA_ZZ_SheetDesignManager	TEXT		1	1		1	0
+PARAM	b00f059e-1c43-446a-ad66-b7826e488c8f	ATA_ZZ_ProjectStage	TEXT		1	1	ISO19650 Project Stage	1	0
+PARAM	38b392a1-26ef-46da-b24d-c2d7b18fa0ff	ATA_ZZ_SheetStatusDescription	TEXT		1	1	ISO19650 Status Description	1	0
+PARAM	d440faa7-622e-4ee1-9f4e-22a5bedd7074	Classification.Uniclass.EF.Number	TEXT		1	1	Created and used by the Autodesk Classification Manager for Revit	1	0
+PARAM	5d61d2ac-a7a1-4c59-832e-843d63930c4e	Classification.Facility.Description	TEXT		1	1	Created and used by the Autodesk Classification Manager for Revit	1	0
+PARAM	53e1dbb9-9434-44ad-abcc-51bca479123d	Classification.Uniclass.Ss.Description	TEXT		1	1	Created and used by the Autodesk Classification Manager for Revit	1	0
+PARAM	f6b4ffc9-622d-4c26-b367-fb044aa9fcea	ATA_ZZ_WorkStage	INTEGER		1	1		1	0
+PARAM	bcc0bfdd-95e3-4f0f-85b1-ea2260840393	Classification.Uniclass.EF.Description	TEXT		1	1	Created and used by the Autodesk Classification Manager for Revit	1	0
+PARAM	c34cbfdf-acee-46da-89ae-471dfc6b4566	ATA_ZZ_SheetIMCoordinator	TEXT		1	1		1	0
+PARAM	8212e2e8-d020-4127-bada-a9cc7f5f4dcc	Classification.Uniclass.Pr.Number	TEXT		1	1	Created and used by the Autodesk Classification Manager for Revit	1	0
+PARAM	4cba69eb-147d-4a38-8dea-3aa907b116ce	Classification.Facility.Number	TEXT		1	1	Created and used by the Autodesk Classification Manager for Revit	1	0
+PARAM	d47f96f3-7191-43b2-afc4-db4b5e4a8859	Classification.Uniclass.Pr.Description	TEXT		1	1	Created and used by the Autodesk Classification Manager for Revit	1	0
+PARAM	eccb49fb-3189-4e04-a4bb-6c3fa7bb57df	Classification.Space.Description	TEXT		1	1	Created and used by the Autodesk Classification Manager for Revit	1	0
+PARAM	ee3967b4-00d5-47bf-8dd1-1fff548e4fb6	ATA_ST_ConnectionBoltDiameter	LENGTH		1	1		1	0
+PARAM	2bd63a38-583e-43cc-934d-eedab8c41a01	ATA_ME_LengthDuct	HVAC_DUCT_SIZE		1	1		1	0
+PARAM	045e7a44-92ca-4f2e-8290-d6fb99ddf968	ATA_ME_WidthDuct	HVAC_DUCT_SIZE		1	1		1	0
+PARAM	dc5ab07c-3b7a-4204-8e17-27b3e7761e5a	ADC_ZZ_CountID	TEXT		1	1		1	0
+PARAM	f4dbb79c-4e85-4694-82eb-3bc333fb99e0	ATA_ME_DensityLitrePerSecond	HVAC_AIRFLOW_DENSITY		1	1		1	0
+PARAM	10fa2b6e-8278-4ed2-8aaf-69daa2f4b957	ATA_PD_FlowDomesticCold	PIPING_FLOW		1	1		1	0
+PARAM	f0f8b252-f090-4da6-9789-ef62281e8dc9	ATA_ME_NoiseCriteriaLevel	NUMBER		1	1		1	0
+PARAM	bb2c16b9-29cb-408f-a0a0-29cdc07ad0e9	ATA_ZZ_Weight	MASS		1	1		1	0
+PARAM	aed4d2d5-80c8-402d-9de3-a311fe859068	ATA_EE_CurrentInput	ELECTRICAL_CURRENT		1	1		1	0
+PARAM	4a5ebbf0-5be6-4dd8-b1d5-5c6ba1cdf77f	ATA_ME_DeltaT	NUMBER		1	1		1	0
+PARAM	12f574e0-19fb-46bd-9b7e-0f329356db9a	ATA_ZZ_CutOffset	LENGTH		1	1		1	0
+PARAM	66ee1cb3-3758-43c7-9dec-dc14f93b4ac0	ATA_ZZ_Height	LENGTH		1	1		1	0
+PARAM	864d852b-cafb-4776-91ab-02a39c3e31e9	ATA_PD_PressureDrop	PIPING_PRESSURE		1	1		1	0
+PARAM	5f88be4a-ae83-4d02-9106-621a51608d27	ATA_EE_PowerNominal	ELECTRICAL_POWER		1	1		1	0
+PARAM	c6bcd2fd-ab45-429c-8b67-023420fbda3d	ATA_PD_CapacityFluid	PIPING_VOLUME		1	1		1	0
+PARAM	decaf462-a5ae-4385-aa46-17df5614ffac	ATA_PD_DiameterNominal	PIPE_SIZE		1	1		1	0
+PARAM	9d3672c6-4562-45fd-b6f2-30267f1635d0	ATA_ME_DXUnit	YESNO		1	1		1	0
+PARAM	0a234abe-ef16-4519-857a-d76d1155c355	ATA_ZZ_WidthOpening	LENGTH		1	1		1	0
+PARAM	20fac57b-eb8a-43d7-a09e-71eeea874389	ATA_ME_FlowChilledWater	PIPING_FLOW		1	1		1	0
+PARAM	47aaf81b-c7dc-42a0-bab3-98b84375fdb6	ATA_ME_AreaFree	AREA		1	1		1	0
+PARAM	1fd42f5c-e0c6-4d22-b1ba-9056bb97aacf	ATA_ME_FlowAirActual	HVAC_AIR_FLOW		1	1		1	0
+PARAM	2cd6afed-1a61-46e4-a5ef-ea91f62ffec0	ATA_ZZ_Length	LENGTH		1	1		1	0
+PARAM	823b7f3f-b116-49cb-a729-9b9b9167634d	ATA_EE_PowerFactor	NUMBER		1	1		1	0
+PARAM	57fb4269-67da-4a42-95fa-743033444cb4	ATA_PD_FlowUnitsDomesticCold	INTEGER		1	1		1	0
+PARAM	a3e185e7-4639-4f1c-b7c8-e67ab3711707	ATA_ME_AreaFace	AREA		1	1		1	0
+PARAM	e1d987d2-c41c-4912-a540-9aa4edecd72b	ATA_PD_PressureDomesticCold	NUMBER		1	1		1	0
+PARAM	fbc6c4b7-239e-49f6-bcf0-f00eed9accb9	ATA_ME_FreeAreaFactor	HVAC_FACTOR		1	1		1	0
+PARAM	10701f96-311e-487c-8046-20ef13ec9659	ATA_ZZ_Slope	SLOPE		1	1		1	0
+PARAM	50f66c1b-ad71-4590-b673-670da12b6efc	ATA_ZZ_Volume	VOLUME		1	1		1	0
+PARAM	03133fef-5830-4710-9665-c801f5fc47ff	ATA_ZZ_EquipmentID	TEXT		1	1		1	0
+PARAM	cf5496d2-97bb-482a-bf41-37b2c4959fd6	ATA_ZZ_Width	LENGTH		1	1		1	0
+PARAM	10776a93-d76a-4644-a6cf-978a73167675	ATA_ZZ_BLANK	HVAC_AIR_FLOW		1	1		1	0
+PARAM	ae2bbac5-db37-4c39-9fa9-3929ec10c4c5	ATA_PD_FlowWater	PIPING_FLOW		1	1		1	0
+PARAM	241a83c8-309b-4937-9a90-db704a5b7a07	ATA_ZZ_Angle	ANGLE		1	1		1	0
+PARAM	1b14eb7f-8bf5-400f-9600-338c3d5cc290	ATA_PD_CriticalPath	YESNO		1	1		1	0
+PARAM	6d357bbe-a3ac-4fb3-a21c-d33612a3cbfc	ATA_ZZ_Area	AREA		1	1		1	0
+PARAM	d66ca03e-3748-4f90-98ce-d73af46f8ba4	ATA_EE_PowerReheater	HVAC_POWER		1	1		1	0
+PARAM	45fe094b-7bbf-4d00-a0e4-ee6dbc8eaa68	ATA_ZZ_Clearance	LENGTH		1	1	Used for Service Zone Clearance	1	0
+PARAM	4bd2a951-360d-43f9-b0c0-aae422f23ef9	ATA_ZZ_Depth	LENGTH		1	1		1	0
+PARAM	8701d9b1-57f9-41e7-a560-c7d461b8f570	ATA_ZZ_HeightOpening	LENGTH		1	1		1	0
+PARAM	0b460d91-7b8e-437f-adf1-23e5170580d6	ATA_EE_VoltAmpere	ELECTRICAL_APPARENT_POWER		1	1		1	0
+PARAM	e7e48098-eabc-48c6-a06f-c7352e20678e	ATA_ME_HeatingTotal	HVAC_HEATING_LOAD		1	1		1	0
+PARAM	44ed9b12-dd68-40b9-ad8b-60ea51c4f681	ATA_ME_FlowSteamCondensate	PIPING_FLOW		1	1		1	0
+PARAM	52faeaa5-800c-438c-a63c-c237a7090597	ATA_ME_FlowSteamSupply	PIPING_FLOW		1	1		1	0
+PARAM	3b30bd0e-84ce-4669-8477-1d028ae493b9	ATA_ME_PressureSteamSupply	NUMBER		1	1		1	0
+PARAM	70919a3c-5e3f-4ebe-8117-f55162683049	ATA_ME_CoolingTotal	HVAC_COOLING_LOAD		1	1		1	0
+PARAM	592beaf7-9f9d-4c09-9e0b-b56fef9f02ef	ATA_ME_CoolingSensible	HVAC_COOLING_LOAD		1	1		1	0
+PARAM	e279a71d-755f-476d-99d3-4f4d5e82c4e2	ATA_EE_PowerRequired	HVAC_COOLING_LOAD		1	1	Load Requirement for HVAC Cooling	1	0
+PARAM	26eceba1-4ba4-4773-a290-0798e7a6b44d	ATA_EE_Volt	ELECTRICAL_POTENTIAL		1	1		1	0
+PARAM	68accc25-eb49-482d-a0f6-d3ed454593f0	ATA_EE_Hertz	ELECTRICAL_FREQUENCY		1	1		1	0
+PARAM	8610aa68-9d7c-45be-ac9d-2e41ede1d450	ATA_EE_Phase	NOOFPOLES		1	1		1	0
+PARAM	c04e0ae4-ebcc-4146-9940-b3a22903f59e	ATA_ME_SizeNeck	HVAC_DUCT_SIZE		1	1	TYP Spigot Diameter	1	0
+PARAM	a62ff6b1-a294-4e27-aba8-71b666a6a86b	ATA_ME_FreshAirperPerson	HVAC_AIR_FLOW		1	1		1	0
+PARAM	0e4660c6-75ad-490d-80c8-ed2530ab9e8e	ATA_ME_FlowFreshAir	HVAC_AIR_FLOW		1	1		1	0
+PARAM	f8844350-59ab-449c-8804-b7cefe7e5d12	ATA_ME_FlowReturnAir	HVAC_AIR_FLOW		1	1		1	0
+PARAM	c5828417-5f08-464a-abbd-721027f608eb	ATA_ME_FlowSupplyAir	HVAC_AIR_FLOW		1	1		1	0
+PARAM	b9e9bd31-60cb-4b6f-b452-0cc911397bed	ATA_ME_FlowAir	HVAC_AIR_FLOW		1	1		1	0
+PARAM	77404c05-2964-41d2-9753-dac9612fe225	ATA_ME_DesignSensibleLoad	HVAC_COOLING_LOAD		1	1		1	0
+PARAM	08a0b078-550f-4781-af02-7c1e21ed88f6	ATA_ME_PressureCompressedAir	NUMBER		1	1		1	0
+PARAM	410ce2b6-7e23-4e09-9087-fd672d60fb0d	ATA_ME_FlowCompressedAir	PIPING_FLOW		1	1		1	0
+PARAM	1a161101-ebda-423a-abba-aadff429f4f2	ATA_ME_AirChanges	INTEGER		1	1		1	0
+PARAM	df24bc39-8938-43b1-8b42-9840d5ab96ab	ATA_ME_HeightDuct	HVAC_DUCT_SIZE		1	1		1	0
+PARAM	11ee7c26-6ef2-46e7-b13c-e7f7aa23eefc	ATA_ME_VelocityFace	HVAC_VELOCITY		1	1		1	0
+PARAM	444aef8f-9fd5-4fbf-a6e5-30ff8fa72a09	ATA_ME_PressureTotal	HVAC_PRESSURE		1	1		1	0
+PARAM	f2c6f065-ac23-4037-89ba-25a684f184d1	ATA_ZZ_SheetState	TEXT		1	1	State Reporting Parameter eg. WIP/SHARED/PUBLISHED	1	0

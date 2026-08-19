@@ -1,2 +1,2 @@
-# Atana IM Tasks v3.3.5
-Asset naming UI · condensed Tools · PyRevit classify/rename
+# Atana IM Tasks v3.3.6
+Category-filtered objects · EF classification · Add object · PyRevit Ss/EF/Pr
