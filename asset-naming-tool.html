@@ -669,8 +669,8 @@ function updatePreview(){
   document.getElementById('clsSs').textContent = cat ? ((cat.uniclassSs||'—') + (cat.uniclassDescription? ' — '+cat.uniclassDescription:'')) : '—';
   const efEl = document.getElementById('clsEf');
   if(efEl){
-    const ef = (cat && (cat.uniclassEf || cat.ef)) || (obj && obj.uniclassEf) || null;
-    const efd = (cat && cat.uniclassEfDescription) || '';
+    const ef = (obj && obj.uniclassEf) || (cat && (cat.uniclassEf || cat.ef)) || null;
+    const efd = (obj && obj.uniclassEfDescription) || (cat && cat.uniclassEfDescription) || '';
     efEl.textContent = ef ? (ef + (efd ? ' — '+efd : '')) : '—';
   }
   document.getElementById('clsMa').textContent = mat ? ((mat.uniclassCode||'—') + (mat.uniclassDescription? ' — '+mat.uniclassDescription:'')) : '—';
@@ -864,7 +864,10 @@ document.getElementById('btnExportData').onclick = exportDataExcel;
 document.getElementById('btnImportData').onclick = ()=>document.getElementById('fileImport').click();
 document.getElementById('fileImport').onchange = e=>{ const f=e.target.files&&e.target.files[0]; if(f) importDataExcel(f); e.target.value=''; };
 document.getElementById('btnExportForma').onclick = exportFormaTemplate;
-document.getElementById('btnReload').onclick = ()=>{ localStorage.removeItem(LS_KEY); 
+
+document.getElementById('btnReload').onclick = ()=>{ localStorage.removeItem(LS_KEY); loadData(); setStatus('Reloaded file data', true); };
+document.getElementById('btnPop').onclick = ()=>{ const w=window.open(location.href,'atana-asset-naming','width=1100,height=900'); if(!w) alert('Pop-out blocked'); };
+
 function toPascalCase(str){
   return String(str||'').replace(/[^a-zA-Z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean)
     .map(w => w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join('');
@@ -873,7 +876,6 @@ function scorePrMatch(query, item){
   const q = query.toLowerCase();
   const name = (item.name||'').toLowerCase();
   const desc = (item.uniclassDescription||'').toLowerCase();
-  const pr = (item.uniclassPr||'').toLowerCase();
   let s = 0;
   if(name === q) s += 100;
   if(name.includes(q) || q.includes(name)) s += 40;
@@ -881,94 +883,96 @@ function scorePrMatch(query, item){
   if(desc.includes(q)) s += 20;
   return s;
 }
-function suggestObjectFromInput(){
-  const raw = (document.getElementById('addObjInput').value||'').trim();
-  const box = document.getElementById('addObjSuggest');
-  if(!raw){ box.innerHTML = 'Type a description to match closest Pr.'; return null; }
-  const team = document.getElementById('taskTeam').value;
-  const cat = document.getElementById('category').value;
-  let pool = (DATA.objectsByTaskTeam[team]||[]).slice();
-  // prefer same category if set
-  if(cat){
-    const same = pool.filter(it => (it.categoryCode||'').toUpperCase()===cat.toUpperCase());
-    if(same.length) pool = same.concat(pool.filter(it => !(it.categoryCode||'').toUpperCase()===cat.toUpperCase()));
-  }
-  // also search all teams for Pr pool
-  const all = [];
-  Object.keys(DATA.objectsByTaskTeam||{}).forEach(t=>{
-    (DATA.objectsByTaskTeam[t]||[]).forEach(it => all.push(it));
-  });
-  const ranked = all.map(it => ({it, s: scorePrMatch(raw, it)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,6);
-  const pascal = toPascalCase(raw);
-  if(!ranked.length){
-    box.innerHTML = 'No close Pr match. Proposed name: <strong>'+pascal+'</strong> (you can still add with empty Pr)';
-    return { name: pascal, uniclassPr: null, uniclassDescription: raw, ifc4: null, categoryCode: cat||null, group: cat||'CUSTOM', local: true };
-  }
-  const best = ranked[0].it;
-  box.innerHTML = 'Closest Pr: <strong>'+(best.uniclassPr||'—')+'</strong> — '+(best.uniclassDescription||best.name)+
-    '<br>Proposed PascalCase name: <strong>'+pascal+'</strong>'+
-    '<br>Alternatives: '+ranked.slice(1,4).map(x=>x.it.uniclassPr||x.it.name).join(', ');
-  return {
-    name: pascal,
-    uniclassPr: best.uniclassPr||null,
-    uniclassDescription: best.uniclassDescription || raw,
-    ifc4: best.ifc4||null,
-    revitCategory: best.revitCategory||null,
-    categoryCode: cat || best.categoryCode || null,
-    group: best.group || cat || 'CUSTOM',
-    local: true
-  };
-}
-function addObjectToDb(){
-  const suggestion = suggestObjectFromInput();
-  if(!suggestion || !suggestion.name){ setAddStatus('Enter a name first', false); return; }
-  const team = document.getElementById('taskTeam').value;
-  if(!team){ setAddStatus('Select task team', false); return; }
-  if(!DATA.objectsByTaskTeam[team]) DATA.objectsByTaskTeam[team] = [];
-  if((DATA.objectsByTaskTeam[team]||[]).some(x => x.name === suggestion.name)){
-    setAddStatus('Object name already exists in this task team', false); return;
-  }
-  if(!confirm('Add object "'+suggestion.name+'" to task team '+team+'?\nPr: '+(suggestion.uniclassPr||'—')+'\n\nSaved in this browser now. Download JSON for SharePoint / site update.')) return;
-  DATA.objectsByTaskTeam[team].push(suggestion);
-  const loc = loadLocalObjectOverrides();
-  if(!loc[team]) loc[team] = [];
-  loc[team].push(suggestion);
-  saveLocalObjectOverrides(loc);
-  // also persist full data override for session continuity
-  try { localStorage.setItem(LS_KEY, JSON.stringify(DATA)); } catch(e){}
-  refreshObjects();
-  document.getElementById('object').value = suggestion.name;
-  updatePreview();
-  setAddStatus('Added locally. Download JSON and upload to SharePoint Data folder, then email Heinz to update the live site DB.', true);
-  // download json
-  try {
-    const blob = new Blob([JSON.stringify(DATA,null,2)], {type:'application/json'});
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='asset-naming-data.json'; a.click();
-  } catch(e){}
-  alert(
-    'Object added in this browser.\n\n'+
-    '1) Upload the downloaded asset-naming-data.json to:\n'+
-    '   SharePoint → KTG_BIM_Execution-IMTeam → AtanaIM/Data\n\n'+
-    '2) Email Heinz to update the GitHub site source with the new DB.\n\n'+
-    'Until the site is updated, this browser keeps your new object.'
-  );
-}
 function setAddStatus(msg, ok){
   const el = document.getElementById('addObjStatus');
   if(!el) return;
   el.textContent = msg||'';
   el.style.color = ok===false ? '#b91c1c' : (ok ? '#047857' : '');
 }
+function suggestObjectFromInput(){
+  try {
+    if(!DATA){ setAddStatus('Data not loaded yet', false); return null; }
+    const raw = (document.getElementById('addObjInput').value||'').trim();
+    const box = document.getElementById('addObjSuggest');
+    if(!raw){ if(box) box.innerHTML = 'Type a description to match closest Pr.'; setAddStatus('Enter a description', false); return null; }
+    const team = document.getElementById('taskTeam').value;
+    const cat = document.getElementById('category').value;
+    const all = [];
+    Object.keys(DATA.objectsByTaskTeam||{}).forEach(t=>{
+      (DATA.objectsByTaskTeam[t]||[]).forEach(it => all.push(Object.assign({_team:t}, it)));
+    });
+    let ranked = all.map(it => ({it, s: scorePrMatch(raw, it)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s);
+    if(cat){
+      ranked = ranked.slice().sort((a,b)=>{
+        const ac = ((a.it.categoryCode||'')===cat)?1:0;
+        const bc = ((b.it.categoryCode||'')===cat)?1:0;
+        return (bc-ac) || (b.s-a.s);
+      });
+    }
+    ranked = ranked.slice(0,8);
+    const pascal = toPascalCase(raw);
+    if(!ranked.length){
+      if(box) box.innerHTML = 'No close Pr match. Proposed name: <strong>'+pascal+'</strong>';
+      setAddStatus('No Pr match — you can still add', true);
+      return { name: pascal, uniclassPr: null, uniclassDescription: raw, ifc4: null, categoryCode: cat||null, group: cat||'CUSTOM', local: true };
+    }
+    const best = ranked[0].it;
+    if(box) box.innerHTML = 'Closest Pr: <strong>'+(best.uniclassPr||'—')+'</strong> — '+(best.uniclassDescription||best.name)+
+      '<br>Proposed PascalCase name: <strong>'+pascal+'</strong>'+
+      '<br>Alternatives: '+ranked.slice(1,4).map(x=>x.it.uniclassPr||x.it.name).join(', ');
+    setAddStatus('Suggestion ready', true);
+    return {
+      name: pascal,
+      uniclassPr: best.uniclassPr||null,
+      uniclassDescription: best.uniclassDescription || raw,
+      ifc4: best.ifc4||null,
+      revitCategory: best.revitCategory||null,
+      categoryCode: cat || best.categoryCode || null,
+      group: best.group || cat || 'CUSTOM',
+      local: true
+    };
+  } catch(e){
+    setAddStatus('Suggest failed: '+(e.message||e), false);
+    console.error(e);
+    return null;
+  }
+}
+function addObjectToDb(){
+  try {
+    if(!DATA){ setAddStatus('Data not loaded yet', false); return; }
+    const suggestion = suggestObjectFromInput();
+    if(!suggestion || !suggestion.name){ setAddStatus('Enter a name first', false); return; }
+    const team = document.getElementById('taskTeam').value;
+    if(!team){ setAddStatus('Select task team', false); return; }
+    if(!DATA.objectsByTaskTeam[team]) DATA.objectsByTaskTeam[team] = [];
+    if((DATA.objectsByTaskTeam[team]||[]).some(x => x.name === suggestion.name)){
+      setAddStatus('Object name already exists in this task team', false); return;
+    }
+    if(!confirm('Add object "'+suggestion.name+'" to task team '+team+'?\nPr: '+(suggestion.uniclassPr||'—')+'\n\nSaved in this browser now. JSON will download for SharePoint.')) return;
+    DATA.objectsByTaskTeam[team].push(suggestion);
+    const loc = loadLocalObjectOverrides();
+    if(!loc[team]) loc[team] = [];
+    loc[team].push(suggestion);
+    saveLocalObjectOverrides(loc);
+    try { localStorage.setItem(LS_KEY, JSON.stringify(DATA)); } catch(e){}
+    refreshObjects();
+    document.getElementById('object').value = suggestion.name;
+    updatePreview();
+    setAddStatus('Added locally. Upload JSON to SharePoint Data folder and email Heinz to update the live DB.', true);
+    try {
+      const blob = new Blob([JSON.stringify(DATA,null,2)], {type:'application/json'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='asset-naming-data.json'; a.click();
+    } catch(e){}
+    alert('Object added in this browser.\n\n1) Upload asset-naming-data.json to SharePoint → AtanaIM/Data\n2) Email Heinz to update the GitHub site DB.\n\nThis browser keeps the new object until then.');
+  } catch(e){
+    setAddStatus('Add failed: '+(e.message||e), false);
+    console.error(e);
+  }
+}
 
-
-loadData();
-document.getElementById('btnSuggestObj') && document.getElementById('btnSuggestObj').addEventListener('click', suggestObjectFromInput);
-document.getElementById('btnAddObj') && document.getElementById('btnAddObj').addEventListener('click', addObjectToDb);
-document.getElementById('addObjInput') && document.getElementById('addObjInput').addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); suggestObjectFromInput(); }});
- setStatus('Reloaded file data', true); };
-document.getElementById('btnPop').onclick = ()=>{ const w=window.open(location.href,'atana-asset-naming','width=1100,height=900'); if(!w) alert('Pop-out blocked'); };
+document.getElementById('btnSuggestObj').addEventListener('click', function(e){ e.preventDefault(); suggestObjectFromInput(); });
+document.getElementById('btnAddObj').addEventListener('click', function(e){ e.preventDefault(); addObjectToDb(); });
+document.getElementById('addObjInput').addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); suggestObjectFromInput(); }});
 
 loadData();
 </script>
-</body>
-</html>

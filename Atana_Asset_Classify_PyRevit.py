@@ -1,15 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 Atana Asset Classify + Rename (PyRevit)
---------------------------------------
-Uses Atana naming: Originator_Source_Category_Material_Object
-Writes Autodesk Classification Manager shared parameters:
-  Classification.Uniclass.Ss.Number / Description
-  Classification.Uniclass.EF.Number / Description
-  Classification.Uniclass.Pr.Number / Description
-Material is NOT written (display-only in the web tool).
-
-Requires asset-naming-data.json next to this script or in %APPDATA%\Atana\
+Writes Classification.Uniclass Ss / EF / Pr (number + description).
+Creates missing shared parameters on the family when possible.
+EF is mapped from Pr (product → function hierarchy).
 """
 
 from __future__ import print_function
@@ -21,9 +15,16 @@ clr.AddReference("RevitAPI")
 clr.AddReference("RevitAPIUI")
 from Autodesk.Revit.DB import (
     FilteredElementCollector, Family, FamilySymbol,
-    StorageType, Transaction, SaveAsOptions
+    StorageType, Transaction, SaveAsOptions,
+    ExternalDefinitionCreationOptions, BuiltInCategory,
+    Category, SpecTypeId, GroupTypeId, LabelUtils
 )
-from Autodesk.Revit.UI import TaskDialog, TaskDialogCommonButtons, TaskDialogResult
+from Autodesk.Revit.UI import TaskDialog, TaskDialogCommonButtons, TaskDialogResult, TaskDialogIcon
+
+try:
+    from Autodesk.Revit.DB import ForgeTypeId
+except Exception:
+    ForgeTypeId = None
 
 try:
     from pyrevit import forms
@@ -39,10 +40,13 @@ DATA_CANDIDATES = [
     os.path.join(SCRIPT_DIR, "asset-naming-data.json"),
     os.path.join(SCRIPT_DIR, "..", "asset-naming-data.json"),
     os.path.expandvars(r"%APPDATA%\Atana\asset-naming-data.json"),
-    os.path.expandvars(r"%USERPROFILE%\Atana\asset-naming-data.json"),
+]
+SP_FILE_CANDIDATES = [
+    os.path.join(SCRIPT_DIR, "ATA_ZZ_SharedParameters_MERGED.txt"),
+    os.path.join(SCRIPT_DIR, "ATA_ZZ_SharedParameters.txt"),
+    os.path.expandvars(r"%APPDATA%\Atana\ATA_ZZ_SharedParameters_MERGED.txt"),
 ]
 
-# Official Classification Manager + Atana shared parameter names
 PARAM_SS_NUM = "Classification.Uniclass.Ss.Number"
 PARAM_SS_DESC = "Classification.Uniclass.Ss.Description"
 PARAM_EF_NUM = "Classification.Uniclass.EF.Number"
@@ -50,7 +54,8 @@ PARAM_EF_DESC = "Classification.Uniclass.EF.Description"
 PARAM_PR_NUM = "Classification.Uniclass.Pr.Number"
 PARAM_PR_DESC = "Classification.Uniclass.Pr.Description"
 
-# GUIDs from ATA-SHARED PARAMETERS (for documentation / future binding)
+ALL_PARAMS = [PARAM_SS_NUM, PARAM_SS_DESC, PARAM_EF_NUM, PARAM_EF_DESC, PARAM_PR_NUM, PARAM_PR_DESC]
+
 PARAM_GUIDS = {
     PARAM_SS_NUM: "f16eb500-0976-4c80-b5d1-082470821ef8",
     PARAM_SS_DESC: "53e1dbb9-9434-44ad-abcc-51bca479123d",
@@ -61,19 +66,50 @@ PARAM_GUIDS = {
 }
 
 
-def alert(msg, title="Atana Asset Classify"):
+def show_result(title, lines, success=True):
+    """Friendly TaskDialog with tick/cross marks."""
+    body = []
+    for line in lines:
+        if not line:
+            body.append("")
+            continue
+        if line.startswith("[OK]"):
+            body.append(line.replace("[OK]", "✓", 1))
+        elif line.startswith("[NO]"):
+            body.append(line.replace("[NO]", "✗", 1))
+        elif line.startswith("[..]"):
+            body.append(line.replace("[..]", "•", 1))
+        else:
+            body.append(line)
+    msg = "\n".join(body)
     try:
-        TaskDialog.Show(title, str(msg))
+        td = TaskDialog(title)
+        td.MainInstruction = title
+        td.MainContent = msg
+        try:
+            td.MainIcon = TaskDialogIcon.TaskDialogIconInformation if success else TaskDialogIcon.TaskDialogIconWarning
+        except Exception:
+            pass
+        td.CommonButtons = TaskDialogCommonButtons.Ok
+        td.Show()
     except Exception:
-        print(msg)
+        TaskDialog.Show(title, msg)
 
 
-def ask_yes_no(msg, title="Atana Asset Classify"):
+def ask_yes_no(instruction, content, title="Atana Asset Classify"):
     try:
-        r = TaskDialog.Show(title, str(msg), TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No)
+        td = TaskDialog(title)
+        td.MainInstruction = instruction
+        td.MainContent = content
+        try:
+            td.MainIcon = TaskDialogIcon.TaskDialogIconInformation
+        except Exception:
+            pass
+        td.CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No
+        return td.Show() == TaskDialogResult.Yes
+    except Exception:
+        r = TaskDialog.Show(title, instruction + "\n\n" + content, TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No)
         return r == TaskDialogResult.Yes
-    except Exception:
-        return True
 
 
 def load_data():
@@ -83,6 +119,21 @@ def load_data():
             with open(p, "r") as f:
                 return json.load(f), p
     return None, None
+
+
+def find_shared_param_file():
+    for p in SP_FILE_CANDIDATES:
+        p = os.path.normpath(p)
+        if os.path.isfile(p):
+            return p
+    # current app shared param file if set
+    try:
+        cur = app.SharedParametersFilename
+        if cur and os.path.isfile(cur):
+            return cur
+    except Exception:
+        pass
+    return None
 
 
 def parse_family_name(name):
@@ -102,13 +153,40 @@ def parse_family_name(name):
     }
 
 
+def ef_from_pr(pr, pr_desc):
+    """Map Pr_AA_BB_CC_DD → EF_AA_BB_CC using product hierarchy."""
+    if not pr:
+        return None, None
+    import re
+    m = re.match(r"Pr[_\s]?(\d{2})[_\s]?(\d{2})[_\s]?(\d{2})(?:[_\s]?(\d{2}))?", str(pr), re.I)
+    if not m:
+        return None, None
+    a, b, c, d = m.groups()
+    ef = "EF_{}_{}_{}".format(a, b, c)
+    known = {
+        "EF_65_40_33": "General space ventilation",
+        "EF_65_40_32": "Fume extraction",
+        "EF_65_40_80": "Smoke extraction and control",
+        "EF_65_80_12": "Central air conditioning",
+        "EF_60_40_37": "Heating",
+        "EF_60_40_17": "Cooling",
+        "EF_55_70_38": "Hot and cold water supply",
+        "EF_25_30_25": "Doors",
+        "EF_25_30_97": "Windows",
+        "EF_30_20": "Floors",
+        "EF_30_10": "Roofs",
+        "EF_20_10_30": "Framed structures",
+        "EF_20_05_30": "Foundations",
+    }
+    return ef, known.get(ef) or pr_desc or None
+
+
 def lookup_classification(data, parts):
     out = {
         "ss": None, "ssDesc": None,
         "ef": None, "efDesc": None,
         "pr": None, "prDesc": None,
-        "ifc4": None, "revitCategory": None,
-        "material": None,  # display only
+        "ifc4": None, "material": None,
     }
     for c in data.get("categories") or []:
         if c.get("isGroup"):
@@ -116,8 +194,6 @@ def lookup_classification(data, parts):
         if (c.get("code") or "").upper() == (parts["category"] or "").upper():
             out["ss"] = c.get("uniclassSs") or None
             out["ssDesc"] = c.get("uniclassDescription") or c.get("label") or None
-            out["ef"] = c.get("uniclassEf") or c.get("ef") or None
-            out["efDesc"] = c.get("uniclassEfDescription") or None
             break
 
     for m in data.get("materials") or []:
@@ -134,23 +210,118 @@ def lookup_classification(data, parts):
                 out["pr"] = it.get("uniclassPr") or None
                 out["prDesc"] = it.get("uniclassDescription") or None
                 out["ifc4"] = it.get("ifc4") or None
-                out["revitCategory"] = it.get("revitCategory") or None
+                # EF primarily from Pr
                 if it.get("uniclassEf"):
                     out["ef"] = it.get("uniclassEf")
-                return out
+                    out["efDesc"] = it.get("uniclassEfDescription")
+                break
+
+    # Always prefer EF derived from Pr code
+    ef, efd = ef_from_pr(out.get("pr"), out.get("prDesc"))
+    if ef:
+        out["ef"] = ef
+        if efd:
+            out["efDesc"] = efd
     return out
 
 
-def set_param(element, name, value):
+def family_has_param(fam_doc, name):
+    try:
+        fm = fam_doc.FamilyManager
+        for fp in fm.GetParameters():
+            if fp.Definition.Name == name:
+                return True
+    except Exception:
+        pass
+    for el in FilteredElementCollector(fam_doc).OfClass(FamilySymbol).ToElements():
+        if el.LookupParameter(name):
+            return True
+    return False
+
+
+def ensure_shared_params(fam_doc):
+    """
+    Ensure Classification shared parameters exist on the family.
+    Tries binding from a shared parameter file using FamilyManager.AddParameter.
+    Returns (present_list, created_list, missing_list).
+    """
+    present = []
+    created = []
+    missing = []
+
+    for name in ALL_PARAMS:
+        if family_has_param(fam_doc, name):
+            present.append(name)
+
+    need = [n for n in ALL_PARAMS if n not in present]
+    if not need:
+        return present, created, missing
+
+    sp_path = find_shared_param_file()
+    if not sp_path:
+        missing.extend(need)
+        return present, created, missing
+
+    try:
+        prev = app.SharedParametersFilename
+    except Exception:
+        prev = None
+
+    t = Transaction(fam_doc, "Atana add classification parameters")
+    t.Start()
+    try:
+        app.SharedParametersFilename = sp_path
+        def_file = app.OpenSharedParameterFile()
+        if def_file is None:
+            t.RollBack()
+            missing.extend(need)
+            return present, created, missing
+
+        # index definitions by name
+        defs = {}
+        for group in def_file.Groups:
+            for d in group.Definitions:
+                defs[d.Name] = d
+
+        fm = fam_doc.FamilyManager
+        for name in need:
+            ext_def = defs.get(name)
+            if ext_def is None:
+                missing.append(name)
+                continue
+            try:
+                # type parameter, instance=False
+                fm.AddParameter(ext_def, GroupTypeId.IdentityData, False)
+                created.append(name)
+                present.append(name)
+            except Exception:
+                try:
+                    # older API overload: BuiltInParameterGroup
+                    from Autodesk.Revit.DB import BuiltInParameterGroup, ParameterType
+                    fm.AddParameter(ext_def, BuiltInParameterGroup.PG_IDENTITY_DATA, False)
+                    created.append(name)
+                    present.append(name)
+                except Exception:
+                    missing.append(name)
+        t.Commit()
+    except Exception:
+        if t.HasStarted():
+            t.RollBack()
+        missing.extend([n for n in need if n not in created])
+    finally:
+        try:
+            if prev:
+                app.SharedParametersFilename = prev
+        except Exception:
+            pass
+
+    return present, created, missing
+
+
+def set_param_on_element(element, name, value):
     if value is None or value == "":
         return False
     p = element.LookupParameter(name)
-    if p is None:
-        try:
-            if hasattr(element, "Symbol") and element.Symbol:
-                p = element.Symbol.LookupParameter(name)
-        except Exception:
-            pass
     if p is None or p.IsReadOnly:
         return False
     try:
@@ -162,15 +333,51 @@ def set_param(element, name, value):
     return False
 
 
-def get_open_documents():
-    docs = []
+def write_classifications(fam_doc, classification):
+    written = []
+    failed = []
+    pairs = [
+        (PARAM_SS_NUM, classification.get("ss")),
+        (PARAM_SS_DESC, classification.get("ssDesc")),
+        (PARAM_EF_NUM, classification.get("ef")),
+        (PARAM_EF_DESC, classification.get("efDesc")),
+        (PARAM_PR_NUM, classification.get("pr")),
+        (PARAM_PR_DESC, classification.get("prDesc")),
+    ]
+    t = Transaction(fam_doc, "Atana write classification values")
+    t.Start()
     try:
-        for d in app.Documents:
-            docs.append(d)
-    except Exception:
-        if doc:
-            docs.append(doc)
-    return docs
+        fm = fam_doc.FamilyManager
+        for pname, val in pairs:
+            if not val:
+                continue
+            found = None
+            for fp in fm.GetParameters():
+                if fp.Definition.Name == pname:
+                    found = fp
+                    break
+            if found is not None:
+                try:
+                    fm.Set(found, str(val))
+                    written.append(pname)
+                    continue
+                except Exception:
+                    pass
+            # fallback type elements
+            ok = False
+            for el in FilteredElementCollector(fam_doc).OfClass(FamilySymbol).ToElements():
+                if set_param_on_element(el, pname, val):
+                    ok = True
+            if ok:
+                written.append(pname)
+            else:
+                failed.append(pname)
+        t.Commit()
+    except Exception as ex:
+        if t.HasStarted():
+            t.RollBack()
+        raise ex
+    return written, failed
 
 
 def rename_family_in_project(proj_doc, old_name, new_name):
@@ -189,71 +396,39 @@ def rename_family_in_project(proj_doc, old_name, new_name):
             except Exception:
                 pass
         t.Commit()
-    except Exception as ex:
+    except Exception:
         if t.HasStarted():
             t.RollBack()
-        raise ex
+        raise
     return count
 
 
-def write_classifications_to_family(fam_doc, classification):
-    """Write Ss + EF + Pr number/description only (not material)."""
-    written = []
-    pairs = [
-        (PARAM_SS_NUM, classification.get("ss")),
-        (PARAM_SS_DESC, classification.get("ssDesc")),
-        (PARAM_EF_NUM, classification.get("ef")),
-        (PARAM_EF_DESC, classification.get("efDesc")),
-        (PARAM_PR_NUM, classification.get("pr")),
-        (PARAM_PR_DESC, classification.get("prDesc")),
-    ]
-    t = Transaction(fam_doc, "Atana write classification")
-    t.Start()
+def get_open_documents():
+    docs = []
     try:
-        try:
-            fm = fam_doc.FamilyManager
-            for pname, val in pairs:
-                if not val:
-                    continue
-                found = None
-                for fp in fm.GetParameters():
-                    if fp.Definition.Name == pname:
-                        found = fp
-                        break
-                if found is not None:
-                    try:
-                        fm.Set(found, str(val))
-                        if pname not in written:
-                            written.append(pname)
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-
-        types = FilteredElementCollector(fam_doc).OfClass(FamilySymbol).ToElements()
-        for el in types:
-            for pname, val in pairs:
-                if set_param(el, pname, val):
-                    if pname not in written:
-                        written.append(pname)
-        t.Commit()
-    except Exception as ex:
-        if t.HasStarted():
-            t.RollBack()
-        raise ex
-    return written
+        for d in app.Documents:
+            docs.append(d)
+    except Exception:
+        if doc:
+            docs.append(doc)
+    return docs
 
 
 def main():
     if doc is None:
-        alert("No active document.")
+        show_result("Atana Asset Classify", ["[NO] No active document."], success=False)
         return
 
     data, data_path = load_data()
     if not data:
-        alert(
-            "Could not find asset-naming-data.json.\n\n"
-            "Place it next to this script or in %APPDATA%\\Atana\\"
+        show_result(
+            "Atana Asset Classify",
+            [
+                "[NO] asset-naming-data.json not found",
+                "",
+                "[..] Place it next to script.py or in %APPDATA%\\Atana\\",
+            ],
+            success=False,
         )
         return
 
@@ -269,44 +444,53 @@ def main():
     except Exception:
         pass
 
-    suggested = clip if (clip and "_" in clip) else current_name
-    if "\n" in suggested:
-        suggested = suggested.split("\n")[0].strip()
-    # if clipboard is JSON from Copy classifications
-    if suggested.startswith("{"):
-        try:
-            suggested = json.loads(suggested).get("name") or current_name
-        except Exception:
-            suggested = current_name
+    suggested = current_name
+    if clip:
+        if clip.startswith("{"):
+            try:
+                suggested = json.loads(clip).get("name") or current_name
+            except Exception:
+                suggested = current_name
+        elif "_" in clip:
+            suggested = clip.split("\n")[0].strip()
 
     new_name = suggested
     if forms:
         new_name = forms.ask_for_string(
             default=suggested,
-            prompt="Family name (Atana Asset Naming)",
+            prompt="Family name (Originator_Source_Category_Material_Object)",
             title="Atana Asset Naming",
         )
         if not new_name:
             return
     else:
-        if not ask_yes_no("Use family name:\n\n{}\n\nYes = continue".format(suggested)):
+        if not ask_yes_no("Use this family name?", suggested):
             return
         new_name = suggested
 
     new_name = os.path.splitext(new_name.strip())[0]
     parts = parse_family_name(new_name)
     if not parts:
-        alert("Name must be:\nOriginator_Source_Category_Material_Object\n\nGot:\n" + new_name)
+        show_result(
+            "Invalid name",
+            [
+                "[NO] Name must match:",
+                "[..] Originator_Source_Category_Material_Object",
+                "",
+                "Got:",
+                new_name,
+            ],
+            success=False,
+        )
         return
 
     classification = lookup_classification(data, parts)
-    summary = (
-        "Name: {full}\n"
-        "Ss: {ss} — {ssDesc}\n"
-        "EF: {ef} — {efDesc}\n"
-        "Pr: {pr} — {prDesc}\n"
+    content = (
+        "Name: {full}\n\n"
+        "Ss: {ss}\n    {ssDesc}\n\n"
+        "EF (from Pr): {ef}\n    {efDesc}\n\n"
+        "Pr: {pr}\n    {prDesc}\n\n"
         "Material (not written): {mat}\n"
-        "IFC4: {ifc}\n"
         "Data: {path}"
     ).format(
         full=parts["full"],
@@ -317,30 +501,41 @@ def main():
         pr=classification.get("pr") or "—",
         prDesc=classification.get("prDesc") or "",
         mat=classification.get("material") or "—",
-        ifc=classification.get("ifc4") or "—",
         path=data_path,
     )
-    if not ask_yes_no(summary + "\n\nApply rename + write Ss/EF/Pr?"):
+    if not ask_yes_no("Apply classification & rename?", content):
         return
 
-    fam_doc = doc if doc.IsFamilyDocument else None
-    if fam_doc is None:
+    if not doc.IsFamilyDocument:
         try:
             n = rename_family_in_project(doc, current_name, new_name)
-            alert("Project document: renamed {} family element(s) to:\n{}\n\nOpen the .rfa to write classification parameters.".format(n, new_name))
+            show_result(
+                "Project document",
+                [
+                    "[OK] Renamed {} family element(s)".format(n) if n else "[NO] No matching family to rename",
+                    "[..] New name: " + new_name,
+                    "",
+                    "[..] Open the .rfa family to write Ss / EF / Pr parameters.",
+                ],
+                success=bool(n),
+            )
         except Exception as ex:
-            alert("Project rename failed: " + str(ex))
+            show_result("Rename failed", ["[NO] " + str(ex)], success=False)
         return
 
+    fam_doc = doc
     old_family_name = fam_doc.Title
     if old_family_name.lower().endswith(".rfa"):
         old_family_name = old_family_name[:-4]
 
+    # Ensure parameters exist (create from shared param file if needed)
+    present, created, missing = ensure_shared_params(fam_doc)
+
     try:
-        written = write_classifications_to_family(fam_doc, classification)
+        written, failed = write_classifications(fam_doc, classification)
     except Exception as ex:
-        alert("Classification write failed: " + str(ex))
-        written = []
+        show_result("Write failed", ["[NO] " + str(ex)], success=False)
+        return
 
     renamed_docs = []
     for d in get_open_documents():
@@ -349,20 +544,46 @@ def main():
         try:
             n = rename_family_in_project(d, old_family_name, new_name)
             if n:
-                renamed_docs.append("{} ({})".format(d.Title, n))
+                renamed_docs.append("{} ×{}".format(d.Title, n))
             if old_family_name != current_name:
                 n2 = rename_family_in_project(d, current_name, new_name)
                 if n2:
-                    renamed_docs.append("{} ({})".format(d.Title, n2))
+                    renamed_docs.append("{} ×{}".format(d.Title, n2))
         except Exception:
             pass
 
-    save_msg = "Parameters written:\n{}\n".format("\n".join(written) if written else "(none — load Classification shared params into the family)")
+    lines = []
+    if created:
+        lines.append("[OK] Created parameters:")
+        for n in created:
+            lines.append("    + " + n)
+        lines.append("")
+    lines.append("[OK] Values written:" if written else "[NO] No values written")
+    for n in written:
+        lines.append("    ✓ " + n)
+    if failed:
+        lines.append("")
+        lines.append("[NO] Could not write:")
+        for n in failed:
+            lines.append("    ✗ " + n)
+    if missing:
+        lines.append("")
+        lines.append("[NO] Missing parameters (add shared param file):")
+        for n in missing:
+            lines.append("    ✗ " + n)
+        lines.append("[..] Place ATA_ZZ_SharedParameters_MERGED.txt next to script.py")
     if renamed_docs:
-        save_msg += "\nRenamed in: {}\n".format(", ".join(renamed_docs))
-    save_msg += "\nSave family as:\n{}.rfa ?".format(new_name)
+        lines.append("")
+        lines.append("[OK] Renamed in open projects:")
+        for r in renamed_docs:
+            lines.append("    ✓ " + r)
 
-    if ask_yes_no(save_msg):
+    lines.append("")
+    lines.append("[..] Family name target: {}.rfa".format(new_name))
+
+    show_result("Classification applied", lines, success=bool(written))
+
+    if ask_yes_no("Save family as {}.rfa?".format(new_name), "Overwrite if the file already exists."):
         try:
             path = fam_doc.PathName
             folder = os.path.dirname(path) if path else os.path.expanduser("~\\Documents")
@@ -372,11 +593,9 @@ def main():
             opts = SaveAsOptions()
             opts.OverwriteExistingFile = True
             fam_doc.SaveAs(target, opts)
-            alert("Saved:\n" + target)
+            show_result("Saved", ["[OK] " + target], success=True)
         except Exception as ex:
-            alert("Save As failed: " + str(ex))
-    else:
-        alert("Done without Save As.\nWritten: " + (", ".join(written) if written else "none"))
+            show_result("Save As failed", ["[NO] " + str(ex)], success=False)
 
 
 if __name__ == "__main__":

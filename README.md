@@ -1,2 +1,2 @@
-# Atana IM Tasks v3.3.6
-Category-filtered objects · EF classification · Add object · PyRevit Ss/EF/Pr
+# Atana IM Tasks v3.3.7
+Suggest/Add object fixed · EF from Pr · PyRevit create params + nicer dialogs
