@@ -1468,7 +1468,7 @@
         <div class="tool-card" id="toolAssetNaming" role="button" tabindex="0">
           <div class="tool-ic">&#129513;</div>
           <div class="tool-name">Asset naming</div>
-          <div class="tool-desc">Asset / model element naming aligned to convention defaults.</div>
+          <div class="tool-desc">NBS BIM object naming · Uniclass Ss/Pr · IFC4 · FORMA export · Excel import/export.</div>
         </div>
       </div>
       <div id="toolsChecklistsHost" style="display:none;margin-top:16px;">
@@ -1477,6 +1477,16 @@
           <button type="button" class="btn btn-ghost btn-xs" id="checklistsOpenWindow">Open in new window</button>
         </div>
         <div id="checklistsRoot" class="card" style="padding:12px;"></div>
+      </div>
+      <div id="toolsAssetNamingHost" style="display:none;margin-top:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <strong>Asset Naming Tool</strong>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" class="btn btn-ghost btn-xs" id="assetNamingOpenWindow">Open in new window</button>
+            <button type="button" class="btn btn-ghost btn-xs" id="assetNamingClose">Close</button>
+          </div>
+        </div>
+        <iframe id="assetNamingFrame" title="Asset Naming" src="asset-naming-tool.html" style="width:100%;min-height:72vh;border:1px solid var(--line,#e2e8f0);border-radius:12px;background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.06);"></iframe>
       </div>
     </section>
 
@@ -1829,6 +1839,7 @@
         <div class="segmented" id="prjtoolsSub" style="margin-bottom:12px;">
           <button class="active" data-toolsub="gen">MIDP Generator</button>
           <button data-toolsub="naming">Naming</button>
+          <button data-toolsub="asset">Asset Naming</button>
           <button data-toolsub="checklists">Checklists</button>
         </div>
         <div id="toolsub-gen">
@@ -1950,7 +1961,16 @@
           </div>
         </div>
 
-        <div id="toolsub-checklists" style="display:none;">
+        
+        <div id="toolsub-asset" style="display:none;">
+          <div class="midp-title">Asset Naming</div>
+          <div class="midp-sub">NBS BIM object naming for design families · Uniclass Ss/Pr · IFC4 · FORMA convention export.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;">
+            <button type="button" class="btn btn-ghost btn-xs" id="prjAssetNamingPop">Open in new window</button>
+          </div>
+          <iframe id="prjAssetNamingFrame" title="Asset Naming" src="asset-naming-tool.html" style="width:100%;min-height:70vh;border:1px solid var(--line,#e2e8f0);border-radius:12px;background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.06);"></iframe>
+        </div>
+<div id="toolsub-checklists" style="display:none;">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
             <div class="midp-title" style="margin:0;">IM Good Practice Checklists</div>
             <button type="button" class="btn btn-ghost btn-xs" id="prjClWin">Open in new window</button>
@@ -2003,8 +2023,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.2.7";
-const APP_BUILD = "2026-08-18-flow-status";
+const APP_VERSION = "3.3.0";
+const APP_BUILD = "2026-08-19-asset-naming";
 
 /** Atana IM Framework — path relative to app (same folder on GitHub Pages / local). */
 const IM_FRAMEWORK_URL = "Atana-IM-Framework.html";
@@ -16847,7 +16867,7 @@ function bindProjectTools(project){
       bindProjectTools(projectById(project.id) || project);
     };
   });
-  ["gen","naming","checklists"].forEach(k => {
+  ["gen","naming","asset","checklists"].forEach(k => {
     const el = document.getElementById("toolsub-" + k);
     if(el) el.style.display = sub === k ? "block" : "none";
   });
@@ -20575,6 +20595,36 @@ document.addEventListener("DOMContentLoaded", () => {
 
   }
 });
+
+
+
+
+/* ---- Asset Naming tool (main Tools) ---- */
+function openAssetNamingTool(embedded){
+  try{
+    const host = document.getElementById('toolsAssetNamingHost');
+    const chk = document.getElementById('toolsChecklistsHost');
+    if(chk) chk.style.display = 'none';
+    if(embedded && host){
+      host.style.display = '';
+      const fr = document.getElementById('assetNamingFrame');
+      if(fr){ fr.src = 'asset-naming-tool.html?v=' + Date.now(); }
+      host.scrollIntoView({behavior:'smooth', block:'start'});
+    } else {
+      const w = window.open('asset-naming-tool.html', 'atana-asset-naming', 'width=1100,height=860');
+      if(!w) alert('Pop-out blocked — allow pop-ups for this site');
+    }
+  }catch(e){ console.error(e); alert('Could not open Asset Naming tool'); }
+}
+document.getElementById('toolAssetNaming') && document.getElementById('toolAssetNaming').addEventListener('click', function(){ openAssetNamingTool(true); });
+document.getElementById('toolAssetNaming') && document.getElementById('toolAssetNaming').addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openAssetNamingTool(true); }});
+document.getElementById('assetNamingOpenWindow') && document.getElementById('assetNamingOpenWindow').addEventListener('click', function(){ openAssetNamingTool(false); });
+document.getElementById('assetNamingClose') && document.getElementById('assetNamingClose').addEventListener('click', function(){
+  const host = document.getElementById('toolsAssetNamingHost');
+  if(host) host.style.display = 'none';
+});
+
+document.getElementById('prjAssetNamingPop') && document.getElementById('prjAssetNamingPop').addEventListener('click', function(){ openAssetNamingTool(false); });
 
 
 </script>

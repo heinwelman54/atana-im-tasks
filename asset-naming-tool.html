@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Atana Asset Naming Tool</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#f4f6f9; --card:#fff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
+  --brand:#5b21b6; --brand2:#7c3aed; --ok:#15803d; --shadow:0 8px 24px rgba(15,23,42,.08);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:linear-gradient(120deg,#4c1d95,#6d28d9 55%,#7c3aed);color:#fff;padding:16px 20px;display:flex;gap:12px;align-items:center;justify-content:space-between;box-shadow:var(--shadow);flex-wrap:wrap}
+header h1{margin:0;font-size:18px;font-weight:700}
+header .sub{opacity:.85;font-size:12px;margin-top:2px}
+.wrap{max-width:1200px;margin:0 auto;padding:16px}
+.grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px}
+@media(max-width:960px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow)}
+.card h2{margin:0 0 10px;font-size:15px}
+label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:10px 0 4px}
+select,input[type=text]{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;background:#fff}
+select:focus,input:focus{outline:2px solid #c4b5fd;border-color:#8b5cf6}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{border:0;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer;font-size:13px}
+.btn-primary{background:var(--brand);color:#fff}
+.btn-ghost{background:#f1f5f9;color:var(--ink)}
+.btn-ok{background:#059669;color:#fff}
+.btn-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.preview{font-family:ui-monospace,Consolas,monospace;font-size:17px;font-weight:700;background:#0f172a;color:#e9d5ff;padding:16px;border-radius:12px;word-break:break-all}
+.meta{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.45}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#ede9fe;color:#5b21b6;font-size:11px;font-weight:700;margin-right:4px}
+.table{width:100%;border-collapse:collapse;font-size:12px}
+.table th,.table td{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}
+.table th{color:var(--muted);font-weight:600}
+.hint{font-size:12px;color:var(--muted);margin-top:6px}
+.badge{font-size:11px;padding:2px 6px;border-radius:6px;background:#ecfdf5;color:var(--ok);font-weight:700}
+.badge.warn{background:#fff7ed;color:#c2410c}
+.search{margin-bottom:8px}
+.footer{padding:20px;text-align:center;color:var(--muted);font-size:12px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+details.guide{border:1px solid var(--line);border-radius:12px;background:#fff;margin-top:10px;box-shadow:0 2px 8px rgba(15,23,42,.04)}
+details.guide summary{cursor:pointer;padding:12px 14px;font-weight:700;font-size:13px;list-style:none;display:flex;justify-content:space-between;align-items:center}
+details.guide summary::-webkit-details-marker{display:none}
+details.guide summary::after{content:"+";color:var(--brand);font-size:16px}
+details.guide[open] summary::after{content:"–"}
+details.guide .body{padding:0 14px 14px;font-size:13px;line-height:1.55;color:#334155}
+details.guide .body ul{margin:6px 0 0 18px;padding:0}
+details.guide .body li{margin:4px 0}
+details.guide .body code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12px}
+.sep{height:1px;background:var(--line);margin:14px 0}
+.muted{color:var(--muted);font-size:12px}
+.status{font-size:12px;margin-top:8px;min-height:18px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Atana Asset Naming Tool</h1>
+    <div class="sub">NBS BIM Object Standard v2.2 · §5.1.5 Naming fields · Uniclass Ss / Ma / Pr · IFC4</div>
+  </div>
+  <div class="btn-row" style="margin:0">
+    <button class="btn btn-ghost" id="btnReload" type="button">Reload data</button>
+    <button class="btn btn-ghost" id="btnPop" type="button">Pop out</button>
+  </div>
+</header>
+<div class="wrap">
+  <div class="toolbar card" style="padding:12px">
+    <button class="btn btn-ghost" id="btnExportData" type="button">Export data Excel</button>
+    <button class="btn btn-ghost" id="btnImportData" type="button">Import data Excel</button>
+    <input type="file" id="fileImport" accept=".xlsx,.xlsm,.xls" hidden/>
+    <button class="btn btn-primary" id="btnExportForma" type="button">Export task team → FORMA template</button>
+    <span class="muted" id="dataStatus">Data: —</span>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Build name</h2>
+      <label>Task team (scopes Object list)</label>
+      <select id="taskTeam"></select>
+
+      <div class="row">
+        <div>
+          <label>Originator *</label>
+          <select id="originator"></select>
+        </div>
+        <div>
+          <label>Source *</label>
+          <select id="source"></select>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Category (NBS Type) * · Uniclass Ss</label>
+          <select id="category"></select>
+        </div>
+        <div>
+          <label>Material * · Uniclass Ma/Pr</label>
+          <select id="material"></select>
+        </div>
+      </div>
+      <label>Object (NBS Subtype) * · task-team list · Uniclass Pr</label>
+      <input class="search" id="objectSearch" type="text" placeholder="Filter objects…"/>
+      <select id="object" size="12" style="height:220px"></select>
+      <div class="hint">Differentiator excluded — size/variant lives on the Revit family type.</div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnCopy" type="button">Copy name</button>
+        <button class="btn btn-ghost" id="btnCopyClass" type="button">Copy classifications</button>
+      </div>
+      <div class="status" id="actionStatus"></div>
+    </section>
+
+    <section class="card">
+      <h2>Preview</h2>
+      <div class="preview" id="preview">—</div>
+      <div class="meta" id="meta"></div>
+      <h2 style="margin-top:18px">Classification write-back</h2>
+      <table class="table">
+        <tr><th>System</th><th>Value</th></tr>
+        <tr><td>Uniclass Ss (Category)</td><td id="clsSs">—</td></tr>
+        <tr><td>Uniclass Ma/Pr (Material)</td><td id="clsMa">—</td></tr>
+        <tr><td>Uniclass Pr (Object)</td><td id="clsPr">—</td></tr>
+        <tr><td>IFC4</td><td id="clsIfc">—</td></tr>
+        <tr><td>Revit Category</td><td id="clsRev">—</td></tr>
+      </table>
+      <div class="hint" style="margin-top:12px">
+        Pattern: <span class="pill">Originator</span>_<span class="pill">Source</span>_<span class="pill">Category</span>_<span class="pill">Material</span>_<span class="pill">Object</span>
+      </div>
+    </section>
+  </div>
+
+  <!-- NBS GUIDE -->
+  <section class="card" style="margin-top:16px">
+    <h2>NBS BIM Object Standard — naming guide</h2>
+    <p class="muted" style="margin-top:0">From NBS BIM Object Standard Version 2.2 (July 2023), Section 5 Metadata requirements. Collapsed by default.</p>
+
+    <details class="guide">
+      <summary>5.1.2 Composition rules</summary>
+      <div class="body">
+        <ul>
+          <li>Names use alphanumeric characters only (a–z, A–Z, 0–9), max <strong>75 characters</strong>.</li>
+          <li>Fields separated by underscore <code>_</code>; dash <code>-</code> allowed inside phrases.</li>
+          <li>Each field is <strong>PascalCase</strong> (capitalised words, no spaces).</li>
+          <li>No spaces or other punctuation.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="guide">
+      <summary>5.1.5 Naming fields (NBS → Atana)</summary>
+      <div class="body">
+        <table class="table">
+          <tr><th>NBS field</th><th>Atana</th><th>Purpose</th><th>Example</th></tr>
+          <tr><td>Originator</td><td>Originator</td><td>Object provider (3–6 char code)</td><td>ATA</td></tr>
+          <tr><td>Source</td><td>Source</td><td>Manufacturer / library; omit abbreviation; generic may use STD</td><td>STD / BettaWindows</td></tr>
+          <tr><td>Type</td><td>Category</td><td>Object type · maps to Uniclass <strong>Ss</strong></td><td>AIR, DOR, WAL</td></tr>
+          <tr><td>Material</td><td>Material</td><td>Material type · Uniclass <strong>Ma / Pr</strong></td><td>GEN, ALU, CON</td></tr>
+          <tr><td>Subtype / Product code</td><td>Object</td><td>Further definition · Uniclass <strong>Pr</strong> · <em>task-team scoped</em></td><td>BoilerCondensing</td></tr>
+          <tr><td>Differentiator</td><td><em>Excluded</em></td><td>Size/variant — held on Revit family type</td><td>600x900mm</td></tr>
+        </table>
+        <p><strong>Atana composition:</strong> <code>Originator_Source_Category_Material_Object</code><br/>
+        Example: <code>ATA_STD_AIR_GEN_BoilerCondensing</code></p>
+      </div>
+    </details>
+
+    <details class="guide">
+      <summary>5.2 File &amp; BIM object naming</summary>
+      <div class="body">
+        <p>NBS arrangement:</p>
+        <p><code>&lt;Originator&gt;_&lt;Source&gt;_&lt;Type&gt;_&lt;Subtype/Product code&gt;_&lt;Differentiator&gt;</code></p>
+        <p>Differentiator is optional in NBS. Atana omits it from the family name so type catalogues stay clean; sizes live in the Revit type name.</p>
+      </div>
+    </details>
+
+    <details class="guide">
+      <summary>Classification &amp; IFC (OpenBIM)</summary>
+      <div class="body">
+        <ul>
+          <li><strong>Category → Uniclass Ss</strong> (systems) — what system the family belongs to.</li>
+          <li><strong>Material → Uniclass Ma or Pr</strong> — material constitution.</li>
+          <li><strong>Object → Uniclass Pr</strong> — product definition; name derived as reverse camelCase from Pr title keywords.</li>
+          <li><strong>IFC4</strong> — <code>Ifc*Type</code> enums for export / model checking (e.g. <code>IfcBoilerType.WATER</code>).</li>
+          <li>PyRevit can write Ss / Ma / Pr / IFC back to family shared parameters from this naming.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="guide">
+      <summary>Task teams &amp; Object lists</summary>
+      <div class="body">
+        <ul>
+          <li>Object dropdown is <strong>filtered by task team</strong> (AR, ME, ST, EE, …).</li>
+          <li>Lists are curated <strong>generic design families</strong> for Atana enablement — not full manufacturer catalogues.</li>
+          <li>Manufacturer content belongs in <strong>Source</strong>, not in Object.</li>
+          <li>Use <em>Export data Excel</em> to edit lists; <em>Import data Excel</em> to update the in-session backend (and download updated JSON).</li>
+          <li>Use <em>Export task team → FORMA template</em> to produce an ACC/FORMA naming-standard workbook for the selected team.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="guide">
+      <summary>Abbreviations (NBS 5.1.4)</summary>
+      <div class="body">
+        <p>Where platforms limit filename length, values may be abbreviated: max 7 characters, uppercase, no full stops or spaces. The same abbreviation is used for singular and plural.</p>
+      </div>
+    </details>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <h2>Data coverage</h2>
+    <div id="coverage" class="meta">Loading…</div>
+  </section>
+</div>
+<div class="footer">Atana · Asset naming · NBS BIM Object Standard v2.2 · data: asset-naming-data.json</div>
+
+<script>
+let DATA = null;
+const LS_KEY = 'atanaAssetNamingDataV1';
+
+function setStatus(msg, ok){
+  const el = document.getElementById('actionStatus');
+  el.textContent = msg || '';
+  el.style.color = ok === false ? '#b91c1c' : (ok ? '#047857' : '');
+}
+
+async function loadData(){
+  // 1) session override from import
+  try{
+    const cached = localStorage.getItem(LS_KEY);
+    if(cached){
+      DATA = JSON.parse(cached);
+      document.getElementById('dataStatus').textContent = 'Data: local override (imported)';
+      init();
+      return;
+    }
+  }catch(e){}
+
+  const paths = ['./asset-naming-data.json','asset-naming-data.json','/asset-naming-data.json'];
+  let lastErr = null;
+  for(const p of paths){
+    try{
+      const res = await fetch(p + '?v=' + Date.now());
+      if(!res.ok) throw new Error(p + ' ' + res.status);
+      DATA = await res.json();
+      document.getElementById('dataStatus').textContent = 'Data: ' + p + ' · v' + (DATA.version||'?');
+      init();
+      return;
+    }catch(e){ lastErr = e; }
+  }
+  document.getElementById('coverage').textContent = 'Could not load asset-naming-data.json. ' + (lastErr&&lastErr.message||'');
+}
+
+function fillSelect(el, items, getValue, getLabel, includeBlank){
+  el.innerHTML = '';
+  if(includeBlank){
+    const o = document.createElement('option');
+    o.value = ''; o.textContent = '— select —';
+    el.appendChild(o);
+  }
+  (items||[]).forEach(it => {
+    const o = document.createElement('option');
+    if(it && it.isGroup){
+      o.disabled = true;
+      o.textContent = '── ' + (it.group||'') + ' ──';
+    } else {
+      o.value = getValue(it);
+      o.textContent = getLabel(it);
+    }
+    el.appendChild(o);
+  });
+}
+
+function init(){
+  const teams = DATA.taskTeams || [];
+  fillSelect(document.getElementById('taskTeam'), teams, t=>t.code, t=>t.code + ' — ' + t.label, false);
+  fillSelect(document.getElementById('originator'), DATA.originators||[], o=>o.code, o=>o.code + (o.label? ' — '+o.label:''), false);
+  fillSelect(document.getElementById('source'), DATA.sources||[], s=>s.code, s=>s.code + (s.label? ' — '+s.label:''), false);
+
+  const cat = document.getElementById('category');
+  cat.innerHTML = '<option value="">— select —</option>';
+  (DATA.categories||[]).forEach(c=>{
+    const o=document.createElement('option');
+    if(c.isGroup){ o.disabled=true; o.textContent='── '+c.group+' ──'; }
+    else { o.value=c.code; o.textContent=c.code+' — '+(c.label||''); }
+    cat.appendChild(o);
+  });
+  const mat = document.getElementById('material');
+  mat.innerHTML = '<option value="">— select —</option>';
+  (DATA.materials||[]).forEach(m=>{
+    const o=document.createElement('option');
+    if(m.isGroup){ o.disabled=true; o.textContent='── '+m.group+' ──'; }
+    else { o.value=m.code; o.textContent=m.code+' — '+(m.label||''); }
+    mat.appendChild(o);
+  });
+
+  const org = document.getElementById('originator');
+  [...org.options].forEach(o=>{ if(o.value==='ATA') org.value='ATA'; });
+  const src = document.getElementById('source');
+  [...src.options].forEach(o=>{ if(o.value==='STD') src.value='STD'; });
+  const tt = document.getElementById('taskTeam');
+  if([...tt.options].some(o=>o.value==='ME')) tt.value='ME';
+  refreshObjects();
+  renderCoverage();
+  updatePreview();
+}
+
+function currentObjects(){
+  const team = document.getElementById('taskTeam').value;
+  return (DATA.objectsByTaskTeam && DATA.objectsByTaskTeam[team]) || [];
+}
+
+function refreshObjects(){
+  const q = (document.getElementById('objectSearch').value||'').toLowerCase();
+  const sel = document.getElementById('object');
+  const items = currentObjects().filter(it => {
+    if(!q) return true;
+    return (it.name||'').toLowerCase().includes(q) || (it.uniclassPr||'').toLowerCase().includes(q) || (it.uniclassDescription||'').toLowerCase().includes(q);
+  });
+  sel.innerHTML = '';
+  let lastGroup = null;
+  items.forEach(it=>{
+    if(it.group && it.group !== lastGroup){
+      const og=document.createElement('option');
+      og.disabled=true; og.textContent='── '+it.group+' ──';
+      sel.appendChild(og);
+      lastGroup = it.group;
+    }
+    const o=document.createElement('option');
+    o.value = it.name;
+    o.textContent = it.name + (it.uniclassPr ? '  ·  '+it.uniclassPr : '');
+    sel.appendChild(o);
+  });
+  if(!items.length){
+    const o=document.createElement('option');
+    o.disabled=true; o.textContent='(No objects for this task team — import Excel to add)';
+    sel.appendChild(o);
+  }
+  updatePreview();
+}
+
+function findCat(code){ return (DATA.categories||[]).find(c=>!c.isGroup && c.code===code); }
+function findMat(code){ return (DATA.materials||[]).find(m=>!m.isGroup && m.code===code); }
+function findObj(name){ return currentObjects().find(o=>o.name===name); }
+
+function buildName(){
+  const parts = [
+    document.getElementById('originator').value,
+    document.getElementById('source').value,
+    document.getElementById('category').value,
+    document.getElementById('material').value,
+    document.getElementById('object').value
+  ];
+  if(parts.some(p=>!p)) return '';
+  return parts.join('_');
+}
+
+function updatePreview(){
+  const name = buildName();
+  document.getElementById('preview').textContent = name || '— complete all fields —';
+  const cat = findCat(document.getElementById('category').value);
+  const mat = findMat(document.getElementById('material').value);
+  const obj = findObj(document.getElementById('object').value);
+  document.getElementById('clsSs').textContent = cat ? ((cat.uniclassSs||'—') + (cat.uniclassDescription? ' — '+cat.uniclassDescription:'')) : '—';
+  document.getElementById('clsMa').textContent = mat ? ((mat.uniclassCode||'—') + (mat.uniclassDescription? ' — '+mat.uniclassDescription:'')) : '—';
+  document.getElementById('clsPr').textContent = obj ? ((obj.uniclassPr||'—') + (obj.uniclassDescription? ' — '+obj.uniclassDescription:'')) : '—';
+  document.getElementById('clsIfc').textContent = (obj && obj.ifc4) || '—';
+  document.getElementById('clsRev').textContent = (obj && obj.revitCategory) || '—';
+  const team = document.getElementById('taskTeam').value;
+  document.getElementById('meta').innerHTML =
+    '<span class="badge">'+(DATA.standard||'NBS')+'</span> · Task team <strong>'+team+'</strong> · ' +
+    currentObjects().length + ' objects available';
+}
+
+function renderCoverage(){
+  const teams = DATA.taskTeams||[];
+  const lines = teams.map(t=>{
+    const n = (DATA.objectsByTaskTeam[t.code]||[]).length;
+    const cls = n>=15 ? 'badge' : 'badge warn';
+    return '<div><span class="'+cls+'">'+t.code+'</span> '+t.label+': <strong>'+n+'</strong> objects</div>';
+  }).join('');
+  document.getElementById('coverage').innerHTML = lines || 'No task teams';
+}
+
+/* ---------------- Excel export / import backend ---------------- */
+function exportDataExcel(){
+  if(typeof XLSX === 'undefined'){ alert('Excel library not loaded'); return; }
+  const wb = XLSX.utils.book_new();
+
+  // Coverage
+  const cov = [['TaskTeam','Label','ObjectCount']];
+  (DATA.taskTeams||[]).forEach(t=>{
+    cov.push([t.code, t.label, (DATA.objectsByTaskTeam[t.code]||[]).length]);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cov), 'Coverage');
+
+  // Originator / Source
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
+    [['Code','Label']].concat((DATA.originators||[]).map(o=>[o.code,o.label]))
+  ), 'Originator');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
+    [['Code','Label','Description']].concat((DATA.sources||[]).map(s=>[s.code,s.label,s.description||'']))
+  ), 'Source');
+
+  // Category
+  const catRows = [['Code','Label','Uniclass Ss','Uniclass Description','Group']];
+  let g='';
+  (DATA.categories||[]).forEach(c=>{
+    if(c.isGroup){ g=c.group||''; return; }
+    catRows.push([c.code,c.label,c.uniclassSs||'',c.uniclassDescription||'',g]);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(catRows), 'Category');
+
+  // Material
+  const matRows = [['Code','Label','Uniclass Code','Uniclass Description','Group']];
+  g='';
+  (DATA.materials||[]).forEach(m=>{
+    if(m.isGroup){ g=m.group||''; return; }
+    matRows.push([m.code,m.label,m.uniclassCode||'',m.uniclassDescription||'',g]);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(matRows), 'Material');
+
+  // Objects per team
+  Object.keys(DATA.objectsByTaskTeam||{}).sort().forEach(team=>{
+    const rows = [['ObjectName','Group','Uniclass Pr','Uniclass Description','IFC4','Revit Category','Description']];
+    (DATA.objectsByTaskTeam[team]||[]).forEach(it=>{
+      rows.push([it.name, it.group||'', it.uniclassPr||'', it.uniclassDescription||'', it.ifc4||'', it.revitCategory||'', it.description||'']);
+    });
+    const name = ('Object-' + team).slice(0,31);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name);
+  });
+
+  XLSX.writeFile(wb, 'Atana-Asset-Naming-Data.xlsx');
+  setStatus('Exported backend data Excel', true);
+}
+
+function sheetToRows(ws){
+  return XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+}
+
+function importDataExcel(file){
+  if(typeof XLSX === 'undefined'){ alert('Excel library not loaded'); return; }
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      const next = JSON.parse(JSON.stringify(DATA || {objectsByTaskTeam:{}, categories:[], materials:[], originators:[], sources:[], taskTeams:[]}));
+
+      if(wb.Sheets['Originator']){
+        const rows = sheetToRows(wb.Sheets['Originator']).slice(1);
+        next.originators = rows.filter(r=>r[0]).map(r=>({code:String(r[0]).trim(), label:String(r[1]||r[0]).trim()}));
+      }
+      if(wb.Sheets['Source']){
+        const rows = sheetToRows(wb.Sheets['Source']).slice(1);
+        next.sources = rows.filter(r=>r[0]).map(r=>({code:String(r[0]).trim(), label:String(r[1]||r[0]).trim(), description:String(r[2]||'')}));
+      }
+      if(wb.Sheets['Category']){
+        const rows = sheetToRows(wb.Sheets['Category']).slice(1);
+        const cats = [];
+        let lastG = '';
+        rows.forEach(r=>{
+          if(!r[0]) return;
+          const g = String(r[4]||'').trim();
+          if(g && g !== lastG){ cats.push({isGroup:true, group:g}); lastG=g; }
+          cats.push({
+            code:String(r[0]).trim(), label:String(r[1]||r[0]).trim(),
+            uniclassSs:String(r[2]||'').trim()||null,
+            uniclassDescription:String(r[3]||'').trim()||null,
+            isGroup:false
+          });
+        });
+        next.categories = cats;
+      }
+      if(wb.Sheets['Material']){
+        const rows = sheetToRows(wb.Sheets['Material']).slice(1);
+        const mats = [];
+        let lastG = '';
+        rows.forEach(r=>{
+          if(!r[0]) return;
+          const g = String(r[4]||'').trim();
+          if(g && g !== lastG){ mats.push({isGroup:true, group:g}); lastG=g; }
+          mats.push({
+            code:String(r[0]).trim(), label:String(r[1]||r[0]).trim(),
+            uniclassCode:String(r[2]||'').trim()||null,
+            uniclassDescription:String(r[3]||'').trim()||null,
+            isGroup:false
+          });
+        });
+        next.materials = mats;
+      }
+
+      // Object-* sheets
+      wb.SheetNames.forEach(sn=>{
+        if(!/^Object[-_]/i.test(sn)) return;
+        const team = sn.replace(/^Object[-_]/i,'').trim();
+        const rows = sheetToRows(wb.Sheets[sn]).slice(1);
+        const items = [];
+        rows.forEach(r=>{
+          const name = String(r[0]||'').trim();
+          if(!name || name.startsWith('--')) return;
+          items.push({
+            name,
+            group: String(r[1]||'').trim()||null,
+            uniclassPr: String(r[2]||'').trim()||null,
+            uniclassDescription: String(r[3]||'').trim()||null,
+            ifc4: String(r[4]||'').trim()||null,
+            revitCategory: String(r[5]||'').trim()||null,
+            description: String(r[6]||'').trim()||null
+          });
+        });
+        if(!next.objectsByTaskTeam) next.objectsByTaskTeam = {};
+        next.objectsByTaskTeam[team] = items;
+      });
+
+      next.version = (next.version||'1.0') + '+import';
+      DATA = next;
+      localStorage.setItem(LS_KEY, JSON.stringify(DATA));
+      document.getElementById('dataStatus').textContent = 'Data: imported Excel (session + localStorage)';
+      init();
+
+      // Also offer JSON download for backend commit
+      const blob = new Blob([JSON.stringify(DATA, null, 2)], {type:'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'asset-naming-data.json';
+      a.click();
+      setStatus('Import applied. Updated JSON downloaded for backend commit.', true);
+    }catch(err){
+      console.error(err);
+      setStatus('Import failed: ' + err.message, false);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ---------------- FORMA / ACC naming standard template ---------------- */
+function exportFormaTemplate(){
+  if(typeof XLSX === 'undefined'){ alert('Excel library not loaded'); return; }
+  const team = document.getElementById('taskTeam').value || 'ME';
+  const teamLabel = ((DATA.taskTeams||[]).find(t=>t.code===team)||{}).label || team;
+  const wb = XLSX.utils.book_new();
+
+  // INSTRUCTIONS (FORMA style)
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['***IMPORTANT: DO NOT DELETE THIS TAB***'],
+    ['DESCRIPTION'],
+    ['Atana BIM Objects naming standard for task team: ' + team + ' — ' + teamLabel],
+    ['Based on NBS BIM Object Standard v2.2 §5.1.5 and Default ISO 19650 FORMA template structure.'],
+    ['Naming convention attributes: Originator, Source, Type (Category), Material, Subtype/Product Code (Object)'],
+    ['Related attributes: Classification (Uniclass), IFC4'],
+    [''],
+    ['FORMAT'],
+    ['Originator_Source_Type_Material_Subtype'],
+    ['Example: ATA_STD_AIR_GEN_BoilerCondensing'],
+    [''],
+    ['NOTES'],
+    ['Differentiator excluded — Revit family type holds size/variant.'],
+    ['Object (Subtype) list is scoped to task team ' + team + '.'],
+    ['Delimiter: Underscore']
+  ]), 'INSTRUCTIONS');
+
+  // SETTINGS
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['Naming standard name','Description','Delimiter'],
+    ['BIM Objects Convention — ' + team, 'NBS-based OpenBIM / IFC / COBie · Task team ' + team, 'Underscore'],
+    [''],
+    ['***IMPORTANT: DO NOT DELETE THIS TAB***']
+  ]), 'SETTINGS');
+
+  // Originator
+  const org = [['Name','Description','Type','Attribute value','Attribute description','Location']];
+  org.push(['Originator','Object provider code','Drop-down list','','','Naming convention']);
+  (DATA.originators||[]).forEach((o,i)=>{
+    org.push([i===0?'Originator':'', '', i===0?'Drop-down list':'', o.code, o.label||'', i===0?'Naming convention':'']);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(org), 'Originator');
+
+  // Source
+  const src = [['Name','Description','Type','Attribute value','Attribute description','Location']];
+  src.push(['Source','Manufacturer or STD for generic','Drop-down list','','','Naming convention']);
+  (DATA.sources||[]).forEach((s,i)=>{
+    src.push([i===0?'Source':'', '', i===0?'Drop-down list':'', s.code, s.label||s.description||'', i===0?'Naming convention':'']);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(src), 'Source');
+
+  // Type (Category)
+  const typ = [['Name','Description','Type','Attribute value','Attribute description','Location']];
+  typ.push(['Type','Object type (Category) · Uniclass Ss','Drop-down list','','','Naming convention']);
+  (DATA.categories||[]).filter(c=>!c.isGroup).forEach((c,i)=>{
+    const desc = (c.uniclassSs ? c.uniclassSs + ' — ' : '') + (c.uniclassDescription || c.label || '');
+    typ.push([i===0?'Type':'', '', i===0?'Drop-down list':'', c.code, desc, i===0?'Naming convention':'']);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(typ), 'Type');
+
+  // Material
+  const mat = [['Name','Description','Type','Attribute value','Attribute description','Location']];
+  mat.push(['Material','Material · Uniclass Ma/Pr','Drop-down list','','','Naming convention']);
+  (DATA.materials||[]).filter(m=>!m.isGroup).forEach((m,i)=>{
+    const desc = (m.uniclassCode ? m.uniclassCode + ' — ' : '') + (m.uniclassDescription || m.label || '');
+    mat.push([i===0?'Material':'', '', i===0?'Drop-down list':'', m.code, desc, i===0?'Naming convention':'']);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mat), 'Material');
+
+  // SubtypeProduct Code = Objects for this task team
+  const sub = [['Name','Description','Type','Attribute value','Attribute description','Location']];
+  sub.push(['Subtype/Product Code','Object subtype for ' + team + ' · Uniclass Pr','Drop-down list','','','Naming convention']);
+  (DATA.objectsByTaskTeam[team]||[]).forEach((it,i)=>{
+    const desc = (it.uniclassPr ? it.uniclassPr + ' — ' : '') + (it.uniclassDescription || it.description || '');
+    const ifc = it.ifc4 ? (' | IFC4: ' + it.ifc4) : '';
+    sub.push([i===0?'Subtype/Product Code':'', '', i===0?'Drop-down list':'', it.name, desc + ifc, i===0?'Naming convention':'']);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sub), 'SubtypeProduct Code');
+
+  // Classification helper (related)
+  const cls = [['Name','Description','Type','Classification system','Classification version','Location']];
+  cls.push(['Classification','Uniclass from Category Ss + Object Pr','Classification','Uniclass','Uniclass 2015','Related attributes']);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cls), 'Classification');
+
+  // IFC map sheet (bonus for backend)
+  const ifc = [['ObjectName','Uniclass Pr','IFC4','Revit Category']];
+  (DATA.objectsByTaskTeam[team]||[]).forEach(it=>{
+    ifc.push([it.name, it.uniclassPr||'', it.ifc4||'', it.revitCategory||'']);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ifc), 'IFC4 Map');
+
+  const fname = 'BIM-Objects-Convention-' + team + '.xlsx';
+  XLSX.writeFile(wb, fname);
+  setStatus('Exported FORMA-style convention for ' + team + ': ' + fname, true);
+}
+
+/* events */
+document.getElementById('taskTeam').onchange = ()=>{ document.getElementById('objectSearch').value=''; refreshObjects(); };
+document.getElementById('objectSearch').oninput = refreshObjects;
+['originator','source','category','material','object'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', updatePreview);
+});
+document.getElementById('btnCopy').onclick = async ()=>{
+  const n = buildName();
+  if(!n) return alert('Select all fields first');
+  await navigator.clipboard.writeText(n);
+  setStatus('Copied: ' + n, true);
+};
+document.getElementById('btnCopyClass').onclick = async ()=>{
+  const cat = findCat(document.getElementById('category').value);
+  const mat = findMat(document.getElementById('material').value);
+  const obj = findObj(document.getElementById('object').value);
+  const payload = {
+    name: buildName(),
+    uniclassSs: cat && cat.uniclassSs,
+    uniclassMaterial: mat && mat.uniclassCode,
+    uniclassPr: obj && obj.uniclassPr,
+    ifc4: obj && obj.ifc4,
+    revitCategory: obj && obj.revitCategory
+  };
+  await navigator.clipboard.writeText(JSON.stringify(payload,null,2));
+  setStatus('Classification JSON copied', true);
+};
+document.getElementById('btnExportData').onclick = exportDataExcel;
+document.getElementById('btnImportData').onclick = ()=> document.getElementById('fileImport').click();
+document.getElementById('fileImport').onchange = (e)=>{
+  const f = e.target.files && e.target.files[0];
+  if(f) importDataExcel(f);
+  e.target.value = '';
+};
+document.getElementById('btnExportForma').onclick = exportFormaTemplate;
+document.getElementById('btnReload').onclick = ()=>{
+  localStorage.removeItem(LS_KEY);
+  loadData();
+  setStatus('Reloaded file data (local override cleared)', true);
+};
+document.getElementById('btnPop').onclick = ()=>{
+  const w = window.open(location.href, 'atana-asset-naming', 'width=1100,height=860');
+  if(!w) alert('Pop-out blocked by browser');
+};
+
+loadData();
+</script>
+</body>
+</html>
