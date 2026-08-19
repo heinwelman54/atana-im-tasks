@@ -4,68 +4,153 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Atana Asset Naming Tool</title>
+<link rel="icon" href="icons/icon-192.png"/>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
 :root{
-  --bg:#f4f6f9; --card:#fff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
-  --brand:#5b21b6; --brand2:#7c3aed; --ok:#15803d; --shadow:0 8px 24px rgba(15,23,42,.08);
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --ink:#0f172a;
+  --muted:#64748b;
+  --line:#e2e8f0;
+  --brand:#6d28d9;
+  --brand-dark:#4c1d95;
+  --brand-light:#ede9fe;
+  --accent:#7c3aed;
+  --ok:#059669;
+  --shadow:0 8px 24px rgba(15,23,42,.08);
+  --shadow-sm:0 2px 8px rgba(15,23,42,.06);
+  --field-shadow:0 2px 6px rgba(76,29,149,.10), 0 1px 2px rgba(15,23,42,.06);
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
-header{background:linear-gradient(120deg,#4c1d95,#6d28d9 55%,#7c3aed);color:#fff;padding:16px 20px;display:flex;gap:12px;align-items:center;justify-content:space-between;box-shadow:var(--shadow);flex-wrap:wrap}
-header h1{margin:0;font-size:18px;font-weight:700}
-header .sub{opacity:.85;font-size:12px;margin-top:2px}
-.wrap{max-width:1200px;margin:0 auto;padding:16px}
-.grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px}
-@media(max-width:960px){.grid{grid-template-columns:1fr}}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow)}
-.card h2{margin:0 0 10px;font-size:15px}
-label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:10px 0 4px}
-select,input[type=text]{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;background:#fff}
-select:focus,input:focus{outline:2px solid #c4b5fd;border-color:#8b5cf6}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.btn{border:0;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer;font-size:13px}
-.btn-primary{background:var(--brand);color:#fff}
-.btn-ghost{background:#f1f5f9;color:var(--ink)}
-.btn-ok{background:#059669;color:#fff}
-.btn-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.preview{font-family:ui-monospace,Consolas,monospace;font-size:17px;font-weight:700;background:#0f172a;color:#e9d5ff;padding:16px;border-radius:12px;word-break:break-all}
-.meta{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.45}
-.pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#ede9fe;color:#5b21b6;font-size:11px;font-weight:700;margin-right:4px}
+header{
+  background:linear-gradient(120deg,#4c1d95 0%,#6d28d9 50%,#7c3aed 100%);
+  color:#fff;padding:14px 18px;display:flex;gap:14px;align-items:center;
+  justify-content:space-between;flex-wrap:wrap;
+  box-shadow:0 10px 30px rgba(76,29,149,.35);
+}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-icon{
+  width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.15);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.25);
+}
+header h1{margin:0;font-size:17px;font-weight:700;letter-spacing:.01em}
+header .sub{opacity:.88;font-size:12px;margin-top:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:16px}
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;
+  box-shadow:var(--shadow);
+}
+.card h2{margin:0 0 12px;font-size:15px;color:var(--brand-dark)}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.btn{
+  border:0;border-radius:10px;padding:9px 13px;font-weight:700;cursor:pointer;font-size:12px;
+  box-shadow:var(--shadow-sm);transition:transform .05s ease, box-shadow .15s ease;
+}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--brand);color:#fff;box-shadow:0 4px 14px rgba(109,40,217,.35)}
+.btn-ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.btn-ok{background:var(--ok);color:#fff}
+label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin:0 0 6px;text-transform:uppercase;letter-spacing:.04em}
+select,input[type=text]{
+  width:100%;padding:11px 12px;border:1px solid #ddd6fe;border-radius:10px;font-size:13px;
+  background:#fff;box-shadow:var(--field-shadow);color:var(--ink);
+}
+select:focus,input:focus{outline:2px solid #c4b5fd;border-color:var(--accent)}
+.seq{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+  margin-top:8px;
+}
+@media(max-width:900px){.seq{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.seq{grid-template-columns:1fr}}
+.seq-step{
+  background:linear-gradient(180deg,#faf5ff,#fff);
+  border:1px solid #e9d5ff;border-radius:12px;padding:10px;
+  box-shadow:var(--field-shadow);position:relative;
+}
+.seq-num{
+  position:absolute;top:-8px;left:10px;background:var(--brand);color:#fff;
+  font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;
+  box-shadow:0 2px 6px rgba(109,40,217,.35);
+}
+.preview-box{
+  font-family:ui-monospace,Consolas,monospace;font-size:16px;font-weight:700;
+  background:#0f172a;color:#e9d5ff;padding:14px 16px;border-radius:12px;
+  word-break:break-all;box-shadow:inset 0 0 0 1px rgba(167,139,250,.25), var(--shadow-sm);
+  min-height:52px;display:flex;align-items:center;
+}
+.pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.pill{
+  display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;
+  background:var(--brand-light);color:var(--brand-dark);font-size:11px;font-weight:800;
+  box-shadow:0 2px 6px rgba(109,40,217,.18);
+}
+.pill .n{opacity:.55;font-weight:700;font-size:10px}
+.hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.45}
+.grid2{display:grid;grid-template-columns:1.2fr .8fr;gap:14px}
+@media(max-width:960px){.grid2{grid-template-columns:1fr}}
 .table{width:100%;border-collapse:collapse;font-size:12px}
 .table th,.table td{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}
-.table th{color:var(--muted);font-weight:600}
-.hint{font-size:12px;color:var(--muted);margin-top:6px}
-.badge{font-size:11px;padding:2px 6px;border-radius:6px;background:#ecfdf5;color:var(--ok);font-weight:700}
+.table th{color:var(--muted);font-weight:700}
+.badge{font-size:11px;padding:2px 7px;border-radius:6px;background:#ecfdf5;color:var(--ok);font-weight:700}
 .badge.warn{background:#fff7ed;color:#c2410c}
-.search{margin-bottom:8px}
-.footer{padding:20px;text-align:center;color:var(--muted);font-size:12px}
-.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
-details.guide{border:1px solid var(--line);border-radius:12px;background:#fff;margin-top:10px;box-shadow:0 2px 8px rgba(15,23,42,.04)}
-details.guide summary{cursor:pointer;padding:12px 14px;font-weight:700;font-size:13px;list-style:none;display:flex;justify-content:space-between;align-items:center}
+.muted{color:var(--muted);font-size:12px}
+.status{font-size:12px;margin-top:8px;min-height:16px}
+details.guide{
+  border:1px solid var(--line);border-radius:12px;background:#fff;margin-top:10px;
+  box-shadow:var(--shadow-sm);
+}
+details.guide summary{
+  cursor:pointer;padding:12px 14px;font-weight:700;font-size:13px;list-style:none;
+  display:flex;justify-content:space-between;align-items:center;color:var(--brand-dark);
+}
 details.guide summary::-webkit-details-marker{display:none}
-details.guide summary::after{content:"+";color:var(--brand);font-size:16px}
+details.guide summary::after{content:"+";color:var(--brand);font-size:16px;font-weight:800}
 details.guide[open] summary::after{content:"–"}
 details.guide .body{padding:0 14px 14px;font-size:13px;line-height:1.55;color:#334155}
 details.guide .body ul{margin:6px 0 0 18px;padding:0}
-details.guide .body li{margin:4px 0}
-details.guide .body code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12px}
-.sep{height:1px;background:var(--line);margin:14px 0}
-.muted{color:var(--muted);font-size:12px}
-.status{font-size:12px;margin-top:8px;min-height:18px}
+details.guide .body li{margin:5px 0}
+details.guide .body code{background:#f5f3ff;padding:1px 5px;border-radius:4px;font-size:12px;color:#5b21b6}
+.flow{
+  display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0;
+}
+.flow-step{
+  background:#fff;border:1px solid #ddd6fe;border-radius:12px;padding:10px 12px;
+  min-width:140px;max-width:200px;box-shadow:var(--field-shadow);font-size:12px;
+}
+.flow-step strong{display:block;color:var(--brand-dark);font-size:12px;margin-bottom:4px}
+.flow-arrow{color:var(--brand);font-weight:900;font-size:18px}
+.flow-step.champ{border-color:#a7f3d0;background:#ecfdf5}
+.flow-step.catalog{border-color:#c4b5fd;background:#f5f3ff}
+.flow-step.project{border-color:#bfdbfe;background:#eff6ff}
+.flow-step.warn{border-color:#fdba74;background:#fff7ed}
+.role-tag{
+  display:inline-block;font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;
+  background:#4c1d95;color:#fff;margin-top:6px;
+}
+.footer{padding:18px;text-align:center;color:var(--muted);font-size:12px}
+.tt-row{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:4px}
 </style>
 </head>
 <body>
 <header>
-  <div>
-    <h1>Atana Asset Naming Tool</h1>
-    <div class="sub">NBS BIM Object Standard v2.2 · §5.1.5 Naming fields · Uniclass Ss / Ma / Pr · IFC4</div>
+  <div class="brand">
+    <div class="brand-icon">IM</div>
+    <div>
+      <h1>Atana Asset Naming</h1>
+      <div class="sub">NBS BIM Object Standard · Content Catalog governance · Uniclass &amp; IFC4</div>
+    </div>
   </div>
-  <div class="btn-row" style="margin:0">
-    <button class="btn btn-ghost" id="btnReload" type="button">Reload data</button>
-    <button class="btn btn-ghost" id="btnPop" type="button">Pop out</button>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn btn-ghost" id="btnReload" type="button" style="background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.2)">Reload data</button>
+    <button class="btn btn-ghost" id="btnPop" type="button" style="background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.2)">Pop out</button>
   </div>
 </header>
+
 <div class="wrap">
   <div class="toolbar card" style="padding:12px">
     <button class="btn btn-ghost" id="btnExportData" type="button">Export data Excel</button>
@@ -75,38 +160,47 @@ details.guide .body code{background:#f1f5f9;padding:1px 5px;border-radius:4px;fo
     <span class="muted" id="dataStatus">Data: —</span>
   </div>
 
-  <div class="grid">
+  <div class="grid2">
     <section class="card">
-      <h2>Build name</h2>
-      <label>Task team (scopes Object list)</label>
-      <select id="taskTeam"></select>
-
-      <div class="row">
+      <h2>Build family name</h2>
+      <div class="tt-row">
         <div>
-          <label>Originator *</label>
-          <select id="originator"></select>
-        </div>
-        <div>
-          <label>Source *</label>
-          <select id="source"></select>
+          <label>Task team (scopes Object list)</label>
+          <select id="taskTeam"></select>
         </div>
       </div>
-      <div class="row">
-        <div>
-          <label>Category (NBS Type) * · Uniclass Ss</label>
+
+      <div class="seq" title="Name is built left → right">
+        <div class="seq-step">
+          <span class="seq-num">1</span>
+          <label>Originator</label>
+          <select id="originator"></select>
+        </div>
+        <div class="seq-step">
+          <span class="seq-num">2</span>
+          <label>Source</label>
+          <select id="source"></select>
+        </div>
+        <div class="seq-step">
+          <span class="seq-num">3</span>
+          <label>Category · Ss</label>
           <select id="category"></select>
         </div>
-        <div>
-          <label>Material * · Uniclass Ma/Pr</label>
+        <div class="seq-step">
+          <span class="seq-num">4</span>
+          <label>Material · Ma/Pr</label>
           <select id="material"></select>
         </div>
       </div>
-      <label>Object (NBS Subtype) * · task-team list · Uniclass Pr</label>
-      <input class="search" id="objectSearch" type="text" placeholder="Filter objects…"/>
-      <select id="object" size="12" style="height:220px"></select>
-      <div class="hint">Differentiator excluded — size/variant lives on the Revit family type.</div>
 
-      <div class="btn-row">
+      <div style="margin-top:14px">
+        <label>5 · Object (Subtype) · task-team list · Uniclass Pr</label>
+        <input class="search" id="objectSearch" type="text" placeholder="Filter objects…" style="margin-bottom:8px"/>
+        <select id="object" size="11" style="height:210px"></select>
+      </div>
+      <div class="hint">Differentiator is not part of the family name — size / variant belongs on the <strong>Revit type</strong>.</div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
         <button class="btn btn-primary" id="btnCopy" type="button">Copy name</button>
         <button class="btn btn-ghost" id="btnCopyClass" type="button">Copy classifications</button>
       </div>
@@ -115,96 +209,164 @@ details.guide .body code{background:#f1f5f9;padding:1px 5px;border-radius:4px;fo
 
     <section class="card">
       <h2>Preview</h2>
-      <div class="preview" id="preview">—</div>
-      <div class="meta" id="meta"></div>
+      <div class="preview-box" id="preview">—</div>
+      <div class="pills" id="pills"></div>
+      <div class="hint" id="meta"></div>
+
       <h2 style="margin-top:18px">Classification write-back</h2>
       <table class="table">
         <tr><th>System</th><th>Value</th></tr>
-        <tr><td>Uniclass Ss (Category)</td><td id="clsSs">—</td></tr>
-        <tr><td>Uniclass Ma/Pr (Material)</td><td id="clsMa">—</td></tr>
-        <tr><td>Uniclass Pr (Object)</td><td id="clsPr">—</td></tr>
+        <tr><td>Uniclass Ss</td><td id="clsSs">—</td></tr>
+        <tr><td>Uniclass Ma/Pr</td><td id="clsMa">—</td></tr>
+        <tr><td>Uniclass Pr</td><td id="clsPr">—</td></tr>
         <tr><td>IFC4</td><td id="clsIfc">—</td></tr>
         <tr><td>Revit Category</td><td id="clsRev">—</td></tr>
       </table>
-      <div class="hint" style="margin-top:12px">
-        Pattern: <span class="pill">Originator</span>_<span class="pill">Source</span>_<span class="pill">Category</span>_<span class="pill">Material</span>_<span class="pill">Object</span>
-      </div>
     </section>
   </div>
 
-  <!-- NBS GUIDE -->
+  <!-- PROCESS -->
   <section class="card" style="margin-top:16px">
-    <h2>NBS BIM Object Standard — naming guide</h2>
-    <p class="muted" style="margin-top:0">From NBS BIM Object Standard Version 2.2 (July 2023), Section 5 Metadata requirements. Collapsed by default.</p>
+    <h2>Content Catalog process — single source of assets</h2>
+    <p class="muted" style="margin-top:0">
+      The <strong>Content Catalog (UNIFI / Forma)</strong> is the only approved source of design assets.
+      Project models consume published content; they are not the place to permanently fix or store company families.
+    </p>
 
-    <details class="guide">
-      <summary>5.1.2 Composition rules</summary>
+    <div class="flow">
+      <div class="flow-step catalog">
+        <strong>1. Content Catalog</strong>
+        Master library by task-team collection (AR, ME, ST, EE…)
+        <span class="role-tag">SYSTEM OF RECORD</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step project">
+        <strong>2. Project space</strong>
+        Load latest families into the project (read)
+        <span class="role-tag">PROJECT TEAM</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step warn">
+        <strong>3. Issue found?</strong>
+        Do <em>not</em> leave the fix only inside the project
+        <span class="role-tag">AUTHOR / TTIM</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step champ">
+        <strong>4. BIM Champion</strong>
+        Take asset out of project → fix → publish to catalog
+        <span class="role-tag">WRITE ACCESS</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step catalog">
+        <strong>5. Notify team</strong>
+        Project members reload latest from catalog
+        <span class="role-tag">TTM / TEAM</span>
+      </div>
+    </div>
+
+    <div class="flow" style="margin-top:4px">
+      <div class="flow-step warn">
+        <strong>Content request</strong>
+        Missing asset? Create content request in catalog → routes to task-team BIM Champion
+        <span class="role-tag">ANY USER</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step champ">
+        <strong>Champion creates</strong>
+        Name via this tool · classify · Revit 2025 base · publish to collection
+        <span class="role-tag">BIM CHAMPION</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step catalog">
+        <strong>Catalog distributes</strong>
+        Revit / AutoCAD / Civil 3D · auto-upgrade path for later Revit years
+        <span class="role-tag">FORMA</span>
+      </div>
+    </div>
+
+    <details class="guide" open>
+      <summary>Governance (BIM Champions &amp; project teams)</summary>
       <div class="body">
         <ul>
-          <li>Names use alphanumeric characters only (a–z, A–Z, 0–9), max <strong>75 characters</strong>.</li>
-          <li>Fields separated by underscore <code>_</code>; dash <code>-</code> allowed inside phrases.</li>
-          <li>Each field is <strong>PascalCase</strong> (capitalised words, no spaces).</li>
-          <li>No spaces or other punctuation.</li>
+          <li><strong>Task Team BIM Champion</strong> owns the task-team collection (write access). Architecture, Mechanical, Structural, Electrical, etc. each curate their own library.</li>
+          <li><strong>BIM Team / Information Management</strong> aligns standards (naming, shared parameters, classification) across collections and with project IMs.</li>
+          <li><strong>Project TTM / TTIM / authors</strong> consume catalog content inside project space; they coordinate issues back to the champion — they do not become the long-term source of the family.</li>
+          <li><strong>Fix path:</strong> asset leaves project space → champion repairs in a controlled library environment → update Content Catalog → notify project member(s) to load the latest.</li>
+          <li><strong>Revit 2025</strong> is the base version for catalog content. Forma/catalog auto-upgrade serves later Revit versions so users are not blocked by upgrade prompts when loading.</li>
+        </ul>
+      </div>
+    </details>
+  </section>
+
+  <!-- GUIDES -->
+  <section class="card" style="margin-top:16px">
+    <h2>How-to guides</h2>
+
+    <details class="guide">
+      <summary>1. Name families in Revit</summary>
+      <div class="body">
+        <ul>
+          <li>Build the name in this tool: <code>Originator_Source_Category_Material_Object</code>.</li>
+          <li>Default Source for Atana design content is <code>STD</code> (Standard). Use a manufacturer code only for true manufacturer content.</li>
+          <li>Copy the preview name and set it as the <strong>Family Name</strong> in the Revit family editor (not only the type name).</li>
+          <li>Put sizes, ratings, and variants on <strong>Family Types</strong> (this replaces NBS Differentiator).</li>
+          <li>Keep PascalCase / alphanumeric fields; underscore between fields only.</li>
+          <li>Example: <code>ATA_STD_AIR_GEN_BoilerCondensing</code></li>
         </ul>
       </div>
     </details>
 
     <details class="guide">
-      <summary>5.1.5 Naming fields (NBS → Atana)</summary>
+      <summary>2. Apply classification (PyRevit script)</summary>
+      <div class="body">
+        <ul>
+          <li>After naming, run <code>Atana_Asset_Classify_PyRevit.py</code> in PyRevit (with <code>asset-naming-data.json</code> available).</li>
+          <li>The script parses the family name and writes Uniclass Ss / Ma / Pr and IFC4 to shared parameters.</li>
+          <li>Shared parameter GUIDs will be confirmed to match your <code>ATA_ZZ_SharedParameters</code> file (you will supply final GUIDs).</li>
+          <li>Target parameters (names): <code>ATA_ZZ_UniclassSs</code>, <code>ATA_ZZ_UniclassMa</code>, <code>ATA_ZZ_UniclassPr</code>, <code>ATA_ZZ_IFC4</code>.</li>
+          <li>Always verify values on the family before publishing to the catalog.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="guide">
+      <summary>3. Publish to Forma Content Catalog</summary>
+      <div class="body">
+        <ul>
+          <li>Only <strong>BIM Champions</strong> publish into their task-team collection (AR, ME, ST, EE, YS…).</li>
+          <li>Open Content Catalog → your collection → add / replace the family from the controlled library (not from a random project save).</li>
+          <li>Confirm naming, shared parameters, and Revit 2025 base save.</li>
+          <li>Notify the project TTM / authors that a new version is available so they reload from catalog (not from old project copies).</li>
+          <li>Catalog remains the system of record; project space only consumes.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="guide">
+      <summary>4. Request missing content</summary>
+      <div class="body">
+        <ul>
+          <li>In Content Catalog use <strong>Create content request</strong>.</li>
+          <li>Set collection (task team), file type (Revit), minimum year (2025), specifications, and priority.</li>
+          <li>Request routes to the task-team BIM Champion to create, name (this tool), classify, and publish.</li>
+          <li>Requester is notified when the asset is available in the collection for Revit / AutoCAD / Civil 3D as applicable.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="guide">
+      <summary>NBS §5.1.5 field map (Atana)</summary>
       <div class="body">
         <table class="table">
-          <tr><th>NBS field</th><th>Atana</th><th>Purpose</th><th>Example</th></tr>
-          <tr><td>Originator</td><td>Originator</td><td>Object provider (3–6 char code)</td><td>ATA</td></tr>
-          <tr><td>Source</td><td>Source</td><td>Manufacturer / library; omit abbreviation; generic may use STD</td><td>STD / BettaWindows</td></tr>
-          <tr><td>Type</td><td>Category</td><td>Object type · maps to Uniclass <strong>Ss</strong></td><td>AIR, DOR, WAL</td></tr>
-          <tr><td>Material</td><td>Material</td><td>Material type · Uniclass <strong>Ma / Pr</strong></td><td>GEN, ALU, CON</td></tr>
-          <tr><td>Subtype / Product code</td><td>Object</td><td>Further definition · Uniclass <strong>Pr</strong> · <em>task-team scoped</em></td><td>BoilerCondensing</td></tr>
-          <tr><td>Differentiator</td><td><em>Excluded</em></td><td>Size/variant — held on Revit family type</td><td>600x900mm</td></tr>
+          <tr><th>NBS</th><th>Atana</th><th>Notes</th></tr>
+          <tr><td>Originator</td><td>Originator</td><td>e.g. ATA</td></tr>
+          <tr><td>Source</td><td>Source</td><td>STD for generic design; manufacturer name/code when applicable</td></tr>
+          <tr><td>Type</td><td>Category</td><td>Uniclass Ss</td></tr>
+          <tr><td>Material</td><td>Material</td><td>Uniclass Ma/Pr</td></tr>
+          <tr><td>Subtype / Product code</td><td>Object</td><td>Task-team list · Uniclass Pr · reverse camelCase</td></tr>
+          <tr><td>Differentiator</td><td>Excluded</td><td>Revit family type</td></tr>
         </table>
-        <p><strong>Atana composition:</strong> <code>Originator_Source_Category_Material_Object</code><br/>
-        Example: <code>ATA_STD_AIR_GEN_BoilerCondensing</code></p>
-      </div>
-    </details>
-
-    <details class="guide">
-      <summary>5.2 File &amp; BIM object naming</summary>
-      <div class="body">
-        <p>NBS arrangement:</p>
-        <p><code>&lt;Originator&gt;_&lt;Source&gt;_&lt;Type&gt;_&lt;Subtype/Product code&gt;_&lt;Differentiator&gt;</code></p>
-        <p>Differentiator is optional in NBS. Atana omits it from the family name so type catalogues stay clean; sizes live in the Revit type name.</p>
-      </div>
-    </details>
-
-    <details class="guide">
-      <summary>Classification &amp; IFC (OpenBIM)</summary>
-      <div class="body">
-        <ul>
-          <li><strong>Category → Uniclass Ss</strong> (systems) — what system the family belongs to.</li>
-          <li><strong>Material → Uniclass Ma or Pr</strong> — material constitution.</li>
-          <li><strong>Object → Uniclass Pr</strong> — product definition; name derived as reverse camelCase from Pr title keywords.</li>
-          <li><strong>IFC4</strong> — <code>Ifc*Type</code> enums for export / model checking (e.g. <code>IfcBoilerType.WATER</code>).</li>
-          <li>PyRevit can write Ss / Ma / Pr / IFC back to family shared parameters from this naming.</li>
-        </ul>
-      </div>
-    </details>
-
-    <details class="guide">
-      <summary>Task teams &amp; Object lists</summary>
-      <div class="body">
-        <ul>
-          <li>Object dropdown is <strong>filtered by task team</strong> (AR, ME, ST, EE, …).</li>
-          <li>Lists are curated <strong>generic design families</strong> for Atana enablement — not full manufacturer catalogues.</li>
-          <li>Manufacturer content belongs in <strong>Source</strong>, not in Object.</li>
-          <li>Use <em>Export data Excel</em> to edit lists; <em>Import data Excel</em> to update the in-session backend (and download updated JSON).</li>
-          <li>Use <em>Export task team → FORMA template</em> to produce an ACC/FORMA naming-standard workbook for the selected team.</li>
-        </ul>
-      </div>
-    </details>
-
-    <details class="guide">
-      <summary>Abbreviations (NBS 5.1.4)</summary>
-      <div class="body">
-        <p>Where platforms limit filename length, values may be abbreviated: max 7 characters, uppercase, no full stops or spaces. The same abbreviation is used for singular and plural.</p>
       </div>
     </details>
   </section>
@@ -214,7 +376,7 @@ details.guide .body code{background:#f1f5f9;padding:1px 5px;border-radius:4px;fo
     <div id="coverage" class="meta">Loading…</div>
   </section>
 </div>
-<div class="footer">Atana · Asset naming · NBS BIM Object Standard v2.2 · data: asset-naming-data.json</div>
+<div class="footer">Atana · Asset naming · Content Catalog is the only asset source of record · NBS BIM Object Standard v2.2</div>
 
 <script>
 let DATA = null;
@@ -227,7 +389,6 @@ function setStatus(msg, ok){
 }
 
 async function loadData(){
-  // 1) session override from import
   try{
     const cached = localStorage.getItem(LS_KEY);
     if(cached){
@@ -237,7 +398,6 @@ async function loadData(){
       return;
     }
   }catch(e){}
-
   const paths = ['./asset-naming-data.json','asset-naming-data.json','/asset-naming-data.json'];
   let lastErr = null;
   for(const p of paths){
@@ -273,11 +433,19 @@ function fillSelect(el, items, getValue, getLabel, includeBlank){
   });
 }
 
+function sourceLabel(s){
+  if(!s) return '';
+  if(s.code === 'STD') return 'STD — Standard';
+  const lab = (s.label||'').trim();
+  if(!lab || lab.toLowerCase()==='source') return s.code;
+  return s.code + ' — ' + lab;
+}
+
 function init(){
   const teams = DATA.taskTeams || [];
   fillSelect(document.getElementById('taskTeam'), teams, t=>t.code, t=>t.code + ' — ' + t.label, false);
   fillSelect(document.getElementById('originator'), DATA.originators||[], o=>o.code, o=>o.code + (o.label? ' — '+o.label:''), false);
-  fillSelect(document.getElementById('source'), DATA.sources||[], s=>s.code, s=>s.code + (s.label? ' — '+s.label:''), false);
+  fillSelect(document.getElementById('source'), DATA.sources||[], s=>s.code, sourceLabel, false);
 
   const cat = document.getElementById('category');
   cat.innerHTML = '<option value="">— select —</option>';
@@ -299,7 +467,10 @@ function init(){
   const org = document.getElementById('originator');
   [...org.options].forEach(o=>{ if(o.value==='ATA') org.value='ATA'; });
   const src = document.getElementById('source');
-  [...src.options].forEach(o=>{ if(o.value==='STD') src.value='STD'; });
+  src.value = 'STD';
+  if(src.value !== 'STD'){
+    [...src.options].forEach(o=>{ if(o.value==='STD') src.value='STD'; });
+  }
   const tt = document.getElementById('taskTeam');
   if([...tt.options].some(o=>o.value==='ME')) tt.value='ME';
   refreshObjects();
@@ -335,7 +506,7 @@ function refreshObjects(){
   });
   if(!items.length){
     const o=document.createElement('option');
-    o.disabled=true; o.textContent='(No objects for this task team — import Excel to add)';
+    o.disabled=true; o.textContent='(No objects for this task team)';
     sel.appendChild(o);
   }
   updatePreview();
@@ -358,8 +529,19 @@ function buildName(){
 }
 
 function updatePreview(){
-  const name = buildName();
-  document.getElementById('preview').textContent = name || '— complete all fields —';
+  const parts = [
+    {k:'Originator', v:document.getElementById('originator').value},
+    {k:'Source', v:document.getElementById('source').value},
+    {k:'Category', v:document.getElementById('category').value},
+    {k:'Material', v:document.getElementById('material').value},
+    {k:'Object', v:document.getElementById('object').value}
+  ];
+  const name = parts.every(p=>p.v) ? parts.map(p=>p.v).join('_') : '';
+  document.getElementById('preview').textContent = name || '— complete fields 1–5 —';
+  document.getElementById('pills').innerHTML = parts.map((p,i)=>
+    '<span class="pill"><span class="n">'+(i+1)+'</span> '+(p.v||p.k)+'</span>'
+  ).join('<span style="color:#c4b5fd;font-weight:900">_</span>');
+
   const cat = findCat(document.getElementById('category').value);
   const mat = findMat(document.getElementById('material').value);
   const obj = findObj(document.getElementById('object').value);
@@ -370,41 +552,32 @@ function updatePreview(){
   document.getElementById('clsRev').textContent = (obj && obj.revitCategory) || '—';
   const team = document.getElementById('taskTeam').value;
   document.getElementById('meta').innerHTML =
-    '<span class="badge">'+(DATA.standard||'NBS')+'</span> · Task team <strong>'+team+'</strong> · ' +
-    currentObjects().length + ' objects available';
+    '<span class="badge">NBS §5.1.5</span> · Task team <strong>'+team+'</strong> · ' +
+    currentObjects().length + ' objects · Source default <strong>STD</strong>';
 }
 
 function renderCoverage(){
   const teams = DATA.taskTeams||[];
   const lines = teams.map(t=>{
     const n = (DATA.objectsByTaskTeam[t.code]||[]).length;
-    const cls = n>=15 ? 'badge' : 'badge warn';
-    return '<div><span class="'+cls+'">'+t.code+'</span> '+t.label+': <strong>'+n+'</strong> objects</div>';
+    const cls = n>=10 ? 'badge' : 'badge warn';
+    return '<div><span class="'+cls+'">'+t.code+'</span> '+t.label+': <strong>'+n+'</strong></div>';
   }).join('');
   document.getElementById('coverage').innerHTML = lines || 'No task teams';
 }
 
-/* ---------------- Excel export / import backend ---------------- */
 function exportDataExcel(){
   if(typeof XLSX === 'undefined'){ alert('Excel library not loaded'); return; }
   const wb = XLSX.utils.book_new();
-
-  // Coverage
   const cov = [['TaskTeam','Label','ObjectCount']];
-  (DATA.taskTeams||[]).forEach(t=>{
-    cov.push([t.code, t.label, (DATA.objectsByTaskTeam[t.code]||[]).length]);
-  });
+  (DATA.taskTeams||[]).forEach(t=>cov.push([t.code, t.label, (DATA.objectsByTaskTeam[t.code]||[]).length]));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cov), 'Coverage');
-
-  // Originator / Source
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
     [['Code','Label']].concat((DATA.originators||[]).map(o=>[o.code,o.label]))
   ), 'Originator');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
     [['Code','Label','Description']].concat((DATA.sources||[]).map(s=>[s.code,s.label,s.description||'']))
   ), 'Source');
-
-  // Category
   const catRows = [['Code','Label','Uniclass Ss','Uniclass Description','Group']];
   let g='';
   (DATA.categories||[]).forEach(c=>{
@@ -412,8 +585,6 @@ function exportDataExcel(){
     catRows.push([c.code,c.label,c.uniclassSs||'',c.uniclassDescription||'',g]);
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(catRows), 'Category');
-
-  // Material
   const matRows = [['Code','Label','Uniclass Code','Uniclass Description','Group']];
   g='';
   (DATA.materials||[]).forEach(m=>{
@@ -421,24 +592,18 @@ function exportDataExcel(){
     matRows.push([m.code,m.label,m.uniclassCode||'',m.uniclassDescription||'',g]);
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(matRows), 'Material');
-
-  // Objects per team
   Object.keys(DATA.objectsByTaskTeam||{}).sort().forEach(team=>{
     const rows = [['ObjectName','Group','Uniclass Pr','Uniclass Description','IFC4','Revit Category','Description']];
     (DATA.objectsByTaskTeam[team]||[]).forEach(it=>{
       rows.push([it.name, it.group||'', it.uniclassPr||'', it.uniclassDescription||'', it.ifc4||'', it.revitCategory||'', it.description||'']);
     });
-    const name = ('Object-' + team).slice(0,31);
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), ('Object-'+team).slice(0,31));
   });
-
   XLSX.writeFile(wb, 'Atana-Asset-Naming-Data.xlsx');
   setStatus('Exported backend data Excel', true);
 }
 
-function sheetToRows(ws){
-  return XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-}
+function sheetToRows(ws){ return XLSX.utils.sheet_to_json(ws, {header:1, defval:''}); }
 
 function importDataExcel(file){
   if(typeof XLSX === 'undefined'){ alert('Excel library not loaded'); return; }
@@ -447,190 +612,96 @@ function importDataExcel(file){
     try{
       const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
       const next = JSON.parse(JSON.stringify(DATA || {objectsByTaskTeam:{}, categories:[], materials:[], originators:[], sources:[], taskTeams:[]}));
-
       if(wb.Sheets['Originator']){
-        const rows = sheetToRows(wb.Sheets['Originator']).slice(1);
-        next.originators = rows.filter(r=>r[0]).map(r=>({code:String(r[0]).trim(), label:String(r[1]||r[0]).trim()}));
+        next.originators = sheetToRows(wb.Sheets['Originator']).slice(1).filter(r=>r[0]).map(r=>({code:String(r[0]).trim(), label:String(r[1]||r[0]).trim()}));
       }
       if(wb.Sheets['Source']){
-        const rows = sheetToRows(wb.Sheets['Source']).slice(1);
-        next.sources = rows.filter(r=>r[0]).map(r=>({code:String(r[0]).trim(), label:String(r[1]||r[0]).trim(), description:String(r[2]||'')}));
+        next.sources = sheetToRows(wb.Sheets['Source']).slice(1).filter(r=>r[0]).map(r=>({code:String(r[0]).trim(), label:String(r[1]||r[0]).trim(), description:String(r[2]||'')}));
       }
       if(wb.Sheets['Category']){
         const rows = sheetToRows(wb.Sheets['Category']).slice(1);
-        const cats = [];
-        let lastG = '';
+        const cats=[]; let lastG='';
         rows.forEach(r=>{
           if(!r[0]) return;
-          const g = String(r[4]||'').trim();
-          if(g && g !== lastG){ cats.push({isGroup:true, group:g}); lastG=g; }
-          cats.push({
-            code:String(r[0]).trim(), label:String(r[1]||r[0]).trim(),
-            uniclassSs:String(r[2]||'').trim()||null,
-            uniclassDescription:String(r[3]||'').trim()||null,
-            isGroup:false
-          });
+          const gg=String(r[4]||'').trim();
+          if(gg && gg!==lastG){ cats.push({isGroup:true,group:gg}); lastG=gg; }
+          cats.push({code:String(r[0]).trim(),label:String(r[1]||r[0]).trim(),uniclassSs:String(r[2]||'').trim()||null,uniclassDescription:String(r[3]||'').trim()||null,isGroup:false});
         });
         next.categories = cats;
       }
       if(wb.Sheets['Material']){
         const rows = sheetToRows(wb.Sheets['Material']).slice(1);
-        const mats = [];
-        let lastG = '';
+        const mats=[]; let lastG='';
         rows.forEach(r=>{
           if(!r[0]) return;
-          const g = String(r[4]||'').trim();
-          if(g && g !== lastG){ mats.push({isGroup:true, group:g}); lastG=g; }
-          mats.push({
-            code:String(r[0]).trim(), label:String(r[1]||r[0]).trim(),
-            uniclassCode:String(r[2]||'').trim()||null,
-            uniclassDescription:String(r[3]||'').trim()||null,
-            isGroup:false
-          });
+          const gg=String(r[4]||'').trim();
+          if(gg && gg!==lastG){ mats.push({isGroup:true,group:gg}); lastG=gg; }
+          mats.push({code:String(r[0]).trim(),label:String(r[1]||r[0]).trim(),uniclassCode:String(r[2]||'').trim()||null,uniclassDescription:String(r[3]||'').trim()||null,isGroup:false});
         });
         next.materials = mats;
       }
-
-      // Object-* sheets
       wb.SheetNames.forEach(sn=>{
         if(!/^Object[-_]/i.test(sn)) return;
         const team = sn.replace(/^Object[-_]/i,'').trim();
-        const rows = sheetToRows(wb.Sheets[sn]).slice(1);
-        const items = [];
-        rows.forEach(r=>{
-          const name = String(r[0]||'').trim();
+        const items=[];
+        sheetToRows(wb.Sheets[sn]).slice(1).forEach(r=>{
+          const name=String(r[0]||'').trim();
           if(!name || name.startsWith('--')) return;
-          items.push({
-            name,
-            group: String(r[1]||'').trim()||null,
-            uniclassPr: String(r[2]||'').trim()||null,
-            uniclassDescription: String(r[3]||'').trim()||null,
-            ifc4: String(r[4]||'').trim()||null,
-            revitCategory: String(r[5]||'').trim()||null,
-            description: String(r[6]||'').trim()||null
-          });
+          items.push({name, group:String(r[1]||'').trim()||null, uniclassPr:String(r[2]||'').trim()||null, uniclassDescription:String(r[3]||'').trim()||null, ifc4:String(r[4]||'').trim()||null, revitCategory:String(r[5]||'').trim()||null, description:String(r[6]||'').trim()||null});
         });
-        if(!next.objectsByTaskTeam) next.objectsByTaskTeam = {};
-        next.objectsByTaskTeam[team] = items;
+        if(!next.objectsByTaskTeam) next.objectsByTaskTeam={};
+        next.objectsByTaskTeam[team]=items;
       });
-
       next.version = (next.version||'1.0') + '+import';
       DATA = next;
       localStorage.setItem(LS_KEY, JSON.stringify(DATA));
-      document.getElementById('dataStatus').textContent = 'Data: imported Excel (session + localStorage)';
+      document.getElementById('dataStatus').textContent = 'Data: imported Excel';
       init();
-
-      // Also offer JSON download for backend commit
-      const blob = new Blob([JSON.stringify(DATA, null, 2)], {type:'application/json'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'asset-naming-data.json';
-      a.click();
-      setStatus('Import applied. Updated JSON downloaded for backend commit.', true);
+      const blob = new Blob([JSON.stringify(DATA,null,2)], {type:'application/json'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='asset-naming-data.json'; a.click();
+      setStatus('Import applied · JSON downloaded for repo commit', true);
     }catch(err){
-      console.error(err);
-      setStatus('Import failed: ' + err.message, false);
+      setStatus('Import failed: '+err.message, false);
     }
   };
   reader.readAsArrayBuffer(file);
 }
 
-/* ---------------- FORMA / ACC naming standard template ---------------- */
 function exportFormaTemplate(){
   if(typeof XLSX === 'undefined'){ alert('Excel library not loaded'); return; }
   const team = document.getElementById('taskTeam').value || 'ME';
   const teamLabel = ((DATA.taskTeams||[]).find(t=>t.code===team)||{}).label || team;
   const wb = XLSX.utils.book_new();
-
-  // INSTRUCTIONS (FORMA style)
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
     ['***IMPORTANT: DO NOT DELETE THIS TAB***'],
-    ['DESCRIPTION'],
-    ['Atana BIM Objects naming standard for task team: ' + team + ' — ' + teamLabel],
-    ['Based on NBS BIM Object Standard v2.2 §5.1.5 and Default ISO 19650 FORMA template structure.'],
-    ['Naming convention attributes: Originator, Source, Type (Category), Material, Subtype/Product Code (Object)'],
-    ['Related attributes: Classification (Uniclass), IFC4'],
-    [''],
-    ['FORMAT'],
-    ['Originator_Source_Type_Material_Subtype'],
-    ['Example: ATA_STD_AIR_GEN_BoilerCondensing'],
-    [''],
-    ['NOTES'],
-    ['Differentiator excluded — Revit family type holds size/variant.'],
-    ['Object (Subtype) list is scoped to task team ' + team + '.'],
+    ['Atana BIM Objects naming standard — task team ' + team + ' — ' + teamLabel],
+    ['Pattern: Originator_Source_Type_Material_Subtype'],
+    ['Default Source: STD (Standard) for generic design content'],
     ['Delimiter: Underscore']
   ]), 'INSTRUCTIONS');
-
-  // SETTINGS
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
     ['Naming standard name','Description','Delimiter'],
-    ['BIM Objects Convention — ' + team, 'NBS-based OpenBIM / IFC / COBie · Task team ' + team, 'Underscore'],
-    [''],
-    ['***IMPORTANT: DO NOT DELETE THIS TAB***']
+    ['BIM Objects Convention — ' + team, 'NBS-based · Task team ' + team, 'Underscore']
   ]), 'SETTINGS');
-
-  // Originator
-  const org = [['Name','Description','Type','Attribute value','Attribute description','Location']];
-  org.push(['Originator','Object provider code','Drop-down list','','','Naming convention']);
-  (DATA.originators||[]).forEach((o,i)=>{
-    org.push([i===0?'Originator':'', '', i===0?'Drop-down list':'', o.code, o.label||'', i===0?'Naming convention':'']);
-  });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(org), 'Originator');
-
-  // Source
-  const src = [['Name','Description','Type','Attribute value','Attribute description','Location']];
-  src.push(['Source','Manufacturer or STD for generic','Drop-down list','','','Naming convention']);
-  (DATA.sources||[]).forEach((s,i)=>{
-    src.push([i===0?'Source':'', '', i===0?'Drop-down list':'', s.code, s.label||s.description||'', i===0?'Naming convention':'']);
-  });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(src), 'Source');
-
-  // Type (Category)
-  const typ = [['Name','Description','Type','Attribute value','Attribute description','Location']];
-  typ.push(['Type','Object type (Category) · Uniclass Ss','Drop-down list','','','Naming convention']);
-  (DATA.categories||[]).filter(c=>!c.isGroup).forEach((c,i)=>{
-    const desc = (c.uniclassSs ? c.uniclassSs + ' — ' : '') + (c.uniclassDescription || c.label || '');
-    typ.push([i===0?'Type':'', '', i===0?'Drop-down list':'', c.code, desc, i===0?'Naming convention':'']);
-  });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(typ), 'Type');
-
-  // Material
-  const mat = [['Name','Description','Type','Attribute value','Attribute description','Location']];
-  mat.push(['Material','Material · Uniclass Ma/Pr','Drop-down list','','','Naming convention']);
-  (DATA.materials||[]).filter(m=>!m.isGroup).forEach((m,i)=>{
-    const desc = (m.uniclassCode ? m.uniclassCode + ' — ' : '') + (m.uniclassDescription || m.label || '');
-    mat.push([i===0?'Material':'', '', i===0?'Drop-down list':'', m.code, desc, i===0?'Naming convention':'']);
-  });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mat), 'Material');
-
-  // SubtypeProduct Code = Objects for this task team
-  const sub = [['Name','Description','Type','Attribute value','Attribute description','Location']];
-  sub.push(['Subtype/Product Code','Object subtype for ' + team + ' · Uniclass Pr','Drop-down list','','','Naming convention']);
-  (DATA.objectsByTaskTeam[team]||[]).forEach((it,i)=>{
-    const desc = (it.uniclassPr ? it.uniclassPr + ' — ' : '') + (it.uniclassDescription || it.description || '');
-    const ifc = it.ifc4 ? (' | IFC4: ' + it.ifc4) : '';
-    sub.push([i===0?'Subtype/Product Code':'', '', i===0?'Drop-down list':'', it.name, desc + ifc, i===0?'Naming convention':'']);
-  });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sub), 'SubtypeProduct Code');
-
-  // Classification helper (related)
-  const cls = [['Name','Description','Type','Classification system','Classification version','Location']];
-  cls.push(['Classification','Uniclass from Category Ss + Object Pr','Classification','Uniclass','Uniclass 2015','Related attributes']);
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cls), 'Classification');
-
-  // IFC map sheet (bonus for backend)
-  const ifc = [['ObjectName','Uniclass Pr','IFC4','Revit Category']];
-  (DATA.objectsByTaskTeam[team]||[]).forEach(it=>{
-    ifc.push([it.name, it.uniclassPr||'', it.ifc4||'', it.revitCategory||'']);
-  });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ifc), 'IFC4 Map');
-
-  const fname = 'BIM-Objects-Convention-' + team + '.xlsx';
-  XLSX.writeFile(wb, fname);
-  setStatus('Exported FORMA-style convention for ' + team + ': ' + fname, true);
+  function ddSheet(title, desc, items, codeKey, labelKey){
+    const rows=[['Name','Description','Type','Attribute value','Attribute description','Location']];
+    items.forEach((it,i)=>{
+      rows.push([i===0?title:'', i===0?desc:'', i===0?'Drop-down list':'', it[codeKey], it[labelKey]||'', i===0?'Naming convention':'']);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), title.slice(0,31));
+  }
+  ddSheet('Originator','Object provider', DATA.originators||[], 'code','label');
+  ddSheet('Source','STD = Standard generic', DATA.sources||[], 'code','label');
+  const cats=(DATA.categories||[]).filter(c=>!c.isGroup).map(c=>({code:c.code,label:(c.uniclassSs?c.uniclassSs+' — ':'')+(c.uniclassDescription||c.label||'')}));
+  ddSheet('Type','Category · Uniclass Ss', cats, 'code','label');
+  const mats=(DATA.materials||[]).filter(m=>!m.isGroup).map(m=>({code:m.code,label:(m.uniclassCode?m.uniclassCode+' — ':'')+(m.uniclassDescription||m.label||'')}));
+  ddSheet('Material','Uniclass Ma/Pr', mats, 'code','label');
+  const objs=(DATA.objectsByTaskTeam[team]||[]).map(it=>({code:it.name,label:(it.uniclassPr?it.uniclassPr+' — ':'')+(it.uniclassDescription||'')+(it.ifc4?' | IFC4: '+it.ifc4:'')}));
+  ddSheet('SubtypeProduct Code','Object · Uniclass Pr · '+team, objs, 'code','label');
+  XLSX.writeFile(wb, 'BIM-Objects-Convention-'+team+'.xlsx');
+  setStatus('Exported FORMA template for '+team, true);
 }
 
-/* events */
 document.getElementById('taskTeam').onchange = ()=>{ document.getElementById('objectSearch').value=''; refreshObjects(); };
 document.getElementById('objectSearch').oninput = refreshObjects;
 ['originator','source','category','material','object'].forEach(id=>{
@@ -640,40 +711,24 @@ document.getElementById('btnCopy').onclick = async ()=>{
   const n = buildName();
   if(!n) return alert('Select all fields first');
   await navigator.clipboard.writeText(n);
-  setStatus('Copied: ' + n, true);
+  setStatus('Copied: '+n, true);
 };
 document.getElementById('btnCopyClass').onclick = async ()=>{
-  const cat = findCat(document.getElementById('category').value);
-  const mat = findMat(document.getElementById('material').value);
-  const obj = findObj(document.getElementById('object').value);
-  const payload = {
-    name: buildName(),
-    uniclassSs: cat && cat.uniclassSs,
-    uniclassMaterial: mat && mat.uniclassCode,
-    uniclassPr: obj && obj.uniclassPr,
-    ifc4: obj && obj.ifc4,
-    revitCategory: obj && obj.revitCategory
-  };
-  await navigator.clipboard.writeText(JSON.stringify(payload,null,2));
+  const cat=findCat(document.getElementById('category').value);
+  const mat=findMat(document.getElementById('material').value);
+  const obj=findObj(document.getElementById('object').value);
+  await navigator.clipboard.writeText(JSON.stringify({
+    name:buildName(), uniclassSs:cat&&cat.uniclassSs, uniclassMaterial:mat&&mat.uniclassCode,
+    uniclassPr:obj&&obj.uniclassPr, ifc4:obj&&obj.ifc4, revitCategory:obj&&obj.revitCategory
+  },null,2));
   setStatus('Classification JSON copied', true);
 };
 document.getElementById('btnExportData').onclick = exportDataExcel;
-document.getElementById('btnImportData').onclick = ()=> document.getElementById('fileImport').click();
-document.getElementById('fileImport').onchange = (e)=>{
-  const f = e.target.files && e.target.files[0];
-  if(f) importDataExcel(f);
-  e.target.value = '';
-};
+document.getElementById('btnImportData').onclick = ()=>document.getElementById('fileImport').click();
+document.getElementById('fileImport').onchange = e=>{ const f=e.target.files&&e.target.files[0]; if(f) importDataExcel(f); e.target.value=''; };
 document.getElementById('btnExportForma').onclick = exportFormaTemplate;
-document.getElementById('btnReload').onclick = ()=>{
-  localStorage.removeItem(LS_KEY);
-  loadData();
-  setStatus('Reloaded file data (local override cleared)', true);
-};
-document.getElementById('btnPop').onclick = ()=>{
-  const w = window.open(location.href, 'atana-asset-naming', 'width=1100,height=860');
-  if(!w) alert('Pop-out blocked by browser');
-};
+document.getElementById('btnReload').onclick = ()=>{ localStorage.removeItem(LS_KEY); loadData(); setStatus('Reloaded file data', true); };
+document.getElementById('btnPop').onclick = ()=>{ const w=window.open(location.href,'atana-asset-naming','width=1100,height=900'); if(!w) alert('Pop-out blocked'); };
 
 loadData();
 </script>

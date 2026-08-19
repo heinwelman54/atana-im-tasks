@@ -1,21 +1,7 @@
 # Atana IM Tasks
 
-Static PWA for Information Management (ISO 19650).
+Version 3.3.1
 
-## GitHub Pages
+Asset Naming lives under **main Tools only** (not project tools).
 
-1. Repo Settings → Pages
-2. Source: **Deploy from a branch** → `main` / `/ (root)`  
-   **OR** Source: **GitHub Actions** (uses `.github/workflows/pages.yml`)
-3. Ensure this file exists in the repo root: **`.nojekyll`** (disables Jekyll)
-
-Site URL example: `https://heinwelman54.github.io/atana-im-tasks/`
-
-## Files that must be in the repo root
-
-- `index.html`
-- `Atana-IM-Tasks.html`
-- `.nojekyll`
-- `manifest.json`
-- `sw.js`
-- `icons/` (optional)
+Required pair: `asset-naming-tool.html` + `asset-naming-data.json` in site root.

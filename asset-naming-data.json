@@ -199,6 +199,11 @@
   ],
   "sources": [
     {
+      "code": "STD",
+      "label": "Standard",
+      "description": "Generic / design library object"
+    },
+    {
       "code": "ACDoors",
       "label": "ACD",
       "description": "ACD"
