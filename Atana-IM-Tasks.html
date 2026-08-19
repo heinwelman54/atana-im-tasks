@@ -1374,6 +1374,7 @@
   }
   .midp-docs-toolbar-one-row .btn{ white-space:nowrap; }
 </style>
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -1639,13 +1640,59 @@
       <div class="card" style="margin-top:14px;" id="apsCard">
         <div class="chart-card-title" style="margin-bottom:6px;">Autodesk ACC</div>
         <p class="section-sub" style="margin-bottom:12px;">Sign in with your Autodesk account to list ACC hubs/projects, import a project into Atana, and sync Docs. Create an APS app at <strong>aps.autodesk.com</strong> with this exact callback URL.</p>
+        <div class="field" style="border:1px solid #e9d5ff;background:#faf5ff;border-radius:12px;padding:12px;margin-bottom:12px;box-shadow:0 2px 8px rgba(109,40,217,.08)">
+          <div style="font-weight:800;font-size:13px;color:#4c1d95;margin-bottom:6px;">Load APS credentials from SharePoint</div>
+          <p class="section-sub" style="margin:0 0 10px;">Restricted library (only intended users). Default path can be changed. Uses Microsoft sign-in + Graph — secrets stay out of the GitHub repo.</p>
+          <div class="field">
+            <label>Azure AD (MSAL) Application (client) ID</label>
+            <input type="text" id="spMsalClientId" placeholder="Azure AD app client ID for this web app" autocomplete="off" spellcheck="false">
+            <p class="section-sub" style="margin:4px 0 0;">Separate from APS. Register a SPA app in Entra ID with redirect = this site. API permission: Microsoft Graph <code>Files.Read.All</code> or <code>Sites.Read.All</code> (admin consent).</p>
+          </div>
+          <div class="field">
+            <label>Azure AD Tenant ID</label>
+            <input type="text" id="spMsalTenantId" placeholder="Directory (tenant) ID or &quot;organizations&quot;" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="field">
+            <label>SharePoint site URL</label>
+            <input type="text" id="spSiteUrl" placeholder="https://rootcoredirectory.sharepoint.com/sites/KTG_BIM_Execution-IMTeam" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="field">
+            <label>Config file path (default library)</label>
+            <input type="text" id="spConfigPath" placeholder="AtanaIM/Data/aps-config.json" autocomplete="off" spellcheck="false">
+            <p class="section-sub" style="margin:4px 0 0;">Default: <code>AtanaIM/Data/aps-config.json</code> on the IM Team site. Change if your library path differs.</p>
+          </div>
+          <div class="field">
+            <label>SharePoint folder (browser link)</label>
+            <input type="text" id="spFolderUrl" placeholder="SharePoint folder link" autocomplete="off" spellcheck="false">
+            <p class="section-sub" style="margin:4px 0 0;">Opens the shared Data folder so you can download <code>aps-config.json</code> if automatic load is unavailable.</p>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+            <button type="button" class="btn btn-primary" id="btnLoadApsFromSharePoint">Sign in to Microsoft &amp; load config</button>
+            <button type="button" class="btn btn-ghost" id="btnImportApsConfigFile">Browse / import aps-config.json</button>
+            <input type="file" id="apsConfigFileInput" accept=".json,application/json" hidden>
+            <button type="button" class="btn btn-ghost" id="btnOpenSpFolder">Open SharePoint folder</button>
+            <button type="button" class="btn btn-ghost" id="btnSaveSpPath">Save path settings</button>
+            <button type="button" class="btn btn-ghost" id="btnClearApsSecretSession">Clear loaded secret (this browser)</button>
+          </div>
+          <p class="section-sub" style="margin:8px 0 0;">No Azure AD admin? Use <strong>Browse / import</strong> after downloading the JSON from the SharePoint folder (Edge SSO works on SharePoint).</p>
+          <p class="section-sub" id="spCfgStatus" style="margin:8px 0 0;"></p>
+          <details style="margin-top:8px">
+            <summary style="cursor:pointer;font-size:12px;font-weight:700;color:#6d28d9">aps-config.json format</summary>
+            <pre style="font-size:11px;background:#0f172a;color:#e9d5ff;padding:10px;border-radius:8px;overflow:auto;margin-top:6px">{
+  "apsClientId": "…",
+  "apsClientSecret": "…",
+  "apsRegion": "EMEA",
+  "apsCallbackUrl": "https://…/app.html"
+}</pre>
+          </details>
+        </div>
         <div class="field">
           <label>APS Client ID</label>
           <input type="text" id="apsClientId" placeholder="Client ID" autocomplete="off" spellcheck="false">
         </div>
         <div class="field">
           <label>APS Client Secret</label>
-          <input type="password" id="apsClientSecret" placeholder="Client Secret" autocomplete="off" spellcheck="false">
+          <input type="password" id="apsClientSecret" placeholder="Client Secret (prefer load from SharePoint)" autocomplete="off" spellcheck="false">
         </div>
         <div class="field">
           <label>ACC / APS region</label>
@@ -2012,8 +2059,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.3.1";
-const APP_BUILD = "2026-08-19-asset-main-only";
+const APP_VERSION = "3.3.3";
+const APP_BUILD = "2026-08-19-sp-default-import";
 
 /** Atana IM Framework — path relative to app (same folder on GitHub Pages / local). */
 const IM_FRAMEWORK_URL = "Atana-IM-Framework.html";
@@ -7194,7 +7241,209 @@ const APS_AUTH = "https://developer.api.autodesk.com/authentication/v2";
 const APS_DM = "https://developer.api.autodesk.com/project/v1";
 const APS_SCOPES = "data:read data:write account:read user-profile:read";
 const APS_STORE_KEY = "atana-aps-auth-v1";
+
 const APS_CFG_KEY = "atana-aps-cfg-v1";
+const SP_APS_PATH_KEY = "atana-sp-aps-path-v1";
+const APS_SECRET_SESSION_KEY = "atana-aps-secret-session";
+
+/** Default SharePoint location — user can change and save */
+const SP_APS_DEFAULTS = {
+  siteUrl: "https://rootcoredirectory.sharepoint.com/sites/KTG_BIM_Execution-IMTeam",
+  filePath: "AtanaIM/Data/aps-config.json",
+  folderUrl: "https://rootcoredirectory.sharepoint.com/:f:/r/sites/KTG_BIM_Execution-IMTeam/AtanaIM/Data?d=w2e487c83e7ab47c4806ed533b9d0eaa2&csf=1&web=1&e=cerynx",
+  msalClientId: "",
+  msalTenantId: "organizations"
+};
+
+function spApsLoadPathCfg(){
+  try {
+    const raw = JSON.parse(localStorage.getItem(SP_APS_PATH_KEY) || "{}");
+    return Object.assign({}, SP_APS_DEFAULTS, raw || {});
+  } catch(e){ return Object.assign({}, SP_APS_DEFAULTS); }
+}
+function spApsSavePathCfg(cfg){
+  localStorage.setItem(SP_APS_PATH_KEY, JSON.stringify(cfg || {}));
+}
+function spApsFillPathForm(){
+  const c = spApsLoadPathCfg();
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v || ""; };
+  set("spMsalClientId", c.msalClientId);
+  set("spMsalTenantId", c.msalTenantId || "organizations");
+  set("spSiteUrl", c.siteUrl);
+  set("spConfigPath", c.filePath);
+  set("spFolderUrl", c.folderUrl || SP_APS_DEFAULTS.folderUrl || "");
+}
+function spApsReadPathForm(){
+  return {
+    msalClientId: (document.getElementById("spMsalClientId") && document.getElementById("spMsalClientId").value || "").trim(),
+    msalTenantId: (document.getElementById("spMsalTenantId") && document.getElementById("spMsalTenantId").value || "organizations").trim() || "organizations",
+    siteUrl: (document.getElementById("spSiteUrl") && document.getElementById("spSiteUrl").value || "").trim(),
+    filePath: (document.getElementById("spConfigPath") && document.getElementById("spConfigPath").value || "").trim(),
+    folderUrl: (document.getElementById("spFolderUrl") && document.getElementById("spFolderUrl").value || "").trim()
+  };
+}
+
+function spImportApsConfigFromFile(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(){
+    try {
+      const json = JSON.parse(String(reader.result || ""));
+      const applied = spApplyApsConfigJson(json);
+      spApsSetStatus("Imported APS config from file" + (applied.hasSecret ? " (secret in session)" : ""), true);
+      if(typeof showToast === "function") showToast("APS config imported from file");
+      try { if(typeof updateApsLoginUi === "function") updateApsLoginUi(); } catch(e){}
+    } catch(e){
+      spApsSetStatus("Invalid JSON: " + (e.message || e), false);
+    }
+  };
+  reader.readAsText(file);
+}
+function spApsSetStatus(msg, ok){
+  const el = document.getElementById("spCfgStatus");
+  if(!el) return;
+  el.textContent = msg || "";
+  el.style.color = ok === false ? "#b91c1c" : (ok ? "#047857" : "");
+}
+
+function parseSharePointSiteUrl(siteUrl){
+  const u = new URL(siteUrl);
+  const host = u.hostname; // contoso.sharepoint.com
+  let path = u.pathname.replace(/\/$/, "");
+  if(!path.startsWith("/")) path = "/" + path;
+  // Graph: /sites/{hostname}:/sites/SiteName
+  return { host, serverRelative: path, graphSitePath: host + ":" + path };
+}
+
+async function spMsalAcquireToken(pathCfg){
+  if(typeof msal === "undefined" || !msal.PublicClientApplication){
+    throw new Error("MSAL library not loaded — check network / CDN");
+  }
+  if(!pathCfg.msalClientId){
+    throw new Error("Azure AD Application (client) ID is required");
+  }
+  const redirectUri = (function(){
+    try {
+      const u = new URL(window.location.href);
+      return u.origin + u.pathname; // current page is fine for popup/redirect
+    } catch(e){ return window.location.href.split("#")[0].split("?")[0]; }
+  })();
+  const pca = new msal.PublicClientApplication({
+    auth: {
+      clientId: pathCfg.msalClientId,
+      authority: "https://login.microsoftonline.com/" + (pathCfg.msalTenantId || "organizations"),
+      redirectUri: redirectUri
+    },
+    cache: { cacheLocation: "sessionStorage" }
+  });
+  await pca.initialize();
+  const scopes = ["Files.Read.All", "Sites.Read.All", "User.Read"];
+  let account = pca.getAllAccounts()[0] || null;
+  if(!account){
+    const login = await pca.loginPopup({ scopes });
+    account = login.account;
+  }
+  try {
+    const silent = await pca.acquireTokenSilent({ account, scopes });
+    return silent.accessToken;
+  } catch(e){
+    const pop = await pca.acquireTokenPopup({ account, scopes });
+    return pop.accessToken;
+  }
+}
+
+async function spGraphGetJsonConfig(pathCfg, accessToken){
+  const site = parseSharePointSiteUrl(pathCfg.siteUrl);
+  let filePath = (pathCfg.filePath || "").replace(/^\/+/, "");
+  // Allow "Shared Documents/..." or "General/..."
+  const headers = { Authorization: "Bearer " + accessToken, Accept: "application/json" };
+
+  // Resolve site id
+  const siteRes = await fetch("https://graph.microsoft.com/v1.0/sites/" + encodeURIComponent(site.graphSitePath), { headers });
+  const siteText = await siteRes.text();
+  if(!siteRes.ok){
+    throw new Error("SharePoint site not found (" + siteRes.status + "). Check site URL. " + siteText.slice(0, 180));
+  }
+  const siteJson = JSON.parse(siteText);
+  const siteId = siteJson.id;
+
+  // Prefer path on default drive
+  const contentUrl = "https://graph.microsoft.com/v1.0/sites/" + encodeURIComponent(siteId) +
+    "/drive/root:/" + filePath.split("/").map(encodeURIComponent).join("/") + ":/content";
+  const fileRes = await fetch(contentUrl, { headers });
+  const fileText = await fileRes.text();
+  if(!fileRes.ok){
+    throw new Error("Config file not found (" + fileRes.status + "). Path: " + filePath + " — " + fileText.slice(0, 200));
+  }
+  try {
+    return JSON.parse(fileText);
+  } catch(e){
+    throw new Error("Config file is not valid JSON");
+  }
+}
+
+function spApplyApsConfigJson(cfgJson){
+  if(!cfgJson || typeof cfgJson !== "object") throw new Error("Empty config");
+  const clientId = (cfgJson.apsClientId || cfgJson.clientId || cfgJson.CLIENT_ID || "").trim();
+  const clientSecret = (cfgJson.apsClientSecret || cfgJson.clientSecret || cfgJson.CLIENT_SECRET || "").trim();
+  const region = (cfgJson.apsRegion || cfgJson.region || "EMEA").trim();
+  const redirect = (cfgJson.apsCallbackUrl || cfgJson.redirectUri || cfgJson.callbackUrl || "").trim();
+  if(!clientId) throw new Error("apsClientId missing in SharePoint JSON");
+
+  const idEl = document.getElementById("apsClientId");
+  const secEl = document.getElementById("apsClientSecret");
+  const regEl = document.getElementById("apsRegion");
+  const redEl = document.getElementById("apsRedirectUri");
+  if(idEl) idEl.value = clientId;
+  if(secEl && clientSecret) secEl.value = clientSecret;
+  if(regEl && region) regEl.value = region;
+  if(redEl && redirect) redEl.value = redirect;
+
+  // Persist non-secret to local cfg; secret to session only
+  const cfg = apsLoadCfg();
+  cfg.clientId = clientId;
+  if(region) cfg.region = region;
+  if(redirect) cfg.redirectUri = redirect;
+  // Do not write secret into localStorage long-term if avoidable
+  if(clientSecret){
+    try { sessionStorage.setItem(APS_SECRET_SESSION_KEY, clientSecret); } catch(e){}
+    cfg.clientSecret = clientSecret; // existing login still reads cfg.clientSecret — keep compatibility
+  }
+  apsSaveCfg(cfg);
+  return { clientId, hasSecret: !!clientSecret, region, redirect };
+}
+
+async function spLoadApsConfigFromSharePoint(){
+  const pathCfg = spApsReadPathForm();
+  if(!pathCfg.siteUrl || !pathCfg.filePath){
+    spApsSetStatus("Site URL and file path are required", false);
+    return;
+  }
+  if(!pathCfg.msalClientId){
+    spApsSetStatus("Azure AD Application (client) ID is required", false);
+    return;
+  }
+  spApsSavePathCfg(pathCfg);
+  spApsSetStatus("Signing in to Microsoft…");
+  try {
+    const token = await spMsalAcquireToken(pathCfg);
+    spApsSetStatus("Downloading config from SharePoint…");
+    const json = await spGraphGetJsonConfig(pathCfg, token);
+    const applied = spApplyApsConfigJson(json);
+    spApsSetStatus("Loaded APS config from SharePoint" + (applied.hasSecret ? " (secret in session)" : " (no secret in file)"), true);
+    if(typeof showToast === "function") showToast("APS credentials loaded from SharePoint");
+    // refresh FORMA header indicator if present
+    try { if(typeof updateApsLoginUi === "function") updateApsLoginUi(); } catch(e){}
+    try { if(typeof renderApsStatus === "function") renderApsStatus(); } catch(e){}
+  } catch(e){
+    console.error("[SharePoint APS config]", e);
+    spApsSetStatus((e && e.message) || String(e), false);
+    if(typeof showToast === "function") showToast("SharePoint config failed: " + ((e && e.message) || e));
+  }
+}
+
+// Prefer session secret when reading cfg for login
+
 
 const BUSINESS_UNITS = [
   { code: "AVI", label: "AVI - Aviation", description: "Airport Civil Engineering Southern Africa" },
@@ -7254,7 +7503,14 @@ function extractAccProjectFields(accProj){
 
 
 function apsLoadCfg(){
-  try { return JSON.parse(localStorage.getItem(APS_CFG_KEY) || "{}"); } catch(e){ return {}; }
+  try {
+    const cfg = JSON.parse(localStorage.getItem(APS_CFG_KEY) || "{}") || {};
+    try {
+      const sess = sessionStorage.getItem(APS_SECRET_SESSION_KEY);
+      if(sess) cfg.clientSecret = sess;
+    } catch(e){}
+    return cfg;
+  } catch(e){ return {}; }
 }
 function apsSaveCfg(cfg){ localStorage.setItem(APS_CFG_KEY, JSON.stringify(cfg || {})); }
 function apsLoadAuth(){
@@ -7320,6 +7576,58 @@ function apsRandomString(len){
   for(let i=0;i<len;i++) out += chars[arr[i] % chars.length];
   return out;
 }
+
+function bindSharePointApsConfigUi(){
+  try { spApsFillPathForm(); } catch(e){}
+  const loadBtn = document.getElementById("btnLoadApsFromSharePoint");
+  if(loadBtn && !loadBtn._spBound){
+    loadBtn._spBound = true;
+    loadBtn.addEventListener("click", function(){ spLoadApsConfigFromSharePoint(); });
+  }
+  const saveBtn = document.getElementById("btnSaveSpPath");
+  if(saveBtn && !saveBtn._spBound){
+    saveBtn._spBound = true;
+    saveBtn.addEventListener("click", function(){
+      spApsSavePathCfg(spApsReadPathForm());
+      spApsSetStatus("Path settings saved on this device", true);
+    });
+  }
+  const clearBtn = document.getElementById("btnClearApsSecretSession");
+  if(clearBtn && !clearBtn._spBound){
+    clearBtn._spBound = true;
+    clearBtn.addEventListener("click", function(){
+      try { sessionStorage.removeItem(APS_SECRET_SESSION_KEY); } catch(e){}
+      const cfg = apsLoadCfg();
+      delete cfg.clientSecret;
+      apsSaveCfg(cfg);
+      const secEl = document.getElementById("apsClientSecret");
+      if(secEl) secEl.value = "";
+      spApsSetStatus("Cleared APS secret from this browser session", true);
+    });
+  }
+  const importBtn = document.getElementById("btnImportApsConfigFile");
+  const fileInp = document.getElementById("apsConfigFileInput");
+  if(importBtn && fileInp && !importBtn._spBound){
+    importBtn._spBound = true;
+    importBtn.addEventListener("click", function(){ fileInp.click(); });
+    fileInp.addEventListener("change", function(){
+      const f = fileInp.files && fileInp.files[0];
+      if(f) spImportApsConfigFromFile(f);
+      fileInp.value = "";
+    });
+  }
+  const openFolderBtn = document.getElementById("btnOpenSpFolder");
+  if(openFolderBtn && !openFolderBtn._spBound){
+    openFolderBtn._spBound = true;
+    openFolderBtn.addEventListener("click", function(){
+      const c = spApsReadPathForm();
+      const url = (c.folderUrl || SP_APS_DEFAULTS.folderUrl || "").trim();
+      if(!url){ spApsSetStatus("No SharePoint folder URL set", false); return; }
+      window.open(url, "_blank", "noopener");
+    });
+  }
+}
+
 async function apsBeginLogin(){
   const cfg = apsLoadCfg();
   const clientId = ((document.getElementById("apsClientId") && document.getElementById("apsClientId").value) || cfg.clientId || "").trim();
