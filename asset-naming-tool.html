@@ -80,18 +80,40 @@ select:focus,input:focus{outline:2px solid #c4b5fd;border-color:var(--accent)}
   box-shadow:0 2px 6px rgba(213,196,39,.45);
 }
 .preview-box{
-  font-family:ui-monospace,Consolas,monospace;font-size:16px;font-weight:700;
-  background:#3E0B3B;color:#F5E6A0;padding:14px 16px;border-radius:12px;
-  word-break:break-all;box-shadow:inset 0 0 0 1px rgba(213,196,39,.35), var(--shadow-sm);
-  min-height:52px;display:flex;align-items:center;
+  font-family:ui-monospace,Consolas,monospace;font-size:20px;font-weight:800;
+  letter-spacing:0.02em;line-height:1.35;
+  background:linear-gradient(135deg,#2a0728 0%,#3E0B3B 60%,#4a1545 100%);
+  color:#FFE56A;padding:18px 20px;border-radius:14px;
+  word-break:break-all;
+  box-shadow:inset 0 0 0 2px rgba(213,196,39,.55), 0 8px 24px rgba(62,11,59,.25);
+  min-height:64px;display:flex;align-items:center;
+  border:1px solid rgba(213,196,39,.35);
 }
-.pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.preview-label{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center}
 .pill{
-  display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;
-  background:var(--brand-light);color:var(--brand-dark);font-size:11px;font-weight:800;
-  box-shadow:0 2px 6px rgba(62,11,59,.15);
+  display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:999px;
+  background:#f8f5f7;color:#8a7a86;font-size:11px;font-weight:800;
+  border:1.5px solid #d9cfd6;
+  box-shadow:0 2px 6px rgba(62,11,59,.08);
+  transition:background .15s,color .15s,border-color .15s,box-shadow .15s;
 }
-.pill .n{opacity:.55;font-weight:700;font-size:10px}
+.pill .n{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;border-radius:50%;
+  background:#e8e0e6;color:#6b5b69;font-weight:800;font-size:10px;
+}
+.pill.is-set{
+  background:var(--brand-light);color:var(--brand-dark);
+  border-color:#3E0B3B;
+  box-shadow:0 2px 8px rgba(62,11,59,.18);
+}
+.pill.is-set .n{
+  background:var(--accent);color:var(--brand);border:1px solid rgba(62,11,59,.15);
+}
+.pill-sep{color:#c4b5c0;font-weight:900;font-size:14px}
+
 .hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.45}
 .grid2{display:grid;grid-template-columns:1.2fr .8fr;gap:14px}
 @media(max-width:960px){.grid2{grid-template-columns:1fr}}
@@ -117,23 +139,43 @@ details.guide .body{padding:0 14px 14px;font-size:13px;line-height:1.55;color:#3
 details.guide .body ul{margin:6px 0 0 18px;padding:0}
 details.guide .body li{margin:5px 0}
 details.guide .body code{background:#f5f3ff;padding:1px 5px;border-radius:4px;font-size:12px;color:#5b21b6}
-.flow{
-  display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0;
+.flow-board{
+  display:flex;flex-direction:column;gap:14px;margin:14px 0;
+}
+.flow-row{
+  display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;
 }
 .flow-step{
-  background:#fff;border:1px solid #ddd6fe;border-radius:12px;padding:10px 12px;
-  min-width:140px;max-width:200px;box-shadow:var(--field-shadow);font-size:12px;
+  background:#fff;border:1.5px solid #e5d6e2;border-radius:14px;padding:12px 14px;
+  flex:1 1 150px;min-width:140px;max-width:220px;
+  box-shadow:var(--field-shadow);font-size:12px;line-height:1.4;
+  position:relative;
 }
-.flow-step strong{display:block;color:var(--brand-dark);font-size:12px;margin-bottom:4px}
-.flow-arrow{color:var(--brand);font-weight:900;font-size:18px}
-.flow-step.champ{border-color:#a7f3d0;background:#ecfdf5}
-.flow-step.catalog{border-color:#c4b5fd;background:#f5f3ff}
-.flow-step.project{border-color:#bfdbfe;background:#eff6ff}
-.flow-step.warn{border-color:#fdba74;background:#fff7ed}
+.flow-step .step-no{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:50%;font-size:11px;font-weight:900;
+  background:var(--accent);color:var(--brand);margin-right:6px;
+  box-shadow:0 2px 6px rgba(213,196,39,.4);
+}
+.flow-step strong{display:inline;color:var(--brand-dark);font-size:12.5px}
+.flow-step .body-txt{display:block;margin-top:6px;color:#4b3f48}
+.flow-arrow{
+  display:flex;align-items:center;color:var(--brand);font-weight:900;font-size:20px;
+  padding:0 2px;align-self:center;
+}
+.flow-step.champ{border-color:#6ee7b7;background:linear-gradient(180deg,#ecfdf5,#fff)}
+.flow-step.catalog{border-color:#c4a8c0;background:linear-gradient(180deg,#f8f0f6,#fff)}
+.flow-step.project{border-color:#93c5fd;background:linear-gradient(180deg,#eff6ff,#fff)}
+.flow-step.warn{border-color:#fdba74;background:linear-gradient(180deg,#fff7ed,#fff)}
+.flow-lane-label{
+  font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);margin:4px 0 2px;
+}
 .role-tag{
-  display:inline-block;font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;
-  background:#4c1d95;color:#fff;margin-top:6px;
+  display:inline-block;font-size:9px;font-weight:800;padding:3px 7px;border-radius:6px;
+  background:var(--brand);color:#fff;margin-top:8px;letter-spacing:.02em;
 }
+
 .footer{padding:18px;text-align:center;color:var(--muted);font-size:12px}
 .tt-row{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:4px}
 </style>
@@ -196,7 +238,10 @@ details.guide .body code{background:#f5f3ff;padding:1px 5px;border-radius:4px;fo
       </div>
 
       <div style="margin-top:14px">
-        <label>5 · Object (Subtype) · task-team list · Uniclass Pr</label>
+        <label style="display:flex;align-items:center;gap:8px;">
+          <span class="seq-num" style="position:static;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--brand);font-size:11px;font-weight:900;box-shadow:0 2px 6px rgba(213,196,39,.45);">5</span>
+          Object (Subtype) · task-team list · Uniclass Pr
+        </label>
         <input class="search" id="objectSearch" type="text" placeholder="Filter objects…" style="margin-bottom:8px"/>
         <select id="object" size="11" style="height:210px"></select>
       </div>
@@ -211,6 +256,7 @@ details.guide .body code{background:#f5f3ff;padding:1px 5px;border-radius:4px;fo
 
     <section class="card">
       <h2>Preview</h2>
+      <div class="preview-label">Family name</div>
       <div class="preview-box" id="preview">—</div>
       <div class="pills" id="pills"></div>
       <div class="hint" id="meta"></div>
@@ -235,55 +281,58 @@ details.guide .body code{background:#f5f3ff;padding:1px 5px;border-radius:4px;fo
       Project models consume published content; they are not the place to permanently fix or store company families.
     </p>
 
-    <div class="flow">
-      <div class="flow-step catalog">
-        <strong>1. Content Catalog</strong>
-        Master library by task-team collection (AR, ME, ST, EE…)
-        <span class="role-tag">SYSTEM OF RECORD</span>
+    <div class="flow-board">
+      <div class="flow-lane-label">Update path (existing asset)</div>
+      <div class="flow-row">
+        <div class="flow-step catalog">
+          <strong><span class="step-no">1</span>Content Catalog</strong>
+          <span class="body-txt">Master library by task-team collection (AR, ME, ST, EE…)</span>
+          <span class="role-tag">SYSTEM OF RECORD</span>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step project">
+          <strong><span class="step-no">2</span>Project space</strong>
+          <span class="body-txt">Load latest families into the project (read only)</span>
+          <span class="role-tag">PROJECT TEAM</span>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step warn">
+          <strong><span class="step-no">3</span>Issue found?</strong>
+          <span class="body-txt">Do <em>not</em> leave the fix only inside the project</span>
+          <span class="role-tag">AUTHOR / TTIM</span>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step champ">
+          <strong><span class="step-no">4</span>BIM Champion</strong>
+          <span class="body-txt">Take asset out of project → fix → publish to catalog</span>
+          <span class="role-tag">WRITE ACCESS</span>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step catalog">
+          <strong><span class="step-no">5</span>Notify team</strong>
+          <span class="body-txt">Project members reload latest from the catalog</span>
+          <span class="role-tag">TTM / TEAM</span>
+        </div>
       </div>
-      <div class="flow-arrow">→</div>
-      <div class="flow-step project">
-        <strong>2. Project space</strong>
-        Load latest families into the project (read)
-        <span class="role-tag">PROJECT TEAM</span>
-      </div>
-      <div class="flow-arrow">→</div>
-      <div class="flow-step warn">
-        <strong>3. Issue found?</strong>
-        Do <em>not</em> leave the fix only inside the project
-        <span class="role-tag">AUTHOR / TTIM</span>
-      </div>
-      <div class="flow-arrow">→</div>
-      <div class="flow-step champ">
-        <strong>4. BIM Champion</strong>
-        Take asset out of project → fix → publish to catalog
-        <span class="role-tag">WRITE ACCESS</span>
-      </div>
-      <div class="flow-arrow">→</div>
-      <div class="flow-step catalog">
-        <strong>5. Notify team</strong>
-        Project members reload latest from catalog
-        <span class="role-tag">TTM / TEAM</span>
-      </div>
-    </div>
-
-    <div class="flow" style="margin-top:4px">
-      <div class="flow-step warn">
-        <strong>Content request</strong>
-        Missing asset? Create content request in catalog → routes to task-team BIM Champion
-        <span class="role-tag">ANY USER</span>
-      </div>
-      <div class="flow-arrow">→</div>
-      <div class="flow-step champ">
-        <strong>Champion creates</strong>
-        Name via this tool · classify · Revit 2025 base · publish to collection
-        <span class="role-tag">BIM CHAMPION</span>
-      </div>
-      <div class="flow-arrow">→</div>
-      <div class="flow-step catalog">
-        <strong>Catalog distributes</strong>
-        Revit / AutoCAD / Civil 3D · auto-upgrade path for later Revit years
-        <span class="role-tag">FORMA</span>
+      <div class="flow-lane-label">Request path (missing asset)</div>
+      <div class="flow-row">
+        <div class="flow-step warn">
+          <strong><span class="step-no">A</span>Content request</strong>
+          <span class="body-txt">Missing asset? Request in catalog → routes to task-team BIM Champion</span>
+          <span class="role-tag">ANY USER</span>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step champ">
+          <strong><span class="step-no">B</span>Champion creates</strong>
+          <span class="body-txt">Name with this tool · classify · Revit 2025 base · publish</span>
+          <span class="role-tag">BIM CHAMPION</span>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step catalog">
+          <strong><span class="step-no">C</span>Catalog distributes</strong>
+          <span class="body-txt">Revit / AutoCAD / Civil 3D · auto-upgrade for later Revit years</span>
+          <span class="role-tag">FORMA</span>
+        </div>
       </div>
     </div>
 
@@ -540,9 +589,10 @@ function updatePreview(){
   ];
   const name = parts.every(p=>p.v) ? parts.map(p=>p.v).join('_') : '';
   document.getElementById('preview').textContent = name || '— complete fields 1–5 —';
-  document.getElementById('pills').innerHTML = parts.map((p,i)=>
-    '<span class="pill"><span class="n">'+(i+1)+'</span> '+(p.v||p.k)+'</span>'
-  ).join('<span style="color:#c4b5fd;font-weight:900">_</span>');
+  document.getElementById('pills').innerHTML = parts.map((p,i)=>{
+    const set = !!p.v;
+    return '<span class="pill'+(set?' is-set':'')+'"><span class="n">'+(i+1)+'</span> '+(p.v||p.k)+'</span>';
+  }).join('<span class="pill-sep">_</span>');
 
   const cat = findCat(document.getElementById('category').value);
   const mat = findMat(document.getElementById('material').value);

@@ -168,18 +168,19 @@
   .tabbar button .ic{font-size:20px;line-height:1;}
   .tabbar button.active{color:var(--purple-900);}
   .tabbar button.active .ic{color:var(--gold-700);}
-  .tools-grid{display:grid;grid-template-columns:1fr;gap:12px;}
-  @media(min-width:700px){.tools-grid{grid-template-columns:1fr 1fr;}}
+  .tools-grid{display:flex;flex-wrap:nowrap;gap:10px;overflow-x:auto;padding-bottom:4px;}
+  .tools-grid .tool-card{flex:1 1 0;min-width:160px;max-width:280px;}
+  @media(max-width:600px){.tools-grid{flex-wrap:wrap;}.tools-grid .tool-card{min-width:calc(50% - 8px);max-width:none;}}
   .acc-status{font-size:12px;color:var(--slate-500);margin:6px 0 10px;}
   .acc-hub{margin:10px 0 6px;font-size:12px;font-weight:800;color:var(--purple-950);text-transform:uppercase;letter-spacing:.04em;}
   .acc-proj-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--slate-100);border-radius:10px;margin-bottom:8px;background:var(--white);}
   .acc-proj-row .meta{font-size:12px;color:var(--slate-500);}
   .acc-proj-row .title{font-weight:700;color:var(--purple-950);}
-  .tool-card{background:var(--white);border:1px solid var(--slate-100);border-radius:var(--radius-lg);padding:18px 16px;cursor:pointer;}
+  .tool-card{background:var(--white);border:1px solid var(--slate-100);border-radius:var(--radius-lg);padding:12px 14px;cursor:pointer;box-shadow:0 2px 8px rgba(62,11,59,.06);display:flex;flex-direction:column;gap:2px;}
   .tool-card:active{border-color:var(--purple-800);}
-  .tool-card .tool-ic{font-size:28px;margin-bottom:8px;}
-  .tool-card .tool-name{font-family:var(--serif);font-weight:700;font-size:16px;color:var(--purple-950);margin:0 0 4px;}
-  .tool-card .tool-desc{font-size:13px;color:var(--slate-500);margin:0;line-height:1.4;}
+  .tool-card .tool-ic{font-size:20px;margin-bottom:2px;line-height:1;}
+  .tool-card .tool-name{font-family:var(--serif);font-weight:700;font-size:14px;color:var(--purple-950);margin:0;}
+  .tool-card .tool-desc{font-size:11px;color:var(--slate-500);margin:0;line-height:1.35;}
   .link-row{display:flex;align-items:center;gap:12px;padding:14px 4px;border-bottom:1px solid var(--slate-100);text-decoration:none;color:inherit;}
   .link-row:last-child{border-bottom:none;}
   .link-row .link-ic{width:40px;height:40px;border-radius:10px;background:var(--purple-900);color:var(--gold-500);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex-shrink:0;}
@@ -1459,17 +1460,17 @@
         <div class="tool-card" id="toolChecklists" role="button" tabindex="0">
           <div class="tool-ic">&#9745;</div>
           <div class="tool-name">IM Good Practice Checklists</div>
-          <div class="tool-desc">ISO 19650 / SACAP QA checklists embedded in the app. Progress saves on this device.</div>
+          <div class="tool-desc">ISO 19650 / SACAP QA · progress on device</div>
         </div>
         <div class="tool-card" id="toolDeliverableNaming" role="button" tabindex="0">
           <div class="tool-ic">&#128196;</div>
           <div class="tool-name">Deliverable naming</div>
-          <div class="tool-desc">ISO naming helper (defaults). Prefer project Tools when a project is open.</div>
+          <div class="tool-desc">ISO deliverable naming helper</div>
         </div>
         <div class="tool-card" id="toolAssetNaming" role="button" tabindex="0">
           <div class="tool-ic">&#129513;</div>
           <div class="tool-name">Asset naming</div>
-          <div class="tool-desc">NBS family naming · Content Catalog process · Uniclass & IFC4 · FORMA export.</div>
+          <div class="tool-desc">NBS family names · Uniclass · Content Catalog</div>
         </div>
       </div>
       <div id="toolsChecklistsHost" style="display:none;margin-top:16px;">
@@ -2059,8 +2060,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.3.4";
-const APP_BUILD = "2026-08-19-sp-btns-projects";
+const APP_VERSION = "3.3.5";
+const APP_BUILD = "2026-08-19-asset-ui-pyrevit";
 
 /** Atana IM Framework — path relative to app (same folder on GitHub Pages / local). */
 const IM_FRAMEWORK_URL = "Atana-IM-Framework.html";

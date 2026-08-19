@@ -1,2 +1,2 @@
-# Atana IM Tasks v3.3.4
-Projects menu · SharePoint APS import · Atana Asset Naming branding
+# Atana IM Tasks v3.3.5
+Asset naming UI · condensed Tools · PyRevit classify/rename
