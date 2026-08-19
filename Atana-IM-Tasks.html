@@ -1419,7 +1419,7 @@
     </button>
     <img src="./icons/icon-192.png" class="brand-icon" alt="" id="topbarIcon">
     <img id="topbarProjectImg" alt="" style="display:none;">
-    <h1 id="topbarTitle">Information Management</h1>
+    <h1 id="topbarTitle">Projects</h1>
     <span class="app-version-badge" id="appVersionBadge" title="App build">v…</span>
     <button type="button" class="acc-status-btn" id="accStatusBtn" title="FORMA / Autodesk" aria-label="FORMA login status">
       <span class="acc-status-dot" id="accStatusDot"></span>
@@ -1434,7 +1434,7 @@
     <section class="panel active" id="panel-projects">
       <div class="fab-row">
         <div>
-          <div class="section-title">Information Management</div>
+          <div class="section-title">Projects</div>
           <p class="section-sub">Projects and IM task checklists. Tap a project to open it.</p>
         </div>
       </div>
@@ -1668,7 +1668,7 @@
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
             <button type="button" class="btn btn-primary" id="btnLoadApsFromSharePoint">Sign in to Microsoft &amp; load config</button>
-            <button type="button" class="btn btn-ghost" id="btnImportApsConfigFile">Browse / import aps-config.json</button>
+            <button type="button" class="btn btn-ghost" id="btnImportApsConfigFile" type="button">Browse / import aps-config.json</button>
             <input type="file" id="apsConfigFileInput" accept=".json,application/json" hidden>
             <button type="button" class="btn btn-ghost" id="btnOpenSpFolder">Open SharePoint folder</button>
             <button type="button" class="btn btn-ghost" id="btnSaveSpPath">Save path settings</button>
@@ -2043,7 +2043,7 @@
   <button type="button" class="fab-btn" id="fabBackTop" title="Back to top">↑ Top</button>
 </div>
 <nav class="tabbar" id="tabbar">
-    <button class="tab-btn active" data-tab="projects"><span class="ic">&#128193;</span>IM</button>
+    <button class="tab-btn active" data-tab="projects"><span class="ic">&#128193;</span>Projects</button>
     <button class="tab-btn" data-tab="tools"><span class="ic">&#128295;</span>Tools</button>
     <button class="tab-btn" data-tab="templates"><span class="ic">&#128209;</span>Templates</button>
     <button class="tab-btn" data-tab="links"><span class="ic">&#128279;</span>Links</button>
@@ -2059,8 +2059,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.3.3";
-const APP_BUILD = "2026-08-19-sp-default-import";
+const APP_VERSION = "3.3.4";
+const APP_BUILD = "2026-08-19-sp-btns-projects";
 
 /** Atana IM Framework — path relative to app (same folder on GitHub Pages / local). */
 const IM_FRAMEWORK_URL = "Atana-IM-Framework.html";
@@ -7579,54 +7579,75 @@ function apsRandomString(len){
 
 function bindSharePointApsConfigUi(){
   try { spApsFillPathForm(); } catch(e){}
-  const loadBtn = document.getElementById("btnLoadApsFromSharePoint");
-  if(loadBtn && !loadBtn._spBound){
-    loadBtn._spBound = true;
-    loadBtn.addEventListener("click", function(){ spLoadApsConfigFromSharePoint(); });
-  }
-  const saveBtn = document.getElementById("btnSaveSpPath");
-  if(saveBtn && !saveBtn._spBound){
-    saveBtn._spBound = true;
-    saveBtn.addEventListener("click", function(){
-      spApsSavePathCfg(spApsReadPathForm());
-      spApsSetStatus("Path settings saved on this device", true);
-    });
-  }
-  const clearBtn = document.getElementById("btnClearApsSecretSession");
-  if(clearBtn && !clearBtn._spBound){
-    clearBtn._spBound = true;
-    clearBtn.addEventListener("click", function(){
-      try { sessionStorage.removeItem(APS_SECRET_SESSION_KEY); } catch(e){}
-      const cfg = apsLoadCfg();
-      delete cfg.clientSecret;
-      apsSaveCfg(cfg);
-      const secEl = document.getElementById("apsClientSecret");
-      if(secEl) secEl.value = "";
-      spApsSetStatus("Cleared APS secret from this browser session", true);
-    });
-  }
-  const importBtn = document.getElementById("btnImportApsConfigFile");
-  const fileInp = document.getElementById("apsConfigFileInput");
-  if(importBtn && fileInp && !importBtn._spBound){
-    importBtn._spBound = true;
-    importBtn.addEventListener("click", function(){ fileInp.click(); });
-    fileInp.addEventListener("change", function(){
-      const f = fileInp.files && fileInp.files[0];
-      if(f) spImportApsConfigFromFile(f);
-      fileInp.value = "";
-    });
-  }
-  const openFolderBtn = document.getElementById("btnOpenSpFolder");
-  if(openFolderBtn && !openFolderBtn._spBound){
-    openFolderBtn._spBound = true;
-    openFolderBtn.addEventListener("click", function(){
-      const c = spApsReadPathForm();
-      const url = (c.folderUrl || SP_APS_DEFAULTS.folderUrl || "").trim();
-      if(!url){ spApsSetStatus("No SharePoint folder URL set", false); return; }
-      window.open(url, "_blank", "noopener");
-    });
+  // One-time document-level delegation so buttons work even if Settings was not open at load
+  if(!window.__spApsDelegated){
+    window.__spApsDelegated = true;
+    document.addEventListener("click", function(ev){
+      const t = ev.target && (ev.target.closest ? ev.target.closest("button, a, label") : ev.target);
+      if(!t || !t.id) return;
+      if(t.id === "btnImportApsConfigFile"){
+        ev.preventDefault();
+        const fileInp = document.getElementById("apsConfigFileInput");
+        if(fileInp) fileInp.click();
+        else if(typeof showToast === "function") showToast("File input missing — hard-refresh the app");
+        return;
+      }
+      if(t.id === "btnLoadApsFromSharePoint"){
+        ev.preventDefault();
+        if(typeof spLoadApsConfigFromSharePoint === "function") spLoadApsConfigFromSharePoint();
+        return;
+      }
+      if(t.id === "btnSaveSpPath"){
+        ev.preventDefault();
+        try {
+          spApsSavePathCfg(spApsReadPathForm());
+          spApsSetStatus("Path settings saved on this device", true);
+        } catch(e){ spApsSetStatus(String(e.message||e), false); }
+        return;
+      }
+      if(t.id === "btnClearApsSecretSession"){
+        ev.preventDefault();
+        try { sessionStorage.removeItem(APS_SECRET_SESSION_KEY); } catch(e){}
+        try {
+          const cfg = apsLoadCfg();
+          delete cfg.clientSecret;
+          apsSaveCfg(cfg);
+        } catch(e){}
+        const secEl = document.getElementById("apsClientSecret");
+        if(secEl) secEl.value = "";
+        spApsSetStatus("Cleared APS secret from this browser session", true);
+        return;
+      }
+      if(t.id === "btnOpenSpFolder"){
+        ev.preventDefault();
+        let url = "";
+        try {
+          const c = spApsReadPathForm();
+          url = (c.folderUrl || (SP_APS_DEFAULTS && SP_APS_DEFAULTS.folderUrl) || "").trim();
+        } catch(e){}
+        if(!url && SP_APS_DEFAULTS) url = SP_APS_DEFAULTS.folderUrl || "";
+        if(!url){ spApsSetStatus("No SharePoint folder URL set", false); return; }
+        window.open(url, "_blank", "noopener");
+        return;
+      }
+    }, true);
+    document.addEventListener("change", function(ev){
+      const t = ev.target;
+      if(!t || t.id !== "apsConfigFileInput") return;
+      const f = t.files && t.files[0];
+      if(f && typeof spImportApsConfigFromFile === "function") spImportApsConfigFromFile(f);
+      try { t.value = ""; } catch(e){}
+    }, true);
   }
 }
+
+// Ensure handlers install as soon as script runs + on DOM ready
+try { bindSharePointApsConfigUi(); } catch(e){ console.warn("[SP APS bind]", e); }
+try {
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", function(){ try { bindSharePointApsConfigUi(); } catch(e){} });
+  else bindSharePointApsConfigUi();
+} catch(e){}
+
 
 async function apsBeginLogin(){
   const cfg = apsLoadCfg();
@@ -17221,6 +17242,16 @@ function switchTab(tab){
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   document.getElementById("panel-" + tab).classList.add("active");
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  if(tab === "settings"){
+    try { bindSharePointApsConfigUi(); } catch(e){}
+    try { spApsFillPathForm(); } catch(e){}
+  }
+  if(tab === "projects"){
+    try {
+      const t = document.getElementById("topbarTitle");
+      if(t && !currentProjectId) t.textContent = "Projects";
+    } catch(e){}
+  }
   document.getElementById("tabbar").style.display = "flex";
   document.getElementById("backBtn").style.display = "none";
 
