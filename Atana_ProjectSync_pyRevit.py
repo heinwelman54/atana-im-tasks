@@ -70,7 +70,7 @@ try:
     from Autodesk.Revit.UI import TaskDialog, TaskDialogCommonButtons, TaskDialogResult
     from System.Windows.Forms import (
         OpenFileDialog, DialogResult, FolderBrowserDialog, Form,
-        Label, TextBox, Button, DockStyle, FormStartPosition, DialogResult as DR
+        Label, TextBox, Button, DockStyle, FormStartPosition, DialogResult as DR, FormBorderStyle
     )
     from System.IO import File, Directory
     from System import Uri
@@ -360,46 +360,157 @@ def _extract_code_from_text(s):
 
 
 
+
+def choose_json_source():
+    """Neat dialog: Local File | Sign In | Cancel. Returns 'local' | 'signin' | None."""
+    form = Form()
+    form.Text = "Atana Project Sync"
+    form.Width = 460
+    form.Height = 250
+    form.StartPosition = FormStartPosition.CenterScreen
+    try:
+        form.FormBorderStyle = FormBorderStyle.FixedDialog
+    except Exception:
+        pass
+    form.MaximizeBox = False
+    form.MinimizeBox = False
+    try:
+        form.TopMost = True
+    except Exception:
+        pass
+
+    result = {"v": None}
+
+    title = Label()
+    title.Text = "Load project DB JSON"
+    title.Left = 20
+    title.Top = 16
+    title.Width = 410
+    title.Height = 28
+    try:
+        import System.Drawing
+        title.Font = System.Drawing.Font("Segoe UI", 11, System.Drawing.FontStyle.Bold)
+    except Exception:
+        pass
+
+    body = Label()
+    body.Text = (
+        "Choose how to get the project information file for Revit sync.\n\n"
+        "Local File — JSON from Atana IM (export / push) — recommended.\n"
+        "Sign In — Autodesk (APS). Prefer Edge so company SSO is used."
+    )
+    body.Left = 20
+    body.Top = 48
+    body.Width = 410
+    body.Height = 100
+
+    def on_local(s, e):
+        result["v"] = "local"
+        form.DialogResult = DR.OK
+        form.Close()
+
+    def on_signin(s, e):
+        result["v"] = "signin"
+        form.DialogResult = DR.OK
+        form.Close()
+
+    def on_cancel(s, e):
+        result["v"] = None
+        form.DialogResult = DR.Cancel
+        form.Close()
+
+    btn_local = Button()
+    btn_local.Text = "Local File"
+    btn_local.Width = 120
+    btn_local.Height = 32
+    btn_local.Left = 20
+    btn_local.Top = 160
+    btn_local.Click += on_local
+
+    btn_signin = Button()
+    btn_signin.Text = "Sign In"
+    btn_signin.Width = 120
+    btn_signin.Height = 32
+    btn_signin.Left = 150
+    btn_signin.Top = 160
+    btn_signin.Click += on_signin
+
+    btn_cancel = Button()
+    btn_cancel.Text = "Cancel"
+    btn_cancel.Width = 120
+    btn_cancel.Height = 32
+    btn_cancel.Left = 280
+    btn_cancel.Top = 160
+    btn_cancel.Click += on_cancel
+
+    form.Controls.Add(title)
+    form.Controls.Add(body)
+    form.Controls.Add(btn_local)
+    form.Controls.Add(btn_signin)
+    form.Controls.Add(btn_cancel)
+    form.AcceptButton = btn_local
+    form.CancelButton = btn_cancel
+    form.ShowDialog()
+    return result["v"]
+
+
 def open_browser(url):
-    """Open system browser from Revit/IronPython reliably (Process.Start often fails silently)."""
+    """Open browser from Revit. Prefer Edge (company SSO / Autodesk cookies)."""
     if not url:
         return False
     errors = []
-    # 1) os.startfile (Windows)
+
+    def _popen(args):
+        try:
+            import subprocess
+            subprocess.Popen(args, shell=False)
+            return True
+        except Exception as ex:
+            errors.append(str(ex))
+            return False
+
+    # 1) Edge with Default profile (SSO)
+    for edge in (
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    ):
+        if os.path.isfile(edge):
+            if _popen([edge, "--profile-directory=Default", url]):
+                return True
+            if _popen([edge, url]):
+                return True
+
+    # 2) Edge URL protocol
+    try:
+        Process.Start("microsoft-edge:" + url)
+        return True
+    except Exception as ex:
+        errors.append("edge-protocol: " + str(ex))
+
+    # 3) os.startfile
     try:
         os.startfile(url)
         return True
     except Exception as ex:
         errors.append("startfile: " + str(ex))
-    # 2) cmd start
-    try:
-        import subprocess
-        subprocess.Popen(['cmd', '/c', 'start', '', url], shell=False)
+
+    # 4) cmd start
+    if _popen(["cmd", "/c", "start", "", url]):
         return True
-    except Exception as ex:
-        errors.append("cmd: " + str(ex))
-    # 3) Process.Start URL
+
+    # 5) Process.Start
     try:
         Process.Start(url)
         return True
     except Exception as ex:
         errors.append("Process: " + str(ex))
-    # 4) Process.Start with UseShellExecute via cmd
-    try:
-        psi = ProcessStartInfo()
-        psi.FileName = "cmd.exe"
-        psi.Arguments = '/c start "" "' + url.replace('"', '') + '"'
-        psi.CreateNoWindow = True
-        psi.UseShellExecute = False
-        Process.Start(psi)
-        return True
-    except Exception as ex:
-        errors.append("psi: " + str(ex))
+
     try:
         print("[Atana] open_browser failed: " + " | ".join(errors))
     except Exception:
         pass
     return False
+
 
 
 def prompt_paste_auth_code(auth_url):
@@ -412,7 +523,7 @@ def prompt_paste_auth_code(auth_url):
 
     lbl = Label()
     lbl.Text = (
-        "Windows blocked the local callback (HttpListener).\n\n"
+        "Complete Autodesk login in Edge (company SSO).\n\n"
         "1) Browser should open Autodesk login (or open the URL shown after OK).\n"
         "2) Sign in and Allow.\n"
         "3) Browser may show an error page — that is OK.\n"
@@ -1108,45 +1219,46 @@ def main():
     pack = None
     json_path = None
 
-    choice = TaskDialog.Show(
-        "Atana Project Sync",
-        "How do you want to load the project DB JSON?\n\n"
-        "YES = Local file / folder (exported from Atana IM)\n"
-        "NO  = Sign in to ACC and download (uses APS Client ID/Secret)\n"
-        "CANCEL = Abort",
-        TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No | TaskDialogCommonButtons.Cancel
-    )
-
-    if choice == TaskDialogResult.Cancel:
+    source_mode = choose_json_source()
+    if not source_mode:
         return
 
-    if choice == TaskDialogResult.No:
-        # ACC login path
+    if source_mode == "signin":
+        # ACC / APS login — use Edge so company SSO cookies apply
         cfg, tok = ensure_aps_token()
         if not tok:
-            info("ACC login did not complete.\n\n"
-                 "1) APS app Callback URL must be exactly:\n" + APS_CALLBACK_URL + "\n\n"
-                 "2) Client ID / Secret must match that APS app.\n\n"
-                 "Falling back to local file…")
-            choice = TaskDialogResult.Yes
+            info(
+                "Sign-in did not complete.\n\n"
+                "Tips:\n"
+                "• Sign in to Autodesk in Edge first (same PC user).\n"
+                "• APS Callback URL must be exactly:\n  " + APS_CALLBACK_URL + "\n"
+                "• Client ID / Secret must match that APS app.\n\n"
+                "You can still load a Local File next."
+            )
+            source_mode = "local"
         else:
-            info("Signed in to Autodesk.\n\n"
-                 "Automatic ACC folder browse is limited in this version.\n"
-                 "Use the Atana IM web app to Push DB JSON, then pick the "
-                 "local download / synced folder with YES next time — "
-                 "or place the JSON in your remembered sync folder.\n\n"
-                 "Looking for a local JSON in the saved sync folder…")
+            info(
+                "Signed in to Autodesk.\n\n"
+                "ACC folder browse is limited here.\n"
+                "Use Atana IM → Push DB JSON, then choose Local File,\n"
+                "or keep the JSON in your remembered sync folder.\n\n"
+                "Checking the saved sync folder…"
+            )
             folder = load_sync_folder()
             if folder:
                 json_path = find_db_json_in_folder(folder)
-            if not json_path:
-                info("No JSON found after ACC login.\nPick a local JSON file.")
-                choice = TaskDialogResult.Yes
-            else:
-                source = "local+token"
-                pack = load_pack_from_path(json_path)
+            if json_path:
+                try:
+                    pack = load_pack_from_path(json_path)
+                    source = "local+token"
+                except Exception as ex:
+                    info("Could not read JSON in sync folder:\n" + str(ex))
+                    pack = None
+            if pack is None:
+                info("No JSON found after sign-in.\nPick a local JSON file.")
+                source_mode = "local"
 
-    if choice == TaskDialogResult.Yes and pack is None:
+    if source_mode == "local" and pack is None:
         folder = load_sync_folder()
         if folder:
             json_path = find_db_json_in_folder(folder)

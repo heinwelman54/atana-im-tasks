@@ -138,20 +138,40 @@ def find_shared_param_file():
 
 
 def parse_family_name(name):
+    """Asset (5+ parts) or Annotation (4 parts).
+
+    Asset:      Originator_Source_Category_Material_Object
+    Annotation: Originator_Source_AnnCategory_AnnType
+                e.g. ATA_STD_TitleBlock_AxB
+    """
     if not name:
         return None
-    base = os.path.splitext(name)[0]
-    parts = base.split("_")
-    if len(parts) < 5:
-        return None
-    return {
-        "originator": parts[0],
-        "source": parts[1],
-        "category": parts[2],
-        "material": parts[3],
-        "object": "_".join(parts[4:]),
-        "full": base,
-    }
+    base = os.path.splitext(name)[0].strip()
+    parts = [p for p in base.split("_") if p]
+    if len(parts) >= 5:
+        return {
+            "mode": "asset",
+            "originator": parts[0],
+            "source": parts[1],
+            "category": parts[2],
+            "material": parts[3],
+            "object": "_".join(parts[4:]),
+            "full": base,
+        }
+    if len(parts) == 4:
+        return {
+            "mode": "annotation",
+            "originator": parts[0],
+            "source": parts[1],
+            "category": parts[2],
+            "material": None,
+            "object": parts[3],
+            "annCategory": parts[2],
+            "annType": parts[3],
+            "full": base,
+        }
+    return None
+
 
 
 def lookup_ef_from_table(data, *texts):
@@ -353,14 +373,18 @@ def set_param_on_element(element, name, value):
 def write_classifications(fam_doc, classification):
     written = []
     failed = []
-    pairs = [
-        (PARAM_SS_NUM, classification.get("ss")),
-        (PARAM_SS_DESC, classification.get("ssDesc")),
-        (PARAM_EF_NUM, classification.get("ef")),
-        (PARAM_EF_DESC, classification.get("efDesc")),
-        (PARAM_PR_NUM, classification.get("pr")),
-        (PARAM_PR_DESC, classification.get("prDesc")),
-    ]
+    # Annotation families: rename only (no Uniclass write-back)
+    if parts.get("mode") == "annotation":
+        pairs = []
+    else:
+        pairs = [
+            (PARAM_SS_NUM, classification.get("ss")),
+            (PARAM_SS_DESC, classification.get("ssDesc")),
+            (PARAM_EF_NUM, classification.get("ef")),
+            (PARAM_EF_DESC, classification.get("efDesc")),
+            (PARAM_PR_NUM, classification.get("pr")),
+            (PARAM_PR_DESC, classification.get("prDesc")),
+        ]
     t = Transaction(fam_doc, "Atana write classification values")
     t.Start()
     try:
@@ -558,8 +582,10 @@ def main():
         show_result(
             "Invalid name",
             [
-                "[NO] Name must match:",
-                "[..] Originator_Source_Category_Material_Object",
+                "[NO] Name must match one of:",
+                "[..] Asset: Originator_Source_Category_Material_Object",
+                "[..] Annotation: Originator_Source_AnnCategory_AnnType",
+                "[..] e.g. ATA_STD_TitleBlock_AxB",
                 "",
                 "Got:",
                 new_name,
@@ -568,27 +594,52 @@ def main():
         )
         return
 
-    classification = lookup_classification(data, parts)
-    content = (
-        "Name: {full}\n\n"
-        "Ss: {ss}\n    {ssDesc}\n\n"
-        "EF (from Pr): {ef}\n    {efDesc}\n\n"
-        "Pr: {pr}\n    {prDesc}\n\n"
-        "Material (not written): {mat}\n"
-        "Data: {path}"
-    ).format(
-        full=parts["full"],
-        ss=classification.get("ss") or "—",
-        ssDesc=classification.get("ssDesc") or "",
-        ef=classification.get("ef") or "—",
-        efDesc=classification.get("efDesc") or "",
-        pr=classification.get("pr") or "—",
-        prDesc=classification.get("prDesc") or "",
-        mat=classification.get("material") or "—",
-        path=data_path,
-    )
-    if not ask_yes_no("Apply classification & rename?", content):
-        return
+    is_annotation = parts.get("mode") == "annotation"
+    classification = lookup_classification(data, parts) if not is_annotation else {
+        "ss": None, "ssDesc": None, "ef": None, "efDesc": None,
+        "pr": None, "prDesc": None, "ifc4": None, "material": None,
+    }
+
+    if is_annotation:
+        content = (
+            "Annotation name (4-part)\n"
+            "Name: {full}\n\n"
+            "Originator: {o}\n"
+            "Source: {s}\n"
+            "Ann. category: {c}\n"
+            "Ann. type: {t}\n\n"
+            "Classification write-back: N/A\n"
+            "(Title blocks / annotations are not Uniclass Pr assets)"
+        ).format(
+            full=parts["full"],
+            o=parts.get("originator") or "—",
+            s=parts.get("source") or "—",
+            c=parts.get("annCategory") or parts.get("category") or "—",
+            t=parts.get("annType") or parts.get("object") or "—",
+        )
+        if not ask_yes_no("Rename annotation family?", content):
+            return
+    else:
+        content = (
+            "Name: {full}\n\n"
+            "Ss: {ss}\n    {ssDesc}\n\n"
+            "EF (Uniclass table): {ef}\n    {efDesc}\n\n"
+            "Pr: {pr}\n    {prDesc}\n\n"
+            "Material (not written): {mat}\n"
+            "Data: {path}"
+        ).format(
+            full=parts["full"],
+            ss=classification.get("ss") or "—",
+            ssDesc=classification.get("ssDesc") or "",
+            ef=classification.get("ef") or "—",
+            efDesc=classification.get("efDesc") or "",
+            pr=classification.get("pr") or "—",
+            prDesc=classification.get("prDesc") or "",
+            mat=classification.get("material") or "—",
+            path=data_path,
+        )
+        if not ask_yes_no("Apply classification & rename?", content):
+            return
 
     if not doc.IsFamilyDocument:
         try:
