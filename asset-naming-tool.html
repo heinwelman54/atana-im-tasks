@@ -1035,15 +1035,32 @@ document.getElementById('fileImport').onchange = e=>{ const f=e.target.files&&e.
 try{ document.getElementById('btnExportAnnForma').onclick = exportAnnFormaTemplate; }catch(e){}
 document.getElementById('btnExportForma').onclick = exportFormaTemplate;
 
-document.getElementById('btnReload').onclick = ()=>{ localStorage.removeItem(LS_KEY); document.querySelectorAll('.mode-tab').forEach(b=> b.addEventListener('click', ()=> setMode(b.dataset.mode)));
-['annOriginator','annSource','annCategory','annType'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('change', updatePreview); });
-const btnAddAnn = document.getElementById('btnAddAnnType'); if(btnAddAnn) btnAddAnn.addEventListener('click', addAnnType);
-const btnCopyAnn = document.getElementById('btnCopyAnn'); if(btnCopyAnn) btnCopyAnn.addEventListener('click', async ()=>{
-  const n = ['annOriginator','annSource','annCategory','annType'].map(id=>document.getElementById(id)&&document.getElementById(id).value).filter(Boolean).join('_');
-  if(!n) return;
-  try { await navigator.clipboard.writeText(n); const s=document.getElementById('annActionStatus'); if(s) s.textContent='Copied '+n; } catch(e){ alert(n); }
+// Mode tabs + annotation controls (must bind on first load, not only on Reload)
+document.querySelectorAll('.mode-tab').forEach(function(b){
+  b.addEventListener('click', function(e){
+    e.preventDefault();
+    setMode(b.getAttribute('data-mode') || b.dataset.mode);
+  });
 });
-loadData(); setStatus('Reloaded file data', true); };
+['annOriginator','annSource','annCategory','annType'].forEach(function(id){
+  var el = document.getElementById(id);
+  if(el) el.addEventListener('change', updatePreview);
+});
+var btnAddAnn = document.getElementById('btnAddAnnType');
+if(btnAddAnn) btnAddAnn.addEventListener('click', addAnnType);
+var btnCopyAnn = document.getElementById('btnCopyAnn');
+if(btnCopyAnn) btnCopyAnn.addEventListener('click', async function(){
+  var n = ['annOriginator','annSource','annCategory','annType'].map(function(id){
+    var el = document.getElementById(id); return el && el.value;
+  }).filter(Boolean).join('_');
+  if(!n) return;
+  try { await navigator.clipboard.writeText(n); var s=document.getElementById('annActionStatus'); if(s) s.textContent='Copied '+n; } catch(e){ alert(n); }
+});
+document.getElementById('btnReload').onclick = function(){
+  localStorage.removeItem(LS_KEY);
+  loadData();
+  setStatus('Reloaded file data', true);
+};
 document.getElementById('btnPop').onclick = ()=>{ const w=window.open(location.href,'atana-asset-naming','width=1100,height=900'); if(!w) alert('Pop-out blocked'); };
 
 function toPascalCase(str){

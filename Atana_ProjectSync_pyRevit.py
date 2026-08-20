@@ -74,7 +74,7 @@ try:
     )
     from System.IO import File, Directory
     from System import Uri
-    from System.Diagnostics import Process
+    from System.Diagnostics import Process, ProcessStartInfo
 except Exception as _ex:
     IMPORT_ERROR = traceback.format_exc()
 
@@ -359,6 +359,49 @@ def _extract_code_from_text(s):
     return None
 
 
+
+def open_browser(url):
+    """Open system browser from Revit/IronPython reliably (Process.Start often fails silently)."""
+    if not url:
+        return False
+    errors = []
+    # 1) os.startfile (Windows)
+    try:
+        os.startfile(url)
+        return True
+    except Exception as ex:
+        errors.append("startfile: " + str(ex))
+    # 2) cmd start
+    try:
+        import subprocess
+        subprocess.Popen(['cmd', '/c', 'start', '', url], shell=False)
+        return True
+    except Exception as ex:
+        errors.append("cmd: " + str(ex))
+    # 3) Process.Start URL
+    try:
+        Process.Start(url)
+        return True
+    except Exception as ex:
+        errors.append("Process: " + str(ex))
+    # 4) Process.Start with UseShellExecute via cmd
+    try:
+        psi = ProcessStartInfo()
+        psi.FileName = "cmd.exe"
+        psi.Arguments = '/c start "" "' + url.replace('"', '') + '"'
+        psi.CreateNoWindow = True
+        psi.UseShellExecute = False
+        Process.Start(psi)
+        return True
+    except Exception as ex:
+        errors.append("psi: " + str(ex))
+    try:
+        print("[Atana] open_browser failed: " + " | ".join(errors))
+    except Exception:
+        pass
+    return False
+
+
 def prompt_paste_auth_code(auth_url):
     """Fallback when Windows blocks HttpListener — user pastes redirect URL or code."""
     form = Form()
@@ -397,7 +440,7 @@ def prompt_paste_auth_code(auth_url):
 
     def _open(sender, args):
         try:
-            Process.Start(auth_url)
+            open_browser(auth_url)
         except Exception:
             pass
     openbtn.Click += _open
@@ -411,7 +454,7 @@ def prompt_paste_auth_code(auth_url):
     form.CancelButton = cancel
 
     try:
-        Process.Start(auth_url)
+        open_browser(auth_url)
     except Exception:
         pass
 
@@ -486,14 +529,15 @@ def aps_login_interactive(cfg):
     th.IsBackground = True
     th.Start()
 
+    opened = False
     try:
-        Process.Start(auth_url)
+        opened = open_browser(auth_url)
     except Exception:
-        pass
+        opened = False
 
     info(
-        "Complete Autodesk login in the browser.\n\n"
-        "You have %d seconds.\n"
+        ("Browser opened for Autodesk login." if opened else "Could not auto-open browser — copy the URL from the next step.")
+        + "\n\nYou have %d seconds.\n"
         "Callback must be:\n%s"
         % (APS_LOGIN_TIMEOUT_SEC, redirect)
     )
