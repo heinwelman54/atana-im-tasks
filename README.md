@@ -1,2 +1,2 @@
-# Atana IM Tasks v3.4.1
-Annotation mode click fix · Project Sync browser open hardened
+# Atana IM Tasks v3.4.2
+Export bar under whole tool · shorter annotation labels

@@ -183,6 +183,9 @@ details.guide .body code{background:#f5f3ff;padding:1px 5px;border-radius:4px;fo
 .mode-tab.active{background:var(--brand);color:#fff;border-color:var(--brand);box-shadow:0 4px 14px rgba(62,11,59,.3)}
 .mode-panel{display:none}
 .mode-panel.active{display:block}
+.seq{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.seq-step label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+@media(max-width:900px){.seq{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -289,27 +292,17 @@ details.guide .body code{background:#f5f3ff;padding:1px 5px;border-radius:4px;fo
         </div>
         <div class="seq-step">
           <span class="seq-num">3</span>
-          <label>Annotation Category</label>
+          <label>Ann. category</label>
           <select id="annCategory"></select>
         </div>
         <div class="seq-step">
           <span class="seq-num">4</span>
-          <label>Annotation Type</label>
+          <label>Ann. type</label>
           <select id="annType" size="8" style="height:160px"></select>
         </div>
       </div>
       
-  <div class="toolbar card" style="padding:12px;margin-top:14px" id="exportToolbar">
-    <div style="font-weight:800;font-size:12px;color:var(--brand-dark);width:100%;margin-bottom:6px">Export / import</div>
-    <button class="btn btn-ghost" id="btnExportData" type="button">Export data Excel</button>
-    <button class="btn btn-ghost" id="btnImportData" type="button">Import data Excel</button>
-    <input type="file" id="fileImport" accept=".xlsx,.xlsm,.xls" hidden/>
-    <button class="btn btn-primary" id="btnExportForma" type="button">Export → FORMA template</button>
-    <button class="btn btn-ghost" id="btnExportAnnForma" type="button">Export Annotation → FORMA</button>
-    <span class="muted" id="exportHint">Asset export uses active task team (e.g. MH - Asset Convention)</span>
-  </div>
-
-<div class="card" style="margin-top:12px;padding:12px;background:linear-gradient(180deg,#faf6f9,#fff);border:1px solid #e5d6e2;box-shadow:var(--field-shadow)">
+  <div class="card" style="margin-top:12px;padding:12px;background:linear-gradient(180deg,#faf6f9,#fff);border:1px solid #e5d6e2;box-shadow:var(--field-shadow)">
         <div style="font-weight:800;font-size:12px;color:var(--brand-dark);margin-bottom:8px">Add annotation type (PascalCase)</div>
         <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
           <div>
@@ -349,6 +342,16 @@ details.guide .body code{background:#f5f3ff;padding:1px 5px;border-radius:4px;fo
       </table>
     </section>
   </div>
+  <div class="toolbar card" style="padding:12px;margin-top:14px" id="exportToolbar">
+    <div style="font-weight:800;font-size:12px;color:var(--brand-dark);width:100%;margin-bottom:6px">Export / import</div>
+    <button class="btn btn-ghost" id="btnExportData" type="button">Export data Excel</button>
+    <button class="btn btn-ghost" id="btnImportData" type="button">Import data Excel</button>
+    <input type="file" id="fileImport" accept=".xlsx,.xlsm,.xls" hidden/>
+    <button class="btn btn-primary" id="btnExportForma" type="button">Export → FORMA template</button>
+    <button class="btn btn-ghost" id="btnExportAnnForma" type="button">Export Annotation → FORMA</button>
+    <span class="muted" id="exportHint">Asset export uses active task team (e.g. MH - Asset Convention)</span>
+  </div>
+
 
   <!-- PROCESS -->
   <section class="card" style="margin-top:16px">
