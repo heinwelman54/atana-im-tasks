@@ -2060,8 +2060,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.5.5";
-const APP_BUILD = "2026-08-20-combo-publish";
+const APP_VERSION = "3.5.6";
+const APP_BUILD = "2026-08-20-org-publish";
 
 /** Atana IM Framework — path relative to app (same folder on GitHub Pages / local). */
 const IM_FRAMEWORK_URL = "Atana-IM-Framework.html";
@@ -15954,8 +15954,19 @@ function buildRevitSyncPack(project){
     "GLOBAL_ZZ_InformationManager": nameOfFunc("IM") || ""
   };
 
+  // Full organogram snapshot for Revit write-back (TTM / Peer per task team)
+  const organogramMembers = members.map(mem => ({
+    name: mem.name || "",
+    email: mem.email || "",
+    company: mem.company || "",
+    discipline: mem.discipline || mem.roleCode || "",
+    func: mem.func || "",
+    defaultRole: mem.defaultRole || mem.role || "",
+    source: mem.source || "project"
+  }));
+
   return {
-    schema: "atana-revit-sync/2.0",
+    schema: "atana-revit-sync/2.1",
     generatedAt: new Date().toISOString(),
     tool: "Atana IM Tasks",
     file: {
@@ -15988,7 +15999,18 @@ function buildRevitSyncPack(project){
       bulkConfirm: true,
       designedByParam: "Designed By",
       approvedByParam: "Approved By",
+      checkedByParam: "Checked By",
       byTaskTeam: taskTeamOrganogram
+    },
+    organogram: {
+      members: organogramMembers,
+      byTaskTeam: taskTeamOrganogram,
+      enablingTeam: {
+        projectDeliveryManager: nameOfFunc("PDM"),
+        informationManager: nameOfFunc("IM"),
+        designTeamLead: nameOfFunc("DTL"),
+        documentManager: nameOfFunc("DM")
+      }
     },
     enablingTeam: {
       projectDeliveryManager: nameOfFunc("PDM"),

@@ -1147,25 +1147,26 @@ def match_sheets_to_plan(doc, plan_rows, role):
 
 
 def create_or_update_print_set(doc, set_name, sheets):
-    """Update (or create) a named sheet set and make it the current/selected set.
+    """Create or UPDATE an existing named ViewSheetSet, then select it as current.
 
-    Existing sets are NOT deleted. Views from `sheets` are assigned and SaveAs
-    updates the named set. CurrentViewSheetSet is left selected (ticked).
+    - If a set with set_name already exists, its Views are replaced with the
+      provided sheets (full plan match for this work stage / role).
+    - Does not delete the set; updates in place so Publish Settings keeps it.
+    - Opens the set as CurrentViewSheetSet (selected). Include-tick for cloud
+      publish is a UI flag the user confirms once in Publish Settings.
     """
     if not sheets:
         return 0
-    t = Transaction(doc, "Atana — publish set " + str(set_name))
+    set_name = str(set_name or "").strip()
+    if not set_name:
+        return 0
+
+    from Autodesk.Revit.DB import ViewSheetSet, PrintRange, ViewSet
+
+    t = Transaction(doc, "Atana — publish set " + set_name)
     t.Start()
     try:
-        from Autodesk.Revit.DB import PrintRange, ViewSet
-        pm = doc.PrintManager
-        try:
-            pm.PrintRange = PrintRange.Select
-        except Exception:
-            pass
-        vss = pm.ViewSheetSetting
-
-        # Build view set of target sheets
+        # Build ViewSet of target sheets
         vs = ViewSet()
         count = 0
         for s in sheets:
@@ -1175,49 +1176,69 @@ def create_or_update_print_set(doc, set_name, sheets):
             except Exception:
                 pass
 
-        # Try load existing named set first (reuse), then assign views and save
-        loaded = False
+        # Find existing ViewSheetSet element by name
+        existing = None
         try:
-            # Some API versions: Open existing
-            names = []
-            try:
-                for ss in FilteredElementCollector(doc).OfClass(__import__("Autodesk.Revit.DB", fromlist=["ViewSheetSet"]).ViewSheetSet):
-                    names.append(ss.Name)
-            except Exception:
-                pass
-            if set_name in names:
+            for ss in FilteredElementCollector(doc).OfClass(ViewSheetSet):
                 try:
-                    vss.Open(set_name)
-                    loaded = True
+                    if (ss.Name or "") == set_name:
+                        existing = ss
+                        break
+                except Exception:
+                    continue
+        except Exception as ex:
+            print("collect ViewSheetSet", ex)
+
+        if existing is not None:
+            # Update in place — do NOT delete / recreate
+            try:
+                existing.Views = vs
+            except Exception as ex:
+                print("set Views on existing", ex)
+                # fallback: delete + recreate via PrintManager
+                try:
+                    doc.Delete(existing.Id)
+                    existing = None
                 except Exception:
                     pass
-        except Exception:
-            pass
 
-        try:
-            vss.CurrentViewSheetSet.Views = vs
-        except Exception as ex:
-            print("assign views", ex)
-
-        try:
-            if loaded:
-                try:
-                    vss.Save()
-                except Exception:
-                    vss.SaveAs(set_name)
-            else:
-                vss.SaveAs(set_name)
-        except Exception as ex:
+        if existing is None:
+            # Create via PrintManager.SaveAs
+            pm = doc.PrintManager
+            try:
+                pm.PrintRange = PrintRange.Select
+            except Exception:
+                pass
+            vss = pm.ViewSheetSetting
+            try:
+                vss.CurrentViewSheetSet.Views = vs
+            except Exception as ex:
+                print("assign current views", ex)
             try:
                 vss.SaveAs(set_name)
-            except Exception as ex2:
-                print("SaveAs set", ex2)
+            except Exception as ex:
+                # name may already exist in session — try Save after Open
+                try:
+                    vss.Open(set_name)
+                    vss.CurrentViewSheetSet.Views = vs
+                    vss.Save()
+                except Exception as ex2:
+                    print("SaveAs/Open/Save", ex, ex2)
 
-        # Attempt to leave this set as the in-session / selected set
+        # Select / open as current so it is active in the session
         try:
-            vss.Open(set_name)
-        except Exception:
-            pass
+            pm = doc.PrintManager
+            try:
+                pm.PrintRange = PrintRange.Select
+            except Exception:
+                pass
+            vss = pm.ViewSheetSetting
+            try:
+                vss.Open(set_name)
+            except Exception:
+                pass
+        except Exception as ex:
+            print("open current set", ex)
 
         t.Commit()
         return count
@@ -1316,40 +1337,95 @@ def extract_plan_rows(pack):
     return out
 
 def extract_titleblock_map(pack):
-    """role → {designedBy, checkedBy} from organogram / projectTeam."""
+    """role → {designedBy, checkedBy} from organogram / titleBlocks.byTaskTeam.
+
+    Priority:
+      1) pack.titleBlocks.byTaskTeam  (from Atana JSON export)
+      2) pack.organogram.byTaskTeam
+      3) pack.projectTeam.members / pack.organogram.members
+    """
     out = {}
+
+    def upsert(code, designed=None, checked=None):
+        if not code:
+            return
+        code = str(code).strip().upper()
+        if code not in out:
+            out[code] = {}
+        if designed:
+            out[code]["designedBy"] = designed
+        if checked:
+            out[code]["checkedBy"] = checked
+            out[code]["approvedBy"] = checked
+
+    # 1) titleBlocks.byTaskTeam
+    tb = pack.get("titleBlocks") or pack.get("titleblocks") or {}
+    by_tt = tb.get("byTaskTeam") or []
+    if isinstance(by_tt, list):
+        for row in by_tt:
+            if not isinstance(row, dict):
+                continue
+            code = row.get("code") or row.get("role") or ""
+            upsert(code, row.get("designedBy") or row.get("ttm"),
+                   row.get("approvedBy") or row.get("checkedBy") or row.get("peer"))
+
+    # 2) organogram.byTaskTeam
+    org = pack.get("organogram") or {}
+    if isinstance(org, dict):
+        for row in (org.get("byTaskTeam") or []):
+            if not isinstance(row, dict):
+                continue
+            code = row.get("code") or row.get("role") or ""
+            upsert(code, row.get("designedBy") or row.get("ttm"),
+                   row.get("approvedBy") or row.get("checkedBy") or row.get("peer"))
+        members = org.get("members") or []
+    else:
+        members = org if isinstance(org, list) else []
+
+    # 3) projectTeam.members
     team = pack.get("projectTeam") or {}
-    members = team.get("members") if isinstance(team, dict) else []
-    if not members and isinstance(pack.get("organogram"), list):
-        members = pack["organogram"]
+    if isinstance(team, dict):
+        members = list(members or []) + list(team.get("members") or [])
+
     for m in members or []:
-        disc = (m.get("discipline") or m.get("roleCode") or "").upper()
-        func = (m.get("func") or "").upper()
-        name = m.get("name") or ""
-        if not disc or not name:
+        if not isinstance(m, dict):
             continue
-        if disc not in out:
-            out[disc] = {}
-        if func == "TTM":
-            out[disc]["designedBy"] = name
-        if func in ("PEER", "PR"):
-            out[disc]["checkedBy"] = name
-            out[disc]["approvedBy"] = name
-    # also pack.revit.titleblocks
-    tb = (pack.get("revit") or {}).get("titleblocks") or pack.get("titleblocks") or {}
-    for role, val in tb.items():
-        if isinstance(val, dict):
-            out.setdefault(role.upper(), {}).update(val)
+        disc = (m.get("discipline") or m.get("roleCode") or "").strip().upper()
+        # Parse "TTM - AR" / "PEER - AR" style roles
+        default_role = str(m.get("defaultRole") or m.get("role") or m.get("func") or "")
+        func = str(m.get("func") or "").upper()
+        name = (m.get("name") or "").strip()
+        if not name:
+            continue
+        # Extract discipline from defaultRole if needed
+        if not disc and " - " in default_role:
+            parts = default_role.split(" - ", 1)
+            # e.g. "TTM - AR" or "AR - Task Team Manager"
+            left, right = parts[0].strip().upper(), parts[1].strip().upper()
+            if left in ("TTM", "PEER", "PR", "TTIM", "IA", "DTL", "PDM", "IM", "DM"):
+                func = left
+                # code may be at start of right: "AR - ..." or just "ARCHITECTURE"
+                segs = right.replace("—", "-").split("-")
+                disc = segs[0].strip() if segs else ""
+            elif len(left) <= 4:
+                disc = left
+        if not disc:
+            continue
+        rl = default_role.upper()
+        if func == "TTM" or "TTM" in rl or "TASK TEAM MANAGER" in rl or "TASK TEAM LEAD" in rl:
+            upsert(disc, designed=name, checked=None)
+        if func in ("PEER", "PR") or "PEER" in rl or "REVIEWER" in rl:
+            upsert(disc, designed=None, checked=name)
+
+    # also pack.revit.titleblocks legacy
+    legacy = ((pack.get("revit") or {}).get("titleblocks") or {})
+    if isinstance(legacy, dict):
+        for code, row in legacy.items():
+            if isinstance(row, dict):
+                upsert(code, row.get("designedBy"), row.get("checkedBy") or row.get("approvedBy"))
+
     return out
 
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# Sheets (DR / SH) + Publish Set from plan JSON
-# ---------------------------------------------------------------------------
 
 def _sheet_number_from_row(row):
     for k in ("documentId", "Document ID", "number", "Number", "sheetNumber", "code", "name"):
@@ -2042,9 +2118,17 @@ def main():
     if not role:
         role = (pi_src.get("ATA_ZZ_ProjectDiscipline") or "").upper()
 
-    team_info = tb_map.get(role) or {}
+    team_info = tb_map.get(role) or tb_map.get((role or "").upper()) or {}
+    # Also try first 2 letters of role if full name was stored as AR vs ARCHITECTURE
+    if not team_info and role:
+        for k, v in (tb_map or {}).items():
+            if str(k).upper().startswith(str(role).upper()) or str(role).upper().startswith(str(k).upper()):
+                team_info = v
+                break
     designed_by = team_info.get("designedBy") or ""
     checked_by = team_info.get("approvedBy") or team_info.get("checkedBy") or ""
+    if designed_by or checked_by:
+        print("Organogram TTM/Peer for", role, ":", designed_by, "/", checked_by)
 
     ensure_shared_params(doc, app)
     pi = get_project_info_element(doc)
