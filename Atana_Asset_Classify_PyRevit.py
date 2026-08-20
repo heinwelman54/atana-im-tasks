@@ -370,21 +370,20 @@ def set_param_on_element(element, name, value):
     return False
 
 
-def write_classifications(fam_doc, classification):
+def write_classifications(fam_doc, classification, is_annotation=False):
     written = []
     failed = []
     # Annotation families: rename only (no Uniclass write-back)
-    if parts.get("mode") == "annotation":
-        pairs = []
-    else:
-        pairs = [
-            (PARAM_SS_NUM, classification.get("ss")),
-            (PARAM_SS_DESC, classification.get("ssDesc")),
-            (PARAM_EF_NUM, classification.get("ef")),
-            (PARAM_EF_DESC, classification.get("efDesc")),
-            (PARAM_PR_NUM, classification.get("pr")),
-            (PARAM_PR_DESC, classification.get("prDesc")),
-        ]
+    if is_annotation:
+        return written, failed
+    pairs = [
+        (PARAM_SS_NUM, classification.get("ss")),
+        (PARAM_SS_DESC, classification.get("ssDesc")),
+        (PARAM_EF_NUM, classification.get("ef")),
+        (PARAM_EF_DESC, classification.get("efDesc")),
+        (PARAM_PR_NUM, classification.get("pr")),
+        (PARAM_PR_DESC, classification.get("prDesc")),
+    ]
     t = Transaction(fam_doc, "Atana write classification values")
     t.Start()
     try:
@@ -667,7 +666,7 @@ def main():
     present, created, missing = ensure_shared_params(fam_doc)
 
     try:
-        written, failed = write_classifications(fam_doc, classification)
+        written, failed = write_classifications(fam_doc, classification, is_annotation=is_annotation)
     except Exception as ex:
         show_result("Write failed", ["[NO] " + str(ex)], success=False)
         return
