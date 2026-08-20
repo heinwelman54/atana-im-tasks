@@ -1,2 +1,2 @@
-# Atana IM Tasks v3.5.3
-Sheet checkbox picker + title block + shared params
+# Atana IM Tasks v3.5.4
+ComboBox fix · full sheet number match · publish set update

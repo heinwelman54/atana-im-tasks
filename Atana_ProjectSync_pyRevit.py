@@ -116,12 +116,21 @@ def _script_dir():
 
 def find_shared_param_file():
     names = ["ATA_ZZ_SharedParameters_MERGED.txt", "ATA_ZZ_SharedParameters.txt"]
-    bases = [
-        _script_dir(),
-        os.path.dirname(_script_dir()),
-        os.path.dirname(os.path.dirname(_script_dir())),
+    bases = []
+    try:
+        d = _script_dir()
+        for _ in range(6):
+            if d and d not in bases:
+                bases.append(d)
+            d = os.path.dirname(d) if d else None
+    except Exception:
+        pass
+    bases.extend([
         os.path.expandvars(r"%APPDATA%\\Atana"),
-    ]
+        os.path.expandvars(r"%APPDATA%\\pyRevit"),
+        os.path.expandvars(r"%APPDATA%\\pyRevit\\Extensions"),
+        r"C:\\Atana",
+    ])
     for base in bases:
         if not base:
             continue
@@ -890,6 +899,11 @@ def parse_role_from_model_name(path):
 # Shared parameters / Project Info / Globals
 # ---------------------------------------------------------------------------
 def ensure_shared_params(doc, app):
+    global SHARED_PARAM_FILE
+    try:
+        SHARED_PARAM_FILE = find_shared_param_file()
+    except Exception:
+        pass
     if not File.Exists(SHARED_PARAM_FILE):
         print("Shared param file missing:", SHARED_PARAM_FILE)
         try:
@@ -1802,7 +1816,11 @@ def sync_sheets_ui(doc, pack, role, stage_code, designed_by, checked_by, functio
         for item in to_create:
             try:
                 vs = ViewSheet.Create(doc, tb.Id)
-                num = (item.get("number") or "")[:64]
+                # Full ISO document id as sheet number (e.g. MD6264-ATA-01-ZZ-DR-AR-1003)
+                raw = item.get("number") or ""
+                if item.get("row"):
+                    raw = item["row"].get("documentId") or item["row"].get("number") or raw
+                num = re.sub(r"\.(pdf|dwg)$", "", str(raw).strip(), flags=re.I)[:64]
                 title = (item.get("title") or num)[:256]
                 vs.SheetNumber = num
                 vs.Name = title
