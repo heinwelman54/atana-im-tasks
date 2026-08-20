@@ -65,12 +65,13 @@ try:
         FilteredElementCollector, BuiltInCategory, BuiltInParameter,
         Transaction, StorageType, GlobalParameter,
         IntegerParameterValue, StringParameterValue,
-        ViewSheet, ViewSet
+        ViewSheet, ViewSet, FamilySymbol, ElementId
     )
     from Autodesk.Revit.UI import TaskDialog, TaskDialogCommonButtons, TaskDialogResult
     from System.Windows.Forms import (
         OpenFileDialog, DialogResult, FolderBrowserDialog, Form,
-        Label, TextBox, Button, DockStyle, FormStartPosition, DialogResult as DR, FormBorderStyle
+        Label, TextBox, Button, DockStyle, FormStartPosition, DialogResult as DR, FormBorderStyle,
+        CheckedListBox, ComboBox, CheckState, Panel, Padding
     )
     from System.IO import File, Directory
     from System import Uri
@@ -107,7 +108,30 @@ APS_DM = "https://developer.api.autodesk.com/data/v1"
 APS_SCOPES = "data:read data:write data:create account:read code:all"
 APS_LOGIN_TIMEOUT_SEC = 180  # stop hanging forever if browser never returns
 
-SHARED_PARAM_FILE = os.path.join(os.path.dirname(__file__), "ATA_ZZ_SharedParameters.txt")
+def _script_dir():
+    try:
+        return os.path.dirname(os.path.abspath(__file__))
+    except Exception:
+        return os.getcwd()
+
+def find_shared_param_file():
+    names = ["ATA_ZZ_SharedParameters_MERGED.txt", "ATA_ZZ_SharedParameters.txt"]
+    bases = [
+        _script_dir(),
+        os.path.dirname(_script_dir()),
+        os.path.dirname(os.path.dirname(_script_dir())),
+        os.path.expandvars(r"%APPDATA%\\Atana"),
+    ]
+    for base in bases:
+        if not base:
+            continue
+        for name in names:
+            path = os.path.join(base, name)
+            if os.path.isfile(path):
+                return path
+    return os.path.join(_script_dir(), names[0])
+
+SHARED_PARAM_FILE = find_shared_param_file()
 
 SHARED_GUIDS = {
     "ATA_ZZ_ClientContractNumber": "28b55e4c-650c-4af5-aae2-5ae0a0cda589",
@@ -127,6 +151,17 @@ def info(msg, title="Atana Project Sync"):
         TaskDialog.Show(title, str(msg)[:3500])
     except Exception:
         print(title, msg)
+
+
+
+def confirm_lines(lines, title="Atana Project Sync"):
+    """Join lines with real newlines for TaskDialog."""
+    msg = chr(10).join([str(x) for x in lines])
+    return confirm(msg, title)
+
+def info_lines(lines, title="Atana Project Sync"):
+    msg = chr(10).join([str(x) for x in lines])
+    info(msg, title)
 
 def confirm(msg, title="Atana Project Sync"):
     try:
@@ -857,6 +892,14 @@ def parse_role_from_model_name(path):
 def ensure_shared_params(doc, app):
     if not File.Exists(SHARED_PARAM_FILE):
         print("Shared param file missing:", SHARED_PARAM_FILE)
+        try:
+            info("Shared parameter file not found." + chr(10) + chr(10)
+                 + "Copy ATA_ZZ_SharedParameters_MERGED.txt to:" + chr(10)
+                 + " - same folder as script.py" + chr(10)
+                 + " - or %APPDATA%\\Atana\\" + chr(10) + chr(10)
+                 + "Looked at:" + chr(10) + str(SHARED_PARAM_FILE))
+        except Exception:
+            pass
         return False
     prev = app.SharedParametersFilename
     try:
@@ -1494,131 +1537,315 @@ def ensure_publish_set(doc, set_name, sheet_ids):
         return "Publish set: " + str(ex)
 
 
-def sync_sheets_ui(doc, pack, role, stage_code, designed_by, checked_by, functional_code=None):
-    """Interactive sheet create/update for DR/SH of this role."""
-    plan = collect_plan_sheets(pack, role, functional_code=functional_code, stage_code=stage_code)
-    if not plan:
-        if not confirm("No DR/SH sheets found in the plan JSON for role %s.\
-Continue without sheet sync?" % (role or "?")):
-            return
-        info("Sheet sync skipped (no matching DR/SH in plan).")
-        return
 
-    if not confirm(
-        "Sheet sync for role %s\\n\\n"
-        "%d planned sheet(s) in JSON (matched by task team + functional).\\n\\n"
-        "Yes = review & create/update sheets\\nNo = skip"
-        % (discipline_full_name(role) or role, len(plan))
-    ):
-        return
+def sheet_picker_form(plan_items, existing_map, titleblock_names):
+    """WinForms: checkboxes for create/update sheets + title block combo.
+    Returns dict {create: [items], update: [(item,vs)], titleblock_name: str} or None.
+    """
+    form = Form()
+    form.Text = "Atana — Sheet sync"
+    form.Width = 720
+    form.Height = 560
+    form.StartPosition = FormStartPosition.CenterScreen
+    try:
+        form.FormBorderStyle = FormBorderStyle.FixedDialog
+    except Exception:
+        pass
+    form.MaximizeBox = False
+    form.MinimizeBox = False
 
-    existing = existing_sheets_map(doc)
-    to_create = []
-    to_update = []
-    for item in plan:
-        num = item["number"]
-        # match by full number or trailing sheet number
-        match = existing.get(num)
+    result = {"ok": False, "create": [], "update": [], "tb": None}
+
+    hdr = Label()
+    hdr.Text = "Select sheets to create or update. Tick items to include."
+    hdr.Left = 12
+    hdr.Top = 10
+    hdr.Width = 680
+    hdr.Height = 22
+
+    lbl_new = Label()
+    lbl_new.Text = "Missing in model (create):"
+    lbl_new.Left = 12
+    lbl_new.Top = 36
+    lbl_new.Width = 340
+
+    cl_new = CheckedListBox()
+    cl_new.Left = 12
+    cl_new.Top = 58
+    cl_new.Width = 340
+    cl_new.Height = 280
+    cl_new.CheckOnClick = True
+
+    lbl_ex = Label()
+    lbl_ex.Text = "Already in model (update title):"
+    lbl_ex.Left = 368
+    lbl_ex.Top = 36
+    lbl_ex.Width = 330
+
+    cl_ex = CheckedListBox()
+    cl_ex.Left = 368
+    cl_ex.Top = 58
+    cl_ex.Width = 330
+    cl_ex.Height = 280
+    cl_ex.CheckOnClick = True
+
+    # Build lists
+    create_items = []
+    update_items = []
+    for item in plan_items:
+        num = item.get("number") or ""
+        title = item.get("title") or ""
+        match = existing_map.get(num)
         if not match:
-            # try last segment
-            short = num.split("-")[-1]
-            for k, vs in existing.items():
-                if k == short or k.endswith(short):
+            short = num.split("-")[-1] if num else ""
+            for k, vs in existing_map.items():
+                if short and (k == short or k.endswith(short) or num.endswith(k)):
                     match = vs
                     break
+        label = "%s  |  %s" % (num, title)
         if match:
-            to_update.append((item, match))
-        else:
-            to_create.append(item)
-
-    lines = [
-        "Planned sheets: %d" % len(plan),
-        "Already in model: %d" % len(to_update),
-        "Missing (to create): %d" % len(to_create),
-        "",
-    ]
-    if to_update:
-        lines.append("Existing (titles can be updated):")
-        for item, vs in to_update[:15]:
+            update_items.append((item, match, label))
+            idx = cl_ex.Items.Add(label)
+            # default checked if title differs
             try:
-                cur = vs.Name
+                cur = match.Name or ""
             except Exception:
-                cur = "?"
-            lines.append("  [in model] %s | now: %s | pack: %s" % (item["number"], cur, item["title"]))
-        if len(to_update) > 15:
-            lines.append("  ... +%d more" % (len(to_update) - 15))
-    if to_create:
-        lines.append("Missing:")
-        for item in to_create[:15]:
-            lines.append("  [new] %s | %s" % (item["number"], item["title"]))
-        if len(to_create) > 15:
-            lines.append("  ... +%d more" % (len(to_create) - 15))
-    lines.append("")
-    lines.append("Yes = create missing + update existing titles + write TTM/Peer")
-    lines.append("No = skip sheet changes")
-    if not confirm("\\n".join(lines)):
+                cur = ""
+            if title and cur != title:
+                cl_ex.SetItemChecked(idx, True)
+            else:
+                cl_ex.SetItemChecked(idx, False)
+        else:
+            create_items.append((item, label))
+            idx = cl_new.Items.Add(label)
+            cl_new.SetItemChecked(idx, True)  # default all new selected
+
+    lbl_tb = Label()
+    lbl_tb.Text = "Title block for NEW sheets (bulk apply):"
+    lbl_tb.Left = 12
+    lbl_tb.Top = 350
+    lbl_tb.Width = 400
+
+    cmb = ComboBox()
+    cmb.Left = 12
+    cmb.Top = 372
+    cmb.Width = 500
+    cmb.DropDownStyle = 2  # DropDownList
+    for n in (titleblock_names or []):
+        cmb.Items.Add(n)
+    if cmb.Items.Count > 0:
+        cmb.SelectedIndex = 0
+
+    btn_all = Button()
+    btn_all.Text = "Select all"
+    btn_all.Left = 12
+    btn_all.Top = 410
+    btn_all.Width = 100
+    def sel_all(s, e):
+        for i in range(cl_new.Items.Count):
+            cl_new.SetItemChecked(i, True)
+        for i in range(cl_ex.Items.Count):
+            cl_ex.SetItemChecked(i, True)
+    btn_all.Click += sel_all
+
+    btn_none = Button()
+    btn_none.Text = "Select none"
+    btn_none.Left = 120
+    btn_none.Top = 410
+    btn_none.Width = 100
+    def sel_none(s, e):
+        for i in range(cl_new.Items.Count):
+            cl_new.SetItemChecked(i, False)
+        for i in range(cl_ex.Items.Count):
+            cl_ex.SetItemChecked(i, False)
+    btn_none.Click += sel_none
+
+    summary = Label()
+    summary.Text = "New: %d   Existing: %d" % (len(create_items), len(update_items))
+    summary.Left = 240
+    summary.Top = 416
+    summary.Width = 300
+
+    def on_ok(s, e):
+        result["ok"] = True
+        result["create"] = []
+        for i in range(cl_new.Items.Count):
+            if cl_new.GetItemChecked(i):
+                result["create"].append(create_items[i][0])
+        result["update"] = []
+        for i in range(cl_ex.Items.Count):
+            if cl_ex.GetItemChecked(i):
+                result["update"].append((update_items[i][0], update_items[i][1]))
+        if cmb.SelectedIndex >= 0:
+            result["tb"] = str(cmb.Items[cmb.SelectedIndex])
+        form.DialogResult = DR.OK
+        form.Close()
+
+    def on_cancel(s, e):
+        result["ok"] = False
+        form.DialogResult = DR.Cancel
+        form.Close()
+
+    btn_ok = Button()
+    btn_ok.Text = "Create / Update selected"
+    btn_ok.Left = 420
+    btn_ok.Top = 470
+    btn_ok.Width = 170
+    btn_ok.Height = 32
+    btn_ok.Click += on_ok
+
+    btn_cancel = Button()
+    btn_cancel.Text = "Skip sheets"
+    btn_cancel.Left = 600
+    btn_cancel.Top = 470
+    btn_cancel.Width = 100
+    btn_cancel.Height = 32
+    btn_cancel.Click += on_cancel
+
+    form.Controls.Add(hdr)
+    form.Controls.Add(lbl_new)
+    form.Controls.Add(cl_new)
+    form.Controls.Add(lbl_ex)
+    form.Controls.Add(cl_ex)
+    form.Controls.Add(lbl_tb)
+    form.Controls.Add(cmb)
+    form.Controls.Add(btn_all)
+    form.Controls.Add(btn_none)
+    form.Controls.Add(summary)
+    form.Controls.Add(btn_ok)
+    form.Controls.Add(btn_cancel)
+    form.AcceptButton = btn_ok
+    form.CancelButton = btn_cancel
+    form.ShowDialog()
+    if not result["ok"]:
+        return None
+    return result
+
+
+def sync_sheets_ui(doc, pack, role, stage_code, designed_by, checked_by, functional_code=None):
+    """Checkbox UI: select sheets to create/update, pick title block, write TTM/Peer."""
+    plan = collect_plan_sheets(pack, role, functional_code=functional_code, stage_code=stage_code)
+    if not plan:
+        NL = chr(10)
+        msg = (
+            "No planned sheets found in the JSON for this model." + NL + NL
+            + "Role (task team): %s" + NL
+            + "Functional: %s" + NL + NL
+            + "Continue without sheet sync?"
+        ) % (discipline_full_name(role) or role or "(unknown)", functional_code or "(any)")
+        if not confirm(msg):
+            return
+        info("Sheet sync skipped.")
         return
 
-    tb = None
-    if to_create:
-        tb = pick_titleblock_symbol(doc)
-        if tb is None:
-            info("No title block selected — cannot create sheets.")
-            # still allow updates
+    # Titleblock list
+    tb_list = list_titleblocks(doc)  # [(name, symbol), ...]
+    tb_names = [n for n, _ in tb_list]
+    tb_map = dict(tb_list)
+    existing = existing_sheets_map(doc)
+
+    # Intro confirm
+    NL = chr(10)
+    intro = (
+        "Sheet sync" + NL + NL
+        + "Role: %s" + NL
+        + "Functional: %s" + NL
+        + "Planned matches: %d" + NL + NL
+        + "Yes = open sheet picker (tick boxes + title block)" + NL
+        + "No = skip"
+    ) % (
+        discipline_full_name(role) or role or "?",
+        functional_code or "(any)",
+        len(plan),
+    )
+    if not confirm(intro):
+        return
+
+    picked = sheet_picker_form(plan, existing, tb_names)
+    if not picked:
+        info("Sheet sync cancelled.")
+        return
+
+    to_create = picked.get("create") or []
+    to_update = picked.get("update") or []
+    tb_name = picked.get("tb")
+    tb = tb_map.get(tb_name) if tb_name else None
+    if to_create and tb is None:
+        # try first available
+        if tb_list:
+            tb = tb_list[0][1]
+            tb_name = tb_list[0][0]
+        else:
+            info("No title block loaded in this project.\\nLoad a title block family first, then re-run sheet sync.")
             to_create = []
+
+    if not to_create and not to_update:
+        info("No sheets selected.")
+        return
 
     created = 0
     updated = 0
+    failed = []
     t = Transaction(doc, "Atana — sheets from plan")
     t.Start()
     try:
         for item, vs in to_update:
             try:
-                # update title (ViewSheet.Name is sheet name/title)
-                if item["title"] and vs.Name != item["title"]:
-                    vs.Name = item["title"][:256]
+                title = item.get("title") or ""
+                if title and vs.Name != title:
+                    vs.Name = title[:256]
                     updated += 1
                 set_sheet_param(vs, TITLEBLOCK_DESIGNED, designed_by)
                 set_sheet_param(vs, TITLEBLOCK_CHECKED, checked_by)
-            except Exception:
-                continue
+            except Exception as ex:
+                failed.append("update %s: %s" % (item.get("number"), ex))
         for item in to_create:
             try:
                 vs = ViewSheet.Create(doc, tb.Id)
-                vs.SheetNumber = item["number"][:64]
-                if item["title"]:
-                    vs.Name = item["title"][:256]
+                num = (item.get("number") or "")[:64]
+                title = (item.get("title") or num)[:256]
+                vs.SheetNumber = num
+                vs.Name = title
                 set_sheet_param(vs, TITLEBLOCK_DESIGNED, designed_by)
                 set_sheet_param(vs, TITLEBLOCK_CHECKED, checked_by)
                 created += 1
             except Exception as ex:
-                print("sheet create fail", item["number"], ex)
+                failed.append("create %s: %s" % (item.get("number"), ex))
         t.Commit()
     except Exception as ex:
         try:
             t.RollBack()
         except Exception:
             pass
-        info("Sheet transaction failed:\\n" + str(ex))
+        info("Sheet transaction failed:\\n%s" % ex)
         return
 
-    # Publish set for current work stage
-    set_name = stage_code or extract_stage(pack) or "WS"
-    if not set_name.upper().startswith("S") and not set_name.upper().startswith("WS"):
-        set_name = "WS" + str(set_name)
-    # Normalize SW1 style
-    sn = str(set_name).upper().replace("STAGE", "").replace(" ", "")
-    if sn.startswith("S") and not sn.startswith("SW"):
-        sn = "SW" + sn.lstrip("S")
-    pub_msg = ensure_publish_set(doc, sn, [])
+    # Publish set name from work stage
+    sn = stage_code or extract_stage(pack) or "S1"
+    sn_u = str(sn).upper().replace(" ", "")
+    if sn_u.startswith("S") and not sn_u.startswith("SW"):
+        pub_name = "SW" + sn_u.lstrip("S")
+    else:
+        pub_name = sn_u
+    pub_msg = ensure_publish_set(doc, pub_name, [])
 
-    info(
-        "Sheets complete.\\n\\n"
-        "Created: %d\\nUpdated titles: %d\\n"
-        "TTM (Designed By): %s\\nPeer (Checked By): %s\\n\\n"
-        "Publish set target: %s\\n%s"
-        % (created, updated, designed_by or "(none)", checked_by or "(none)", sn, pub_msg)
-    )
+    lines = [
+        "Sheets complete.",
+        "",
+        "Created: %d" % created,
+        "Titles updated: %d" % updated,
+        "Title block: %s" % (tb_name or "(n/a)"),
+        "TTM (Designed By): %s" % (designed_by or "(none)"),
+        "Peer (Checked By): %s" % (checked_by or "(none)"),
+        "Publish set target: %s" % pub_name,
+        pub_msg or "",
+    ]
+    if failed:
+        lines.append("")
+        lines.append("Issues:")
+        lines.extend(failed[:8])
+    info_lines(lines)
+
 
 
 def main():
@@ -1779,8 +2006,9 @@ def main():
             lines.append(u"  ✓ {}:".format(k))
             lines.append(u"      now:  {}".format(cur if cur else "(empty)"))
             lines.append(u"      pack: {}".format(new_v))
-        lines.append("\nApply all updates?")
-        if confirm("\n".join(lines)):
+        lines.append("")
+        lines.append("Apply all updates?")
+        if confirm_lines(lines):
             t = Transaction(doc, "Atana — project information")
             t.Start()
             try:

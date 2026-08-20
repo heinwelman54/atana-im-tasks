@@ -1,0 +1,4 @@
+Project Sync setup
+1. Paste Atana_ProjectSync_pyRevit.py into your PyRevit script.py
+2. Copy ATA_ZZ_SharedParameters_MERGED.txt next to script.py
+   OR to %APPDATA%\Atana\ATA_ZZ_SharedParameters_MERGED.txt
