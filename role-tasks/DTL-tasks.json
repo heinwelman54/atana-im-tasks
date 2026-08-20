@@ -1,0 +1,314 @@
+{
+  "schema": "atana-role-tasks/1.0",
+  "functionalRole": "DTL",
+  "label": "Delivery Team Lead",
+  "source": "ISO 19650 \u00b7 Atana R&R \u00b7 Information Management Framework",
+  "wbsCoding": {
+    "scheme": "Uniclass2015-inspired",
+    "segments": [
+      "Role",
+      "Stage",
+      "Activity",
+      "InformationForm"
+    ],
+    "notes": "Role code + stage + activity form the WBS index. Cross-role dependencies use dependsOnRole."
+  },
+  "tasks": [
+    {
+      "id": "dtl-s1-root",
+      "name": "Delivery leadership \u2014 Stage 1",
+      "stageId": "S1",
+      "parentId": null,
+      "depth": 0,
+      "defaultEstHours": 0,
+      "dependencies": [],
+      "critical": false,
+      "category": "Leadership",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s1-1",
+      "name": "Confirm appointing-party requirements & EIR",
+      "stageId": "S1",
+      "parentId": "dtl-s1-root",
+      "depth": 1,
+      "defaultEstHours": 8,
+      "dependencies": [],
+      "critical": true,
+      "category": "Leadership",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s1-2",
+      "name": "Appoint / confirm Delivery Team structure",
+      "stageId": "S1",
+      "parentId": "dtl-s1-root",
+      "depth": 1,
+      "defaultEstHours": 4,
+      "dependencies": [
+        "dtl-s1-1"
+      ],
+      "critical": true,
+      "category": "Leadership",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s1-3",
+      "name": "Agree high-level programme & information milestones",
+      "stageId": "S1",
+      "parentId": "dtl-s1-root",
+      "depth": 1,
+      "defaultEstHours": 6,
+      "dependencies": [
+        "dtl-s1-2"
+      ],
+      "critical": false,
+      "category": "Programme",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s1-4",
+      "name": "Endorse CDE strategy with IM",
+      "stageId": "S1",
+      "parentId": "dtl-s1-root",
+      "depth": 1,
+      "defaultEstHours": 2,
+      "dependencies": [
+        "dtl-s1-2"
+      ],
+      "critical": false,
+      "category": "Governance",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s2-root",
+      "name": "Delivery leadership \u2014 Stage 2",
+      "stageId": "S2",
+      "parentId": null,
+      "depth": 0,
+      "defaultEstHours": 0,
+      "dependencies": [],
+      "critical": false,
+      "category": "Leadership",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s2-1",
+      "name": "Confirm Task Team appointments",
+      "stageId": "S2",
+      "parentId": "dtl-s2-root",
+      "depth": 1,
+      "defaultEstHours": 4,
+      "dependencies": [],
+      "critical": true,
+      "category": "Leadership",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s2-2",
+      "name": "Approve BEP / MIDP baseline with IM",
+      "stageId": "S2",
+      "parentId": "dtl-s2-root",
+      "depth": 1,
+      "defaultEstHours": 4,
+      "dependencies": [
+        "dtl-s2-1"
+      ],
+      "critical": true,
+      "category": "Governance",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s2-3",
+      "name": "Chair concept federation readiness review",
+      "stageId": "S2",
+      "parentId": "dtl-s2-root",
+      "depth": 1,
+      "defaultEstHours": 3,
+      "dependencies": [],
+      "critical": false,
+      "category": "Coordination",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s3-root",
+      "name": "Delivery leadership \u2014 Stage 3",
+      "stageId": "S3",
+      "parentId": null,
+      "depth": 0,
+      "defaultEstHours": 0,
+      "dependencies": [],
+      "critical": false,
+      "category": "Leadership",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s3-1",
+      "name": "Authorise BIM kick-off",
+      "stageId": "S3",
+      "parentId": "dtl-s3-root",
+      "depth": 1,
+      "defaultEstHours": 2,
+      "dependencies": [],
+      "critical": true,
+      "category": "Coordination",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s3-2",
+      "name": "Review peer / QA gateway before WS3 submittal",
+      "stageId": "S3",
+      "parentId": "dtl-s3-root",
+      "depth": 1,
+      "defaultEstHours": 4,
+      "dependencies": [],
+      "critical": true,
+      "category": "Assurance",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s3-3",
+      "name": "Sign-off work stage information exchange",
+      "stageId": "S3",
+      "parentId": "dtl-s3-root",
+      "depth": 1,
+      "defaultEstHours": 3,
+      "dependencies": [
+        "dtl-s3-2"
+      ],
+      "critical": true,
+      "category": "Assurance",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s4-root",
+      "name": "Delivery leadership \u2014 Stage 4",
+      "stageId": "S4",
+      "parentId": null,
+      "depth": 0,
+      "defaultEstHours": 0,
+      "dependencies": [],
+      "critical": false,
+      "category": "Leadership",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s4-1",
+      "name": "Monitor detailed design information risks",
+      "stageId": "S4",
+      "parentId": "dtl-s4-root",
+      "depth": 1,
+      "defaultEstHours": 4,
+      "dependencies": [],
+      "critical": false,
+      "category": "Risk",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s4-2",
+      "name": "Review WS4 submittal readiness",
+      "stageId": "S4",
+      "parentId": "dtl-s4-root",
+      "depth": 1,
+      "defaultEstHours": 4,
+      "dependencies": [],
+      "critical": true,
+      "category": "Assurance",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s5-root",
+      "name": "Delivery leadership \u2014 Stage 5",
+      "stageId": "S5",
+      "parentId": null,
+      "depth": 0,
+      "defaultEstHours": 0,
+      "dependencies": [],
+      "critical": false,
+      "category": "Leadership",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s5-1",
+      "name": "Onboard contractor information requirements",
+      "stageId": "S5",
+      "parentId": "dtl-s5-root",
+      "depth": 1,
+      "defaultEstHours": 6,
+      "dependencies": [],
+      "critical": true,
+      "category": "Leadership",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s5-2",
+      "name": "Oversee construction information compliance",
+      "stageId": "S5",
+      "parentId": "dtl-s5-root",
+      "depth": 1,
+      "defaultEstHours": 8,
+      "dependencies": [],
+      "critical": false,
+      "category": "Assurance",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s6-root",
+      "name": "Delivery leadership \u2014 Stage 6",
+      "stageId": "S6",
+      "parentId": null,
+      "depth": 0,
+      "defaultEstHours": 0,
+      "dependencies": [],
+      "critical": false,
+      "category": "Leadership",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s6-1",
+      "name": "Confirm AIM / handover acceptance path",
+      "stageId": "S6",
+      "parentId": "dtl-s6-root",
+      "depth": 1,
+      "defaultEstHours": 4,
+      "dependencies": [],
+      "critical": true,
+      "category": "Handover",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    },
+    {
+      "id": "dtl-s6-2",
+      "name": "Close-out lessons learned (delivery)",
+      "stageId": "S6",
+      "parentId": "dtl-s6-root",
+      "depth": 1,
+      "defaultEstHours": 4,
+      "dependencies": [],
+      "critical": false,
+      "category": "Handover",
+      "appClient": "N",
+      "functionalRole": "DTL"
+    }
+  ]
+}

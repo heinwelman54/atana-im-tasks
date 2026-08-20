@@ -106,6 +106,14 @@
     z-index:0;
   }
   .app-version-badge:hover{color:rgba(255,255,255,0.55);}
+  .topbar-role-switch{
+    display:none;max-width:160px;margin-left:6px;height:34px;border-radius:999px;
+    border:1px solid rgba(255,255,255,0.35);background:rgba(255,255,255,0.12);
+    color:#fff;font-size:11px;padding:0 10px;
+    -webkit-app-region:no-drag;app-region:no-drag;
+  }
+  .topbar-role-switch.show{display:inline-block;}
+  .topbar-role-switch option{color:#111;}
   .topbar-edit-btn{
     display:none;margin-left:8px;border:1px solid rgba(255,255,255,0.35);background:rgba(255,255,255,0.12);
     color:#fff;font-size:14px;font-weight:600;width:34px;height:34px;padding:0;border-radius:999px;cursor:pointer;
@@ -1444,6 +1452,9 @@
       <span class="acc-status-dot" id="accStatusDot"></span>
       <span class="acc-status-lbl">FORMA</span>
     </button>
+    <select id="topbarRoleSwitcher" class="topbar-role-switch" title="Who am I on this project?" aria-label="Current user / role">
+      <option value="">Who am I…</option>
+    </select>
     <button type="button" class="topbar-edit-btn" id="topbarEditProjectBtn" title="Edit project" aria-label="Edit project">✎</button>
     <button class="icon-btn" id="topbarAction" style="display:none;">+</button>
     <div class="topbar-chrome-safe" aria-hidden="true"></div>
@@ -1674,6 +1685,16 @@
           <div class="palette-grid" id="paletteMainGrid"></div>
         </div>
         <button type="button" class="btn btn-ghost btn-block" id="paletteResetBtn" style="margin-top:12px;">Reset to defaults (solid purple)</button>
+      </details>
+
+      <details class="card" style="margin-top:14px;" id="settingsAdminCard">
+        <summary class="chart-card-title" style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;">
+          <span>Admin · Access matrix</span>
+          <span style="font-size:12px;font-weight:500;color:var(--muted);">expand</span>
+        </summary>
+        <p class="section-sub" style="margin:10px 0;">Tick which functional roles may use each app feature. Saved on this device until Azure Entra ID.</p>
+        <div id="accessMatrixHost" style="overflow:auto;max-height:420px;"></div>
+        <button type="button" class="btn btn-ghost btn-block" id="accessMatrixResetBtn" style="margin-top:10px;">Reset access matrix defaults</button>
       </details>
 
       <div class="card" style="margin-top:14px;" id="apsCard">
@@ -2098,8 +2119,102 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.5.9";
-const APP_BUILD = "2026-08-20-ws-author-ui";
+
+/** ISO 19650 / Atana functional roles — allocation is by role, staff fills the seat. */
+const FUNCTIONAL_ROLES = [
+  { code: "DTL",  label: "Delivery Team Lead",           kind: "enabling", unique: true  },
+  { code: "PDM",  label: "Project Delivery Manager",     kind: "enabling", unique: true  },
+  { code: "IM",   label: "Information Manager",          kind: "enabling", unique: true  },
+  { code: "DM",   label: "Document Manager",             kind: "enabling", unique: true  },
+  { code: "TTM",  label: "Task Team Manager",            kind: "taskTeam", unique: true  },
+  { code: "TTIM", label: "Task Team Information Manager",kind: "taskTeam", unique: true  },
+  { code: "PEER", label: "Peer Reviewer",                kind: "taskTeam", unique: true  },
+  { code: "IA",   label: "Information Author",           kind: "taskTeam", unique: false }
+];
+
+/** App features for admin access matrix (role × feature). */
+const APP_FEATURES = [
+  { id: "project.settings", label: "Project settings", group: "Admin" },
+  { id: "project.delete", label: "Delete project", group: "Admin" },
+  { id: "admin.accessMatrix", label: "Access matrix", group: "Admin" },
+  { id: "admin.staffPool", label: "Staff pool (incl. cost)", group: "Admin" },
+  { id: "im.tasks", label: "IM Tasks", group: "IM Planner" },
+  { id: "im.progress", label: "Progress", group: "IM Planner" },
+  { id: "im.wbs", label: "WBS / Planner", group: "IM Planner" },
+  { id: "im.gantt", label: "Gantt", group: "IM Planner" },
+  { id: "im.clash", label: "Clash schedule", group: "IM Planner" },
+  { id: "midp.view", label: "MIDP view", group: "MIDP" },
+  { id: "midp.edit", label: "MIDP edit / import", group: "MIDP" },
+  { id: "dpow.view", label: "DPoW view", group: "DPoW" },
+  { id: "dpow.edit", label: "DPoW edit", group: "DPoW" },
+  { id: "forma.sync", label: "FORMA sync", group: "FORMA" },
+  { id: "tools.naming", label: "Naming tools", group: "Tools" },
+  { id: "tools.midpGen", label: "MIDP generator", group: "Tools" },
+  { id: "docs.templates", label: "Documents / templates", group: "Docs" },
+  { id: "revit.sync", label: "Revit sync pack", group: "Integration" }
+];
+
+/** Default access: Admin+IM full; others limited. Admin is a meta role. */
+const DEFAULT_ACCESS_MATRIX = {
+  ADMIN: APP_FEATURES.map(f => f.id),
+  IM: APP_FEATURES.map(f => f.id).filter(id => id !== "admin.staffPool"),
+  PDM: ["im.progress","im.wbs","im.gantt","midp.view","dpow.view","docs.templates"],
+  DTL: ["im.progress","im.wbs","im.gantt","midp.view","dpow.view","docs.templates"],
+  TTM: ["im.progress","im.wbs","im.gantt","midp.view","dpow.view","tools.naming"],
+  TTIM: ["im.progress","midp.view","midp.edit","dpow.view","forma.sync","tools.naming"],
+  PEER: ["im.progress","midp.view","dpow.view"],
+  IA: ["im.progress","midp.view","tools.naming"],
+  DM: ["midp.view","forma.sync","docs.templates"]
+};
+
+function getAccessMatrix(){
+  try {
+    const raw = localStorage.getItem("atanaAccessMatrix");
+    if(raw) return Object.assign({}, DEFAULT_ACCESS_MATRIX, JSON.parse(raw));
+  } catch(e){}
+  return Object.assign({}, DEFAULT_ACCESS_MATRIX);
+}
+function saveAccessMatrix(m){
+  try { localStorage.setItem("atanaAccessMatrix", JSON.stringify(m)); } catch(e){}
+}
+function getCurrentUser(){
+  try {
+    const raw = localStorage.getItem("atanaCurrentUser");
+    if(raw) return JSON.parse(raw);
+  } catch(e){}
+  return null;
+}
+function setCurrentUser(u){
+  try {
+    if(u) localStorage.setItem("atanaCurrentUser", JSON.stringify(u));
+    else localStorage.removeItem("atanaCurrentUser");
+  } catch(e){}
+  try { window.dispatchEvent(new CustomEvent("atana-user-changed", { detail: u })); } catch(e){}
+}
+function currentUserCan(featureId){
+  const u = getCurrentUser();
+  if(!u) return true; // until user picks identity, allow (bootstrap)
+  const matrix = getAccessMatrix();
+  const roles = [].concat(u.func ? [u.func] : [], u.isAdmin ? ["ADMIN"] : []);
+  return roles.some(r => (matrix[r] || []).indexOf(featureId) >= 0);
+}
+function resolveMemberFunctionalRoles(project, memberIdOrEmail){
+  if(!project) return [];
+  const team = ensureProjectTeam(project);
+  const key = String(memberIdOrEmail || "").toLowerCase();
+  return (team.members || []).filter(m =>
+    String(m.id || "").toLowerCase() === key ||
+    String(m.email || "").toLowerCase() === key ||
+    String(m.name || "").toLowerCase() === key
+  ).map(m => ({
+    func: m.func,
+    discipline: m.discipline || "",
+    label: (FUNCTIONAL_ROLES.find(r => r.code === m.func) || {}).label || m.func
+  }));
+}
+
+const APP_VERSION = "3.6.0";
+const APP_BUILD = "2026-08-21-roles-foundation";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -2211,6 +2326,97 @@ function renderPaletteGrids(){
     });
   }
 }
+
+
+function renderAccessMatrix(){
+  const host = document.getElementById("accessMatrixHost");
+  if(!host) return;
+  const matrix = getAccessMatrix();
+  const roles = ["ADMIN"].concat(FUNCTIONAL_ROLES.map(r => r.code));
+  let h = '<table class="access-matrix-table" style="border-collapse:collapse;font-size:11px;min-width:100%;"><thead><tr><th style="text-align:left;padding:6px;position:sticky;left:0;background:#fff;">Feature</th>';
+  roles.forEach(r => { h += '<th style="padding:6px;writing-mode:horizontal-tb;">' + r + '</th>'; });
+  h += '</tr></thead><tbody>';
+  let lastGroup = "";
+  APP_FEATURES.forEach(f => {
+    if(f.group !== lastGroup){
+      h += '<tr><td colspan="' + (roles.length+1) + '" style="background:#f5f3f7;font-weight:700;padding:6px;">' + f.group + '</td></tr>';
+      lastGroup = f.group;
+    }
+    h += '<tr><td style="padding:4px 6px;position:sticky;left:0;background:#fff;">' + f.label + '</td>';
+    roles.forEach(r => {
+      const on = (matrix[r] || []).indexOf(f.id) >= 0;
+      h += '<td style="text-align:center;padding:2px;"><input type="checkbox" data-am-role="' + r + '" data-am-feat="' + f.id + '"' + (on?" checked":"") + '/></td>';
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  host.innerHTML = h;
+  host.querySelectorAll("input[data-am-role]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const role = cb.getAttribute("data-am-role");
+      const feat = cb.getAttribute("data-am-feat");
+      const m = getAccessMatrix();
+      if(!m[role]) m[role] = [];
+      const i = m[role].indexOf(feat);
+      if(cb.checked && i < 0) m[role].push(feat);
+      if(!cb.checked && i >= 0) m[role].splice(i, 1);
+      saveAccessMatrix(m);
+    });
+  });
+  const reset = document.getElementById("accessMatrixResetBtn");
+  if(reset && !reset._bound){
+    reset._bound = true;
+    reset.addEventListener("click", () => {
+      saveAccessMatrix(DEFAULT_ACCESS_MATRIX);
+      renderAccessMatrix();
+      try { showToast("Access matrix reset"); } catch(e){}
+    });
+  }
+}
+document.addEventListener("DOMContentLoaded", () => {
+  try { renderAccessMatrix(); } catch(e){}
+});
+
+function refreshRoleSwitcher(project){
+  const sel = document.getElementById("topbarRoleSwitcher");
+  if(!sel) return;
+  if(!project){ sel.classList.remove("show"); return; }
+  sel.classList.add("show");
+  const team = ensureProjectTeam(project);
+  const members = (team.members || []).slice().sort((a,b) => String(a.name||"").localeCompare(String(b.name||"")));
+  const cur = getCurrentUser();
+  const opts = ['<option value="">Who am I…</option>'];
+  members.forEach(m => {
+    const val = m.id || m.email || m.name;
+    const lab = (m.name || "?") + " · " + (m.func || "") + (m.discipline ? ("-" + m.discipline) : "");
+    const selAttr = cur && (cur.id === m.id || cur.email === m.email || cur.name === m.name) ? " selected" : "";
+    opts.push('<option value="' + String(val).replace(/"/g, "&quot;") + '"' + selAttr + ">" + lab.replace(/</g,"&lt;") + "</option>");
+  });
+  opts.push('<option value="__admin__"' + (cur && cur.isAdmin ? " selected" : "") + ">Admin (elevated)</option>');
+  sel.innerHTML = opts.join("");
+  if(!sel._bound){
+    sel._bound = true;
+    sel.addEventListener("change", () => {
+      const v = sel.value;
+      if(!v){ setCurrentUser(null); return; }
+      if(v === "__admin__"){
+        setCurrentUser({ name: "Admin", func: "ADMIN", isAdmin: true });
+        try { showToast("Signed in as Admin"); } catch(e){}
+        return;
+      }
+      const m = members.find(x => (x.id || x.email || x.name) === v);
+      if(m){
+        setCurrentUser({
+          id: m.id, name: m.name, email: m.email,
+          func: m.func, discipline: m.discipline || "",
+          isAdmin: m.func === "IM" || m.func === "DTL"
+        });
+        try { showToast("Working as " + m.name + " (" + m.func + (m.discipline ? "-" + m.discipline : "") + ")"); } catch(e){}
+      }
+    });
+  }
+}
+
 function syncTopbarEditBtn(show){
   const btn = document.getElementById("topbarEditProjectBtn");
   if(!btn) return;
@@ -2222,6 +2428,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const te = document.getElementById("topbarEditProjectBtn");
   if(te){
     te.addEventListener("click", () => {
+      if(typeof currentUserCan === "function" && !currentUserCan("project.settings")){
+        try { showToast("Project settings: Information Manager or Admin only"); } catch(e){}
+        return;
+      }
       const legacy = document.getElementById("wsEditProjectBtn");
       if(legacy) legacy.click();
       else {
@@ -14904,6 +15114,7 @@ function renderTeam(){
 
 function renderWorkspace(){
   try { syncTopbarEditBtn(true); } catch(e){}
+  try { refreshRoleSwitcher(typeof project !== "undefined" ? project : (typeof currentProjectId !== "undefined" ? projectById(currentProjectId) : null)); } catch(e){}
 
   const project = projectById(currentProjectId);
   if(!project){ switchTab("projects"); return; }
@@ -16043,42 +16254,62 @@ function buildRevitSyncPack(project){
   })();
 
   const nameOfFunc = (fn) => {
+    // Exact functional role only (IM ≠ TTIM, TTM ≠ PEER)
     const u = String(fn || "").toUpperCase();
-    const aliases = {
-      PDM: ["PDM", "PROJECT DELIVERY MANAGER", "DESIGN MANAGER"],
-      IM: ["IM", "INFORMATION MANAGER", "INFORMATION LEAD", "BIM MANAGER"],
-      DTL: ["DTL", "DELIVERY TEAM LEAD", "PROJECT MANAGER"],
-      DM: ["DM", "DOCUMENT MANAGER"]
-    };
-    const keys = aliases[u] || [u];
-    const m = members.find(x => {
-      const blob = [
-        x.func, x.roleCode, x.defaultRole, x.role, x.roleName, x.title
-      ].map(v => String(v || "").toUpperCase()).join(" | ");
-      return keys.some(k => blob === k || blob.indexOf(k) >= 0);
-    });
+    const m = members.find(x => String(x.func || "").toUpperCase() === u);
     return m ? (m.name || "") : "";
   };
 
+  /** Exact organogram slot match — never fuzzy (TTIM must not match TTM / IM). */
+  const slotPerson = (func, disc) => {
+    const fu = String(func || "").toUpperCase();
+    const du = disc ? String(disc).toUpperCase() : null;
+    const hits = members.filter(mem => {
+      if (String(mem.func || "").toUpperCase() !== fu) return false;
+      if (du) return String(mem.discipline || "").toUpperCase() === du;
+      return ["DTL","PDM","IM","DM"].includes(fu);
+    });
+    return hits[0] || null;
+  };
+  const slotPeople = (func, disc) => {
+    const fu = String(func || "").toUpperCase();
+    const du = disc ? String(disc).toUpperCase() : null;
+    return members.filter(mem => {
+      if (String(mem.func || "").toUpperCase() !== fu) return false;
+      if (du) return String(mem.discipline || "").toUpperCase() === du;
+      return true;
+    });
+  };
+  const personPack = (m) => m ? {
+    name: m.name || "",
+    email: m.email || "",
+    func: m.func || "",
+    discipline: m.discipline || "",
+    id: m.id || ""
+  } : null;
+
   const roles = (cat.roles || []);
   const taskTeamOrganogram = roles.map(r => {
-    const code = r.code;
-    const onTeam = members.filter(mem => {
-      const d = String(mem.discipline || mem.roleCode || "").toUpperCase();
-      return d === String(code).toUpperCase();
-    });
-    const ttm = onTeam.find(mem => /TTM|TASK TEAM|LEAD/i.test(String(mem.defaultRole || mem.role || mem.func || "")))
-      || onTeam.find(mem => String(mem.func || "").toUpperCase() === "TTM");
-    const peer = onTeam.find(mem => /PEER|REVIEWER/i.test(String(mem.defaultRole || mem.role || mem.func || "")))
-      || onTeam.find(mem => String(mem.func || "").toUpperCase() === "PEER");
+    const code = String(r.code || "").toUpperCase();
+    const ttm = slotPerson("TTM", code);
+    const peer = slotPerson("PEER", code);
+    const ttim = slotPerson("TTIM", code);
+    const ias = slotPeople("IA", code);
     return {
       code,
       label: r.label || code,
-      designedBy: ttm ? ttm.name : "",
-      approvedBy: peer ? peer.name : "",
-      members: onTeam.map(mem => ({
+      designedBy: ttm ? (ttm.name || "") : "",
+      approvedBy: peer ? (peer.name || "") : "",
+      checkedBy: peer ? (peer.name || "") : "",
+      ttm: personPack(ttm),
+      peer: personPack(peer),
+      ttim: personPack(ttim),
+      informationAuthors: ias.map(personPack),
+      members: members.filter(mem => String(mem.discipline || "").toUpperCase() === code).map(mem => ({
         name: mem.name,
         email: mem.email,
+        func: mem.func || "",
+        discipline: mem.discipline || "",
         role: mem.defaultRole || mem.role || mem.func || ""
       }))
     };
@@ -16130,7 +16361,8 @@ function buildRevitSyncPack(project){
   const globalParameters = {
     "GLOBAL_ZZ_ClientContractNumber": project.clientContractNo || "",
     "GLOBAL_ZZ_ProjectDiscipline": "",
-    "GLOBAL_ZZ_ProjectStage": stageIdx,
+    "GLOBAL_ZZ_ProjectStage": wsCode,
+    "GLOBAL_ZZ_ProjectStageInteger": stageIdx,
     "GLOBAL_ZZ_ProjectDeliveryManager": nameOfFunc("PDM") || "",
     "GLOBAL_ZZ_InformationManager": nameOfFunc("IM") || ""
   };
@@ -16187,6 +16419,10 @@ function buildRevitSyncPack(project){
       members: organogramMembers,
       byTaskTeam: taskTeamOrganogram,
       enablingTeam: {
+        DTL: personPack(slotPerson("DTL")),
+        PDM: personPack(slotPerson("PDM")),
+        IM: personPack(slotPerson("IM")),
+        DM: personPack(slotPerson("DM")),
         projectDeliveryManager: nameOfFunc("PDM"),
         informationManager: nameOfFunc("IM"),
         designTeamLead: nameOfFunc("DTL"),
@@ -16194,6 +16430,10 @@ function buildRevitSyncPack(project){
       }
     },
     enablingTeam: {
+      DTL: personPack(slotPerson("DTL")),
+      PDM: personPack(slotPerson("PDM")),
+      IM: personPack(slotPerson("IM")),
+      DM: personPack(slotPerson("DM")),
       projectDeliveryManager: nameOfFunc("PDM"),
       informationManager: nameOfFunc("IM"),
       designTeamLead: nameOfFunc("DTL"),

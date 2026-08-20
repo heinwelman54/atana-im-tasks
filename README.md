@@ -1,2 +1,2 @@
-# Atana IM Tasks v3.5.9
-WS publish sets · Author=IM · custom buttons · solid purple default
+# Atana IM Tasks v3.6.0
+Includes role-tasks/IM-tasks.json (default IM template)

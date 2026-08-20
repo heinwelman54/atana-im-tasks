@@ -2409,94 +2409,71 @@ def main():
         "GLOBAL_ZZ_ProjectDeliveryManager": "",
         "GLOBAL_ZZ_InformationManager": "",
     }
-    def _org_name_for_roles(*role_keys):
-        """Resolve person name from organogram / projectTeam for role codes."""
-        keys = set(k.upper() for k in role_keys)
-        # 1) flat members
-        for src in (
-            pack.get("projectTeam"),
-            pack.get("organogram"),
-            pack.get("team"),
-            (pack.get("titleBlocks") or {}),
-        ):
+    def _exact_func_name(func_code):
+        """Person name for exact organogram func (IM ≠ TTIM, TTM ≠ PEER)."""
+        want = str(func_code or "").strip().upper()
+        if not want:
+            return ""
+        # Prefer structured enablingTeam / organogram.enablingTeam objects
+        for root in (pack.get("enablingTeam"), (pack.get("organogram") or {}).get("enablingTeam")):
+            if not isinstance(root, dict):
+                continue
+            slot = root.get(want) or root.get(want.lower())
+            if isinstance(slot, dict) and (slot.get("name") or "").strip():
+                return slot.get("name").strip()
+            # string forms
+            for key, alias in (
+                ("PDM", ("projectDeliveryManager", "PDM")),
+                ("IM", ("informationManager", "IM")),
+                ("DTL", ("designTeamLead", "DTL")),
+                ("DM", ("documentManager", "DM")),
+            ):
+                if want == key:
+                    for a in alias:
+                        v = root.get(a)
+                        if isinstance(v, str) and v.strip():
+                            return v.strip()
+                        if isinstance(v, dict) and (v.get("name") or "").strip():
+                            return v.get("name").strip()
+        # Flat members — exact func only
+        for src in (pack.get("projectTeam"), pack.get("organogram"), pack.get("team")):
             if not isinstance(src, dict):
                 continue
-            for m in (src.get("members") or src.get("people") or []):
+            for m in (src.get("members") or []):
                 if not isinstance(m, dict):
                     continue
-                role = (m.get("func") or m.get("role") or m.get("code") or m.get("roleCode") or "").upper()
-                role2 = (m.get("roleName") or "").upper()
-                if role in keys or any(k in role for k in keys) or any(k in role2 for k in keys):
-                    nm = (m.get("name") or m.get("displayName") or "").strip()
+                if str(m.get("func") or "").strip().upper() == want:
+                    nm = (m.get("name") or "").strip()
                     if nm:
                         return nm
-            # enabling team slots
-            for slot_key, slot in (src.get("enabling") or src.get("management") or {}).items() if isinstance(src.get("enabling") or src.get("management") or {}, dict) else []:
-                if str(slot_key).upper() in keys and isinstance(slot, dict):
-                    nm = (slot.get("name") or "").strip()
-                    if nm:
-                        return nm
-                if isinstance(slot, list):
-                    for person in slot:
-                        if isinstance(person, dict) and (person.get("name") or "").strip():
-                            if str(slot_key).upper() in keys:
-                                return person.get("name").strip()
-        # 2) titleBlocks map from JSON export
-        tb = pack.get("titleBlocks") or pack.get("titleBlockMap") or {}
-        if isinstance(tb, dict):
-            for k in role_keys:
-                for field in ("pdm", "PDM", "informationManager", "IM", "im"):
-                    pass
-            if "PDM" in keys or "PROJECT DELIVERY MANAGER" in keys:
-                nm = (tb.get("pdm") or tb.get("PDM") or tb.get("projectDeliveryManager") or "").strip()
-                if nm and nm.upper() not in ("PROJECT DELIVERY MANAGER", "PDM"):
-                    return nm
-            if "IM" in keys or "INFORMATION MANAGER" in keys:
-                nm = (tb.get("im") or tb.get("IM") or tb.get("informationManager") or "").strip()
-                if nm and nm.upper() not in ("INFORMATION MANAGER", "IM"):
-                    return nm
-        # 3) byTaskTeam / organogram nested
-        org = pack.get("organogram") or pack.get("taskTeamOrganogram") or {}
-        if isinstance(org, dict):
-            for section in org.values() if not isinstance(org.get("enabling"), dict) else [org.get("enabling"), org.get("management")]:
-                if not isinstance(section, dict):
-                    continue
-                for rk, rv in section.items():
-                    if str(rk).upper() in keys:
-                        if isinstance(rv, dict) and (rv.get("name") or "").strip():
-                            return rv.get("name").strip()
-                        if isinstance(rv, list) and rv:
-                            p0 = rv[0]
-                            if isinstance(p0, dict) and (p0.get("name") or "").strip():
-                                return p0.get("name").strip()
-                            if isinstance(p0, str) and p0.strip():
-                                return p0.strip()
         return ""
 
-    pdm_name = _org_name_for_roles("PDM", "PROJECT DELIVERY MANAGER", "DTL")
-    im_name = _org_name_for_roles("IM", "INFORMATION MANAGER", "INFORMATION LEAD")
-    # Prefer explicit pack fields if they look like people names (not role titles)
-    for cand in (pack.get("projectDeliveryManager"), pack.get("pdmName")):
-        if cand and str(cand).strip() and str(cand).upper() not in ("PROJECT DELIVERY MANAGER", "PDM"):
-            pdm_name = str(cand).strip(); break
-    for cand in (pack.get("informationManager"), pack.get("imName")):
-        if cand and str(cand).strip() and str(cand).upper() not in ("INFORMATION MANAGER", "IM"):
-            im_name = str(cand).strip(); break
-    
-    et = pack.get("enablingTeam") or (pack.get("organogram") or {}).get("enablingTeam") or {}
-    if isinstance(et, dict):
-        if (et.get("projectDeliveryManager") or "").strip():
-            pdm_name = (et.get("projectDeliveryManager") or "").strip()
-        if (et.get("informationManager") or "").strip():
-            im_name = (et.get("informationManager") or "").strip()
-
-    globals_map["GLOBAL_ZZ_ProjectDeliveryManager"] = pdm_name or globals_map.get("GLOBAL_ZZ_ProjectDeliveryManager") or ""
-    globals_map["GLOBAL_ZZ_InformationManager"] = im_name or globals_map.get("GLOBAL_ZZ_InformationManager") or ""
+    pdm_name = _exact_func_name("PDM")
+    im_name = _exact_func_name("IM")
+    globals_map["GLOBAL_ZZ_ProjectDeliveryManager"] = pdm_name
+    globals_map["GLOBAL_ZZ_InformationManager"] = im_name
+    # Stage: code + integer
+    stage_code_g = desired_pi.get("ATA_ZZ_ProjectStage") or ""
+    stage_int = None
+    gp = pack.get("globalParameters") or {}
+    if isinstance(gp, dict) and gp.get("GLOBAL_ZZ_ProjectStageInteger") is not None:
+        try:
+            stage_int = int(gp.get("GLOBAL_ZZ_ProjectStageInteger"))
+        except Exception:
+            stage_int = None
+    if stage_int is None and stage_code_g:
+        m = re.search(r"(\d+)", str(stage_code_g))
+        if m:
+            stage_int = int(m.group(1))
+    if stage_code_g:
+        globals_map["GLOBAL_ZZ_ProjectStage"] = stage_code_g
+    if stage_int is not None:
+        globals_map["GLOBAL_ZZ_ProjectStageInteger"] = stage_int
 
     for n, val in globals_map.items():
-        if not val:
+        if val is None or val == "":
             continue
-        set_global(doc, n, val, is_integer=(n == "GLOBAL_ZZ_ProjectStage"))
+        set_global(doc, n, val, is_integer=(n == "GLOBAL_ZZ_ProjectStageInteger"))
 
     # Title blocks — TTM, Peer, Author=Information Manager
     author_im = ""
