@@ -1,2 +1,2 @@
-# Atana IM Tasks v3.6.0
-Includes role-tasks/IM-tasks.json (default IM template)
+# Atana IM Tasks v3.6.1
+Syntax fix — app loads again

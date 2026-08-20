@@ -1453,7 +1453,7 @@
       <span class="acc-status-lbl">FORMA</span>
     </button>
     <select id="topbarRoleSwitcher" class="topbar-role-switch" title="Who am I on this project?" aria-label="Current user / role">
-      <option value="">Who am I…</option>
+      <option value="">Who am I...</option>
     </select>
     <button type="button" class="topbar-edit-btn" id="topbarEditProjectBtn" title="Edit project" aria-label="Edit project">✎</button>
     <button class="icon-btn" id="topbarAction" style="display:none;">+</button>
@@ -2213,8 +2213,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.6.0";
-const APP_BUILD = "2026-08-21-roles-foundation";
+const APP_VERSION = "3.6.1";
+const APP_BUILD = "2026-08-21-syntax-fix";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -2385,14 +2385,14 @@ function refreshRoleSwitcher(project){
   const team = ensureProjectTeam(project);
   const members = (team.members || []).slice().sort((a,b) => String(a.name||"").localeCompare(String(b.name||"")));
   const cur = getCurrentUser();
-  const opts = ['<option value="">Who am I…</option>'];
+  const opts = ['<option value="">Who am I...</option>'];
   members.forEach(m => {
     const val = m.id || m.email || m.name;
     const lab = (m.name || "?") + " · " + (m.func || "") + (m.discipline ? ("-" + m.discipline) : "");
     const selAttr = cur && (cur.id === m.id || cur.email === m.email || cur.name === m.name) ? " selected" : "";
     opts.push('<option value="' + String(val).replace(/"/g, "&quot;") + '"' + selAttr + ">" + lab.replace(/</g,"&lt;") + "</option>");
   });
-  opts.push('<option value="__admin__"' + (cur && cur.isAdmin ? " selected" : "") + ">Admin (elevated)</option>');
+  opts.push('<option value="__admin__"' + (cur && cur.isAdmin ? ' selected' : '') + '>Admin (elevated)</option>');
   sel.innerHTML = opts.join("");
   if(!sel._bound){
     sel._bound = true;
