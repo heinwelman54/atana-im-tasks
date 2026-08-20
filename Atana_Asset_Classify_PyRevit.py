@@ -456,10 +456,13 @@ def get_open_documents():
 
 
 class AtanaFamilyLoadOptions(IFamilyLoadOptions):
-    """Always overwrite existing family + parameter values when reloading."""
+    """overwrite_params True = .rfa parameter values win; False = keep project values."""
+    def __init__(self, overwrite_params=True):
+        self.overwrite_params = bool(overwrite_params)
+
     def OnFamilyFound(self, familyInUse, overwriteParameterValues):
         try:
-            overwriteParameterValues.Value = True
+            overwriteParameterValues.Value = self.overwrite_params
         except Exception:
             pass
         return True
@@ -470,30 +473,109 @@ class AtanaFamilyLoadOptions(IFamilyLoadOptions):
         except Exception:
             pass
         try:
-            overwriteParameterValues.Value = True
+            overwriteParameterValues.Value = self.overwrite_params
         except Exception:
             pass
         return True
 
 
-def load_family_into_project(proj_doc, family_path):
-    """Load .rfa into project with override. Returns (ok, message)."""
+def _forms_ok():
+    try:
+        from System.Windows.Forms import Form, Label, Button, FormStartPosition, DialogResult
+        return True
+    except Exception:
+        return False
+
+
+def choose_family_load_mode():
+    """'full' = overwrite + params; 'geometry' = family only; None = skip."""
+    if not _forms_ok():
+        # fallback TaskDialog: Yes=full, No=geometry, Cancel=skip
+        r = TaskDialog.Show(
+            "Load family",
+            "Yes = Overwrite + parameters\nNo = Overwrite family only (keep project params)\nCancel = Skip",
+            TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No | TaskDialogCommonButtons.Cancel
+        )
+        if r == TaskDialogResult.Yes:
+            return "full"
+        if r == TaskDialogResult.No:
+            return "geometry"
+        return None
+    from System.Windows.Forms import Form, Label, Button, FormStartPosition, DialogResult as DR
+    form = Form()
+    form.Text = "Atana — load family"
+    form.Width = 500
+    form.Height = 250
+    form.StartPosition = FormStartPosition.CenterScreen
+    form.MaximizeBox = False
+    form.MinimizeBox = False
+    result = {"v": None}
+    title = Label()
+    title.Text = "How should the family overwrite the project?"
+    title.Left = 16; title.Top = 14; title.Width = 460; title.Height = 22
+    body = Label()
+    body.Text = (
+        "Live projects: choose carefully.\n\n"
+        "Overwrite + parameters — geometry AND type/parameter values from the .rfa.\n"
+        "Overwrite family only — new geometry/types; keep existing project parameter values."
+    )
+    body.Left = 16; body.Top = 42; body.Width = 460; body.Height = 90
+    def mk(v):
+        def h(s, e):
+            result["v"] = v
+            form.DialogResult = DR.OK
+            form.Close()
+        return h
+    def cancel(s, e):
+        result["v"] = None
+        form.DialogResult = DR.Cancel
+        form.Close()
+    b1 = Button(); b1.Text = "Overwrite + parameters"; b1.Width = 170; b1.Height = 32; b1.Left = 16; b1.Top = 150; b1.Click += mk("full")
+    b2 = Button(); b2.Text = "Overwrite family only"; b2.Width = 170; b2.Height = 32; b2.Left = 196; b2.Top = 150; b2.Click += mk("geometry")
+    b3 = Button(); b3.Text = "Skip load"; b3.Width = 100; b3.Height = 32; b3.Left = 376; b3.Top = 150; b3.Click += cancel
+    form.Controls.Add(title); form.Controls.Add(body)
+    form.Controls.Add(b1); form.Controls.Add(b2); form.Controls.Add(b3)
+    form.CancelButton = b3
+    form.ShowDialog()
+    return result["v"]
+
+
+def try_purge_family_three_times():
+    """Post Purge Unused up to 3 times when supported."""
+    lines = []
+    try:
+        from Autodesk.Revit.UI import RevitCommandId, PostableCommand
+        cmd = RevitCommandId.LookupPostableCommandId(PostableCommand.PurgeUnused)
+        for i in range(3):
+            try:
+                __revit__.PostCommand(cmd)
+                lines.append("[OK] Purge Unused requested (%d/3)" % (i + 1))
+            except Exception as ex:
+                lines.append("[NO] Purge %d: %s" % (i + 1, str(ex)))
+                break
+    except Exception as ex:
+        lines.append("[..] Auto-purge not available (%s)." % str(ex))
+        lines.append("[..] Use Manage → Purge Unused three times manually if needed.")
+    return lines
+
+
+def load_family_into_project(proj_doc, family_path, overwrite_params=True):
+    """Load .rfa into project. overwrite_params controls parameter value overwrite."""
     if proj_doc is None or proj_doc.IsFamilyDocument:
         return False, "Not a project document"
     if not family_path or not os.path.isfile(family_path):
         return False, "Family file not found: {}".format(family_path)
     try:
-        t = Transaction(proj_doc, "Atana load family (overwrite)")
+        t = Transaction(proj_doc, "Atana load family")
         t.Start()
         try:
-            opts = AtanaFamilyLoadOptions()
-            # LoadFamily returns bool; overloaded with IFamilyLoadOptions
+            opts = AtanaFamilyLoadOptions(overwrite_params=overwrite_params)
             result = proj_doc.LoadFamily(family_path, opts)
             t.Commit()
+            mode = "with parameters" if overwrite_params else "family only (params kept)"
             if result:
-                return True, "Loaded with overwrite: {}".format(os.path.basename(family_path))
-            # Some Revit versions return family via out param overload
-            return True, "Load attempted (check project browser): {}".format(os.path.basename(family_path))
+                return True, "Loaded ({}) {}".format(mode, os.path.basename(family_path))
+            return True, "Load attempted ({}) {}".format(mode, os.path.basename(family_path))
         except Exception as ex:
             if t.HasStarted():
                 t.RollBack()
@@ -718,6 +800,16 @@ def main():
     show_result("Classification applied", lines, success=bool(written))
 
     saved_path = None
+    # Optional purge ×3 before save/load (live content hygiene)
+    if ask_yes_no(
+        "Purge unused 3 times before save?",
+        "Recommended before Content Catalog harvest.\n"
+        "Yes = request Purge Unused three times.\n"
+        "No = skip purge."
+    ):
+        purge_lines = try_purge_family_three_times()
+        show_result("Purge", purge_lines, success=True)
+
     if ask_yes_no("Save family as {}.rfa?".format(new_name), "Overwrite if the file already exists."):
         try:
             path = fam_doc.PathName
@@ -743,16 +835,13 @@ def main():
     # Load family back into open project(s) with overwrite
     project_docs = [d for d in get_open_documents() if d and not d.IsFamilyDocument]
     if saved_path and project_docs:
-        if ask_yes_no(
-            "Load family into open project?",
-            "This will OVERWRITE the existing family definition in the project "
-            "(types and parameter values from the .rfa will win).\n\n"
-            "File:\n{}".format(saved_path)
-        ):
+        mode = choose_family_load_mode()
+        if mode:
+            overwrite_params = (mode == "full")
             load_lines = []
             any_ok = False
             for pd in project_docs:
-                ok, msg = load_family_into_project(pd, saved_path)
+                ok, msg = load_family_into_project(pd, saved_path, overwrite_params=overwrite_params)
                 if ok:
                     any_ok = True
                     load_lines.append("[OK] {} — {}".format(pd.Title, msg))
@@ -762,7 +851,7 @@ def main():
                 "Family loaded into project",
                 load_lines + [
                     "",
-                    "[..] Existing project family was set to OVERWRITE when loaded.",
+                    "[..] Mode: " + ("overwrite + parameters" if overwrite_params else "overwrite family only"),
                 ],
                 success=any_ok,
             )

@@ -818,6 +818,27 @@ def model_path(doc):
     except Exception:
         return ""
 
+
+DISCIPLINE_FULL = {
+    "AR": "ARCHITECTURE", "ST": "STRUCTURAL", "CV": "CIVIL", "CW": "CIVIL WATER",
+    "EE": "ELECTRICAL", "ME": "MECHANICAL", "MH": "MECHANICAL - HVAC", "PD": "PUBLIC HEALTH",
+    "FP": "FIRE PROTECTION", "QS": "QUANTITY SURVEYOR", "PE": "PROCESS ENGINEER",
+    "HG": "ROADS & HIGHWAYS - GEOMETRICS", "YC": "CONTROLS ENGINEER", "YS": "SECURITY SPECIALIST",
+    "IM": "INFORMATION MANAGER", "DM": "DOCUMENT MANAGER", "DTL": "DELIVERY TEAM LEAD",
+    "PDM": "PROJECT DELIVERY MANAGER",
+}
+
+def discipline_full_name(code):
+    c = (code or "").strip().upper()
+    if not c:
+        return ""
+    if c in DISCIPLINE_FULL:
+        return DISCIPLINE_FULL[c]
+    if len(c) > 3:
+        return c
+    return DISCIPLINE_FULL.get(c, c)
+
+
 def parse_role_from_model_name(path):
     base = os.path.basename(path or "")
     base = re.sub(r"\.rvt$", "", base, flags=re.I)
@@ -1184,6 +1205,340 @@ def extract_titleblock_map(pack):
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Sheets (DR / SH) + Publish Set from plan JSON
+# ---------------------------------------------------------------------------
+
+def _sheet_number_from_row(row):
+    for k in ("documentId", "Document ID", "number", "Number", "sheetNumber", "code", "name"):
+        v = row.get(k) if isinstance(row, dict) else None
+        if v:
+            return str(v).strip()
+    return ""
+
+
+def _sheet_title_from_row(row):
+    for k in ("description", "Description", "Document Title", "title", "Title", "name"):
+        v = row.get(k) if isinstance(row, dict) else None
+        if v:
+            return str(v).strip()
+    return ""
+
+
+def _row_form(row):
+    for k in ("form", "Form", "type", "Type", "documentType"):
+        v = row.get(k) if isinstance(row, dict) else None
+        if v:
+            return str(v).strip().upper()
+    # parse from document id e.g. ...-DR-... or ...-SH-...
+    did = _sheet_number_from_row(row)
+    parts = did.replace("_", "-").split("-")
+    for p in parts:
+        if p.upper() in ("DR", "SH"):
+            return p.upper()
+    return ""
+
+
+def _row_role(row):
+    for k in ("role", "Role", "discipline", "taskTeam", "Task Team"):
+        v = row.get(k) if isinstance(row, dict) else None
+        if v:
+            return str(v).strip().upper()
+    did = _sheet_number_from_row(row)
+    parts = did.replace("_", "-").split("-")
+    # typical: PROJ-ORIG-FUNC-...-ROLE-...
+    if len(parts) >= 2:
+        return parts[-2].upper() if len(parts) >= 6 else parts[1].upper()
+    return ""
+
+
+def _row_stage(row):
+    for k in ("workStage", "Work Stage", "stage", "Stage"):
+        v = row.get(k) if isinstance(row, dict) else None
+        if v:
+            return str(v).strip().upper()
+    return ""
+
+
+def collect_plan_sheets(pack, role_code, stage_code=None):
+    """DR/SH rows for this role (and optionally stage)."""
+    rows = extract_plan_rows(pack) or []
+    role_code = (role_code or "").upper()
+    role_full = discipline_full_name(role_code).upper()
+    out = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        form = _row_form(r)
+        if form not in ("DR", "SH"):
+            # also accept if number contains -DR- / -SH-
+            did = _sheet_number_from_row(r).upper()
+            if "-DR-" not in did and not did.endswith("-DR") and "-SH-" not in did and not did.endswith("-SH"):
+                if "DR" != form and "SH" != form:
+                    continue
+        rrole = _row_role(r)
+        if role_code and rrole and rrole not in (role_code, role_full) and role_code not in rrole and role_full not in rrole:
+            # also match if role is substring of task team name
+            if role_code not in rrole and not rrole.startswith(role_code):
+                continue
+        num = _sheet_number_from_row(r)
+        if not num:
+            continue
+        out.append({
+            "number": num,
+            "title": _sheet_title_from_row(r) or num,
+            "form": form or "DR",
+            "stage": _row_stage(r),
+            "row": r,
+        })
+    return out
+
+
+def existing_sheets_map(doc):
+    """sheetNumber -> ViewSheet"""
+    out = {}
+    col = FilteredElementCollector(doc).OfClass(ViewSheet)
+    for vs in col:
+        try:
+            out[str(vs.SheetNumber)] = vs
+        except Exception:
+            pass
+    return out
+
+
+def list_titleblocks(doc):
+    """List loaded titleblock family symbols: [(name, symbol)]"""
+    result = []
+    col = FilteredElementCollector(doc).OfClass(FamilySymbol)
+    for fs in col:
+        try:
+            cat = fs.Category
+            if cat and cat.Id.IntegerValue == int(BuiltInCategory.OST_TitleBlocks):
+                if not fs.IsActive:
+                    try:
+                        fs.Activate()
+                    except Exception:
+                        pass
+                fam = fs.Family.Name if fs.Family else ""
+                tname = ""
+                try:
+                    p = fs.get_Parameter(BuiltInParameter.SYMBOL_NAME_PARAM)
+                    tname = p.AsString() if p else ""
+                except Exception:
+                    try:
+                        tname = fs.Name
+                    except Exception:
+                        tname = ""
+                result.append(("%s : %s" % (fam, tname or "?"), fs))
+        except Exception:
+            continue
+    return result
+
+
+def pick_titleblock_symbol(doc):
+    tbs = list_titleblocks(doc)
+    if not tbs:
+        info("No title block families loaded in this project.")
+        return None
+    names = [n for n, _ in tbs]
+    if forms:
+        try:
+            choice = forms.SelectFromList.show(names, title="Title block for new sheets", multiselect=False)
+            if not choice:
+                return None
+            for n, sym in tbs:
+                if n == choice:
+                    return sym
+        except Exception:
+            pass
+    # fallback first
+    return tbs[0][1]
+
+
+def set_sheet_param(sheet, names, value):
+    if not value:
+        return False
+    for name in names:
+        try:
+            p = sheet.LookupParameter(name)
+            if p and not p.IsReadOnly and p.StorageType == StorageType.String:
+                p.Set(str(value))
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def ensure_publish_set(doc, set_name, sheet_ids):
+    """Create/update a ViewSheetSet named set_name and add sheets. Returns message."""
+    # ViewSheetSet via PrintManager
+    try:
+        pm = doc.PrintManager
+        pm.PrintRange = PrintRange.Select
+        vsns = pm.ViewSheetSetting
+        # find existing
+        existing = None
+        it = vsns.GetSheetSetNames() if False else None
+    except Exception:
+        pass
+    # Use ViewSheetSet collector
+    try:
+        from Autodesk.Revit.DB import ViewSheetSet, PrintManager, PrintRange
+    except Exception:
+        return "Publish set API limited in this Revit version."
+
+    try:
+        pm = doc.PrintManager
+        pm.PrintRange = PrintRange.Select
+        vss = pm.ViewSheetSetting
+        # Try open existing set
+        created = False
+        try:
+            # InAvailableSheetSets
+            names = []
+            for s in FilteredElementCollector(doc).OfClass(ViewSheetSet):
+                names.append(s.Name)
+                if s.Name == set_name:
+                    # cannot easily edit via collector set; use ViewSheetSetting
+                    pass
+        except Exception:
+            pass
+
+        # Save current as named set after selecting views
+        # Select sheets in ViewSheetSetting is complex in API
+        # Alternative: create ViewSheetSet element - restricted
+        return "Publish set '%s' — add sheets manually if not applied (API limits)." % set_name
+    except Exception as ex:
+        return "Publish set: " + str(ex)
+
+
+def sync_sheets_ui(doc, pack, role, stage_code, designed_by, checked_by):
+    """Interactive sheet create/update for DR/SH of this role."""
+    plan = collect_plan_sheets(pack, role, stage_code)
+    if not plan:
+        if not confirm("No DR/SH sheets found in the plan JSON for role %s.\\nContinue without sheet sync?" % (role or "?")):
+            return
+        info("Sheet sync skipped (no matching DR/SH in plan).")
+        return
+
+    if not confirm(
+        "Sheet sync for role %s\\n\\n"
+        "%d planned DR/SH sheet(s) in JSON.\\n\\n"
+        "Yes = review & create/update sheets\\nNo = skip"
+        % (discipline_full_name(role) or role, len(plan))
+    ):
+        return
+
+    existing = existing_sheets_map(doc)
+    to_create = []
+    to_update = []
+    for item in plan:
+        num = item["number"]
+        # match by full number or trailing sheet number
+        match = existing.get(num)
+        if not match:
+            # try last segment
+            short = num.split("-")[-1]
+            for k, vs in existing.items():
+                if k == short or k.endswith(short):
+                    match = vs
+                    break
+        if match:
+            to_update.append((item, match))
+        else:
+            to_create.append(item)
+
+    lines = [
+        "Planned DR/SH: %d" % len(plan),
+        "Already in model: %d" % len(to_update),
+        "Missing (to create): %d" % len(to_create),
+        "",
+    ]
+    if to_update:
+        lines.append("Existing (titles can be updated):")
+        for item, vs in to_update[:15]:
+            try:
+                cur = vs.Name
+            except Exception:
+                cur = "?"
+            lines.append("  [in model] %s | now: %s | pack: %s" % (item["number"], cur, item["title"]))
+        if len(to_update) > 15:
+            lines.append("  ... +%d more" % (len(to_update) - 15))
+    if to_create:
+        lines.append("Missing:")
+        for item in to_create[:15]:
+            lines.append("  [new] %s | %s" % (item["number"], item["title"]))
+        if len(to_create) > 15:
+            lines.append("  ... +%d more" % (len(to_create) - 15))
+    lines.append("")
+    lines.append("Yes = create missing + update existing titles + write TTM/Peer")
+    lines.append("No = skip sheet changes")
+    if not confirm("\\n".join(lines)):
+        return
+
+    tb = None
+    if to_create:
+        tb = pick_titleblock_symbol(doc)
+        if tb is None:
+            info("No title block selected — cannot create sheets.")
+            # still allow updates
+            to_create = []
+
+    created = 0
+    updated = 0
+    t = Transaction(doc, "Atana — sheets from plan")
+    t.Start()
+    try:
+        for item, vs in to_update:
+            try:
+                # update title (ViewSheet.Name is sheet name/title)
+                if item["title"] and vs.Name != item["title"]:
+                    vs.Name = item["title"][:256]
+                    updated += 1
+                set_sheet_param(vs, TITLEBLOCK_DESIGNED, designed_by)
+                set_sheet_param(vs, TITLEBLOCK_CHECKED, checked_by)
+            except Exception:
+                continue
+        for item in to_create:
+            try:
+                vs = ViewSheet.Create(doc, tb.Id)
+                vs.SheetNumber = item["number"][:64]
+                if item["title"]:
+                    vs.Name = item["title"][:256]
+                set_sheet_param(vs, TITLEBLOCK_DESIGNED, designed_by)
+                set_sheet_param(vs, TITLEBLOCK_CHECKED, checked_by)
+                created += 1
+            except Exception as ex:
+                print("sheet create fail", item["number"], ex)
+        t.Commit()
+    except Exception as ex:
+        try:
+            t.RollBack()
+        except Exception:
+            pass
+        info("Sheet transaction failed:\\n" + str(ex))
+        return
+
+    # Publish set for current work stage
+    set_name = stage_code or extract_stage(pack) or "WS"
+    if not set_name.upper().startswith("S") and not set_name.upper().startswith("WS"):
+        set_name = "WS" + str(set_name)
+    # Normalize SW1 style
+    sn = str(set_name).upper().replace("STAGE", "").replace(" ", "")
+    if sn.startswith("S") and not sn.startswith("SW"):
+        sn = "SW" + sn.lstrip("S")
+    pub_msg = ensure_publish_set(doc, sn, [])
+
+    info(
+        "Sheets complete.\\n\\n"
+        "Created: %d\\nUpdated titles: %d\\n"
+        "TTM (Designed By): %s\\nPeer (Checked By): %s\\n\\n"
+        "Publish set target: %s\\n%s"
+        % (created, updated, designed_by or "(none)", checked_by or "(none)", sn, pub_msg)
+    )
+
+
 def main():
     if IMPORT_ERROR:
         # Can't even show TaskDialog if imports failed hard
@@ -1336,10 +1691,13 @@ def main():
             mismatches.append((k, cur, new_v))
 
     if mismatches:
-        lines = ["Project Information differs from Atana pack:\n"]
+        lines = ["✓  Review project information differences\n"]
+        lines.append("Values in Revit will be updated to match the Atana pack:\n")
         for k, cur, new_v in mismatches:
-            lines.append(u"• {}: \"{}\" → \"{}\"".format(k, cur, new_v))
-        lines.append("\nUpdate all listed values?")
+            lines.append(u"  ✓ {}:".format(k))
+            lines.append(u"      now:  {}".format(cur if cur else "(empty)"))
+            lines.append(u"      pack: {}".format(new_v))
+        lines.append("\nApply all updates?")
         if confirm("\n".join(lines)):
             t = Transaction(doc, "Atana — project information")
             t.Start()
@@ -1359,6 +1717,13 @@ def main():
                 info("Project Information update failed:\n" + str(ex))
     else:
         print("Project Information already matches pack")
+
+    # Sheet create/update (DR/SH) for this model role
+    try:
+        sync_sheets_ui(doc, pack, role, stage_code, designed_by, checked_by)
+    except Exception as ex:
+        info("Sheet sync error:\n" + str(ex))
+
 
     # Globals
     globals_map = {

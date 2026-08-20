@@ -1,2 +1,2 @@
-# Atana IM Tasks v3.4.5
-Fix annotation rename: parts scope in write_classifications
+# Atana IM Tasks v3.5.0
+Version toast fix · Classify purge/load modes · Project Sync sheets + full discipline

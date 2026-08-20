@@ -1,4 +1,4 @@
-const CACHE = "atana-im-v300";
+const CACHE = "atana-im-v350";
 self.addEventListener("install", e => { self.skipWaiting(); });
 self.addEventListener("activate", e => {
   e.waitUntil((async () => {
