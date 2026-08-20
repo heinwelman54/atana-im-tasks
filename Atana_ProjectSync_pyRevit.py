@@ -395,11 +395,9 @@ def choose_json_source():
 
     body = Label()
     body.Text = (
-        "Choose how to get the project information file for Revit sync.
-
-"
-        "Local File — JSON from Atana IM (export / push) — recommended.\n"
-        "Sign In — Autodesk (APS). Prefer Edge so company SSO is used."
+        "Choose how to get the project information file for Revit sync.\n\n"
+        "Local File - JSON from Atana IM (export / push) - recommended.\n"
+        "Sign In - Autodesk (APS). Prefer Edge so company SSO is used."
     )
     body.Left = 20
     body.Top = 48
@@ -525,9 +523,7 @@ def prompt_paste_auth_code(auth_url):
 
     lbl = Label()
     lbl.Text = (
-        "Complete Autodesk login in Edge (company SSO).
-
-"
+        "Complete Autodesk login in Edge (company SSO).\n\n"
         "1) Browser should open Autodesk login (or open the URL shown after OK).\n"
         "2) Sign in and Allow.\n"
         "3) Browser may show an error page — that is OK.\n"
@@ -611,15 +607,9 @@ def aps_login_interactive(cfg):
     if not listener_ok:
         # --- Windows block path ---
         info(
-            "Windows blocked HttpListener on port %d.
-
-"
-            "Fix (run once in Command Prompt as Administrator):
-
-"
-            "  netsh http add urlacl url=http://127.0.0.1:%d/ user=%%USERNAME%%
-
-"
+            "Windows blocked HttpListener on port %d.\n\n"
+            "Fix (run once in Command Prompt as Administrator):\n\n"
+            "  netsh http add urlacl url=http://127.0.0.1:%d/ user=%%USERNAME%%\n\n"
             "Or use the next dialog to paste the browser redirect URL / code."
             % (APS_CALLBACK_PORT, APS_CALLBACK_PORT)
         )
@@ -657,11 +647,9 @@ def aps_login_interactive(cfg):
         opened = False
 
     info(
-        ("Browser opened for Autodesk login." if opened else "Could not auto-open browser — copy the URL from the next step.")
-        + "
-
-You have %d seconds.\n"
-        "Callback must be:\n%s"
+        (("Browser opened for Autodesk login." if opened else "Could not auto-open browser - copy the URL from the next step.")
+         + "\n\nYou have %d seconds.\n"
+         "Callback must be:\n%s")
         % (APS_LOGIN_TIMEOUT_SEC, redirect)
     )
 
@@ -672,13 +660,9 @@ You have %d seconds.\n"
         except Exception:
             pass
         info(
-            "Local callback timed out (Windows often blocks this).
-
-"
+            "Local callback timed out (Windows often blocks this).\n\n"
             "Next dialog: paste the browser address bar URL\n"
-            "(http://127.0.0.1:%d/callback?code=...).
-
-"
+            "(http://127.0.0.1:%d/callback?code=...).\n\n"
             "Optional permanent fix (Admin CMD):\n"
             "  netsh http add urlacl url=http://127.0.0.1:%d/ user=%%USERNAME%%"
             % (APS_CALLBACK_PORT, APS_CALLBACK_PORT)
@@ -745,9 +729,7 @@ You have %d seconds.\n"
 def ensure_aps_token():
     cfg = load_aps_cfg()
     if not cfg.get("clientId") or not cfg.get("clientSecret"):
-        info("APS Client ID / Secret are not set in script.py.
-
-"
+        info("APS Client ID / Secret are not set in script.py.\n\n"
              "A site admin must set APS_CLIENT_ID and APS_CLIENT_SECRET "
              "at the top of script.py (company APS app).")
         # last resort prompt for admin machines only
@@ -1683,28 +1665,20 @@ def main():
         cfg, tok = ensure_aps_token()
         if not tok:
             info(
-                "Sign-in did not complete.
-
-"
+                "Sign-in did not complete.\n\n"
                 "Tips:\n"
                 "• Sign in to Autodesk in Edge first (same PC user).\n"
                 "• APS Callback URL must be exactly:\n  " + APS_CALLBACK_URL + "\n"
-                "• Client ID / Secret must match that APS app.
-
-"
+                "• Client ID / Secret must match that APS app.\n\n"
                 "You can still load a Local File next."
             )
             source_mode = "local"
         else:
             info(
-                "Signed in to Autodesk.
-
-"
+                "Signed in to Autodesk.\n\n"
                 "ACC folder browse is limited here.\n"
                 "Use Atana IM → Push DB JSON, then choose Local File,\n"
-                "or keep the JSON in your remembered sync folder.
-
-"
+                "or keep the JSON in your remembered sync folder.\n\n"
                 "Checking the saved sync folder…"
             )
             folder = load_sync_folder()
@@ -1727,9 +1701,7 @@ def main():
             json_path = find_db_json_in_folder(folder)
         if not json_path:
             # ask file or folder
-            if confirm("Pick a JSON file?
-
-Yes = file\nNo = folder"):
+            if confirm("Pick a JSON file?\n\nYes = file\nNo = folder"):
                 json_path = pick_json_file()
                 if json_path:
                     save_sync_folder(os.path.dirname(json_path))
@@ -1858,13 +1830,9 @@ Yes = file\nNo = folder"):
 
     # Title blocks
     if designed_by or checked_by:
-        msg = ("Title blocks for task team {}:
-
-"
+        msg = ("Title blocks for task team {}:\n\n"
                "Designed By (TTM): {}\n"
-               "Checked By (Peer): {}
-
-"
+               "Checked By (Peer): {}\n\n"
                "Apply to all title blocks in this model?").format(
                    role or "—", designed_by or "—", checked_by or "—")
         if confirm(msg):
@@ -1877,9 +1845,7 @@ Yes = file\nNo = folder"):
     if set_name.startswith("S") and not set_name.startswith("WS"):
         set_name = "WS" + set_name[1:]
     if matched and plan_rows:
-        msg = ("Publish Set \"{}\"
-
-"
+        msg = ("Publish Set \"{}\"\n\n"
                "Matched {} sheet(s) from the plan for role {}.\n"
                "Create / replace this publish set?").format(set_name, len(matched), role or "all")
         if confirm(msg):
@@ -1892,9 +1858,7 @@ Yes = file\nNo = folder"):
         inv = export_sheet_inventory(folder, role or "ZZ", pack, doc)
 
     info(
-        "Project Sync complete.
-
-"
+        "Project Sync complete.\n\n"
         "Source: {}\n"
         "JSON: {}\n"
         "Role: {}\n"
