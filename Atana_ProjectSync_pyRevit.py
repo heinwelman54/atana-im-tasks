@@ -148,8 +148,9 @@ SHARED_GUIDS = {
     "ATA_ZZ_ProjectStage": "b00f059e-1c43-446a-ad66-b7826e488c8f",
 }
 
-TITLEBLOCK_DESIGNED = ["Designed By", "Designed by", "DESIGNED BY", "Drawn By", "Author"]
+TITLEBLOCK_DESIGNED = ["Designed By", "Designed by", "DESIGNED BY"]  # Drawn By excluded by design
 TITLEBLOCK_CHECKED = ["Checked By", "Checked by", "CHECKED BY", "Approved By", "Approved by"]
+TITLEBLOCK_NEVER_WRITE = ["Drawn By", "Drawn by", "DRAWN BY", "Author", "Drawn"]  # never map TTM here
 
 
 # ---------------------------------------------------------------------------
@@ -1542,7 +1543,21 @@ def _row_functional(row):
     return ""
 
 
-def collect_plan_sheets(pack, role_code, functional_code=None, stage_code=None):
+
+def collect_plan_sheets_for_functionals(pack, role_code, functionals, stage_code=None):
+    """Match plan rows by role + any of the given functional codes."""
+    functionals = [str(f).upper() for f in (functionals or []) if f]
+    if not functionals:
+        return []
+    # Pass first as functional_code and rest as extras so filter allows all
+    return collect_plan_sheets(
+        pack, role_code,
+        functional_code=functionals[0],
+        stage_code=stage_code,
+        extra_functionals=functionals[1:]
+    )
+
+def collect_plan_sheets(pack, role_code, functional_code=None, stage_code=None, extra_functionals=None):
     """Match planned items by Task team (role) + functional breakdown from model name.
     No form filter — all planned deliverables for that team/func are candidates.
     """
@@ -1579,8 +1594,12 @@ def collect_plan_sheets(pack, role_code, functional_code=None, stage_code=None):
             continue
 
         # Functional breakdown match when both sides known
+        # extra_functionals e.g. ["ZZ","XX"] always allowed when provided
+        extras = [str(x).upper() for x in (extra_functionals or [])]
         if functional_code and rfunc:
-            if rfunc != functional_code and functional_code not in rfunc and rfunc not in functional_code:
+            rfu = rfunc.upper()
+            allowed = [functional_code.upper()] + extras
+            if not any(a == rfu or a in rfu or rfu in a for a in allowed):
                 continue
 
         num = _sheet_number_from_row(r)
@@ -1667,7 +1686,10 @@ def pick_titleblock_symbol(doc):
 def set_sheet_param(sheet, names, value):
     if not value:
         return False
+    never = set(n.upper() for n in TITLEBLOCK_NEVER_WRITE)
     for name in names:
+        if str(name).strip().upper() in never:
+            continue  # never write TTM/peer into Drawn By
         try:
             p = sheet.LookupParameter(name)
             if p and not p.IsReadOnly and p.StorageType == StorageType.String:
@@ -1722,12 +1744,12 @@ def ensure_publish_set(doc, set_name, sheet_ids):
 
 
 
-def sheet_picker_form(plan_items, existing_map, titleblock_names):
+def sheet_picker_form(plan_items, existing_map, titleblock_names, extra_zz=None, extra_xx=None):
     """WinForms: checkboxes for create/update sheets + title block combo.
     Returns dict {create: [items], update: [(item,vs)], titleblock_name: str} or None.
     """
     form = Form()
-    form.Text = "Atana — Sheet sync"
+    form.Text = "ATANA — SYNC SHEETS"
     form.Width = 720
     form.Height = 560
     form.StartPosition = FormStartPosition.CenterScreen
@@ -1844,8 +1866,38 @@ def sheet_picker_form(plan_items, existing_map, titleblock_names):
             cl_ex.SetItemChecked(i, False)
     btn_none.Click += sel_none
 
+
+    # Optional ZZ / XX functional sheets
+    result["include_zz"] = False
+    result["include_xx"] = False
+    result["extra_zz"] = list(extra_zz or [])
+    result["extra_xx"] = list(extra_xx or [])
+    chk_zz = None
+    chk_xx = None
+    try:
+        from System.Windows.Forms import CheckBox
+        if extra_zz:
+            chk_zz = CheckBox()
+            chk_zz.Text = "Also include ZZ sheets (%d)" % len(extra_zz)
+            chk_zz.Left = 12
+            chk_zz.Top = 438
+            chk_zz.Width = 280
+            chk_zz.Checked = False
+            form.Controls.Add(chk_zz)
+        if extra_xx:
+            chk_xx = CheckBox()
+            chk_xx.Text = "Also include XX sheets (%d)" % len(extra_xx)
+            chk_xx.Left = 300
+            chk_xx.Top = 438
+            chk_xx.Width = 280
+            chk_xx.Checked = False
+            form.Controls.Add(chk_xx)
+    except Exception:
+        pass
+
     summary = Label()
     summary.Text = "New: %d   Existing: %d" % (len(create_items), len(update_items))
+
     summary.Left = 240
     summary.Top = 416
     summary.Width = 300
@@ -1862,6 +1914,13 @@ def sheet_picker_form(plan_items, existing_map, titleblock_names):
                 result["update"].append((update_items[i][0], update_items[i][1]))
         if cmb.SelectedIndex >= 0:
             result["tb"] = str(cmb.Items[cmb.SelectedIndex])
+        try:
+            if chk_zz is not None and chk_zz.Checked:
+                result["include_zz"] = True
+            if chk_xx is not None and chk_xx.Checked:
+                result["include_xx"] = True
+        except Exception:
+            pass
         form.DialogResult = DR.OK
         form.Close()
 
@@ -1919,7 +1978,7 @@ def sync_sheets_ui(doc, pack, role, stage_code, designed_by, checked_by, functio
         ) % (discipline_full_name(role) or role or "(unknown)", functional_code or "(any)")
         if not confirm(msg):
             return
-        info("Sheet sync skipped.")
+        info("SYNC SHEETS skipped.")
         return
 
     # Titleblock list
@@ -1931,12 +1990,12 @@ def sync_sheets_ui(doc, pack, role, stage_code, designed_by, checked_by, functio
     # Intro confirm
     NL = chr(10)
     intro = (
-        "Sheet sync" + NL + NL
+        "SYNCHRONISE SHEETS" + NL + NL
         + "Role: %s" + NL
         + "Functional: %s" + NL
         + "Planned matches: %d" + NL + NL
-        + "Yes = open sheet picker (tick boxes + title block)" + NL
-        + "No = skip"
+        + "Yes = SYNC (open sheet picker)" + NL
+        + "No = SKIP"
     ) % (
         discipline_full_name(role) or role or "?",
         functional_code or "(any)",
@@ -1945,14 +2004,39 @@ def sync_sheets_ui(doc, pack, role, stage_code, designed_by, checked_by, functio
     if not confirm(intro):
         return
 
-    picked = sheet_picker_form(plan, existing, tb_names)
+    extra_zz = collect_plan_sheets_for_functionals(pack, role, ["ZZ"], stage_code=stage_code)
+    extra_xx = collect_plan_sheets_for_functionals(pack, role, ["XX"], stage_code=stage_code)
+    # Avoid duplicates already in main plan
+    main_nums = set((x.get("number") or "").upper() for x in plan)
+    extra_zz = [x for x in extra_zz if (x.get("number") or "").upper() not in main_nums]
+    extra_xx = [x for x in extra_xx if (x.get("number") or "").upper() not in main_nums]
+    picked = sheet_picker_form(plan, existing, tb_names, extra_zz=extra_zz, extra_xx=extra_xx)
+
     if not picked:
-        info("Sheet sync cancelled.")
+        info("SYNC SHEETS skipped.")
         return
 
-    to_create = picked.get("create") or []
-    to_update = picked.get("update") or []
+    to_create = list(picked.get("create") or [])
+    to_update = list(picked.get("update") or [])
     tb_name = picked.get("tb")
+    # Merge optional ZZ / XX sheets (all selected for create or update by existence)
+    def _merge_extras(extra_list):
+        for item in extra_list or []:
+            num = (item.get("number") or "")
+            match = existing.get(num) or existing.get(num.upper())
+            if not match:
+                for k, vs in existing.items():
+                    if k and num and k.upper() == num.upper():
+                        match = vs
+                        break
+            if match:
+                to_update.append((item, match))
+            else:
+                to_create.append(item)
+    if picked.get("include_zz"):
+        _merge_extras(picked.get("extra_zz"))
+    if picked.get("include_xx"):
+        _merge_extras(picked.get("extra_xx"))
     tb = tb_map.get(tb_name) if tb_name else None
     if to_create and tb is None:
         # try first available
@@ -2235,7 +2319,7 @@ def main():
         mcodes = parse_model_codes(model_path(doc) if "model_path" in dir() else (doc.PathName if doc else ""))
         sync_sheets_ui(doc, pack, role, stage_code, designed_by, checked_by, functional_code=mcodes.get("functional"))
     except Exception as ex:
-        info("Sheet sync error:\n" + str(ex))
+        info("SYNCHRONISE SHEETS error:\n" + str(ex))
 
 
     # Globals

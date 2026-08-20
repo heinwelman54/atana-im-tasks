@@ -19,6 +19,9 @@
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
 <style>
   :root{
+    --header-top-bg: linear-gradient(90deg, #3e0b3b 0%, #2a8f82 52%, #a8d5a2 100%);
+    --header-main-bg: linear-gradient(90deg, #3e0b3b 0%, #3e0b3b 55%, #5c3d1a 78%, #d5c427 100%);
+
     --purple-950:#2b0729;
     --purple-900:#3e0b3b;
     --purple-800:#60365e;
@@ -71,7 +74,7 @@
   /* ============ TOP BAR ============ */
   .topbar{
     position:sticky;top:0;z-index:20;
-    background:linear-gradient(90deg, #3e0b3b 0%, #2a8f82 52%, #a8d5a2 100%);
+    background:var(--header-top-bg);
     color:#fff;
     padding:calc(14px + env(safe-area-inset-top)) 18px 14px;
     display:flex;align-items:center;gap:12px;
@@ -103,6 +106,19 @@
     z-index:0;
   }
   .app-version-badge:hover{color:rgba(255,255,255,0.55);}
+  .topbar-edit-btn{
+    display:none;margin-left:6px;border:1px solid rgba(255,255,255,0.4);background:rgba(255,255,255,0.12);
+    color:#fff;font-size:12px;font-weight:600;padding:6px 12px;border-radius:999px;cursor:pointer;
+    -webkit-app-region:no-drag;app-region:no-drag;
+  }
+  .topbar-edit-btn.show{display:inline-flex;align-items:center;}
+  .topbar-edit-btn:active{background:rgba(255,255,255,0.22);}
+  .palette-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px;}
+  .palette-option{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--slate-300);border-radius:12px;cursor:pointer;background:#fff;}
+  .palette-option.active{border-color:var(--purple-900);box-shadow:0 0 0 2px rgba(62,11,59,0.15);}
+  .palette-swatch{height:28px;flex:1;border-radius:8px;border:1px solid rgba(0,0,0,0.08);min-width:0;}
+  .palette-option input{flex-shrink:0;}
+  .palette-label{font-size:12px;font-weight:600;color:var(--ink);min-width:120px;}
   .acc-status-btn{
     position:absolute;left:calc(50% + 28px);top:50%;transform:translateY(-50%);
     display:inline-flex;align-items:center;gap:6px;
@@ -320,7 +336,7 @@
 
   /* ============ PROJECT WORKSPACE ============ */
   .ws-header-card{
-    background:linear-gradient(90deg, #3e0b3b 0%, #3e0b3b 55%, #5c3d1a 78%, #d5c427 100%);
+    background:var(--header-main-bg);
     color:#fff;border-radius:var(--radius-lg);padding:0;margin-bottom:16px;overflow:hidden;
   }
   .ws-header-card .ws-name{font-family:var(--serif);font-size:19px;font-weight:700;}
@@ -1427,6 +1443,7 @@
       <span class="acc-status-dot" id="accStatusDot"></span>
       <span class="acc-status-lbl">FORMA</span>
     </button>
+    <button type="button" class="topbar-edit-btn" id="topbarEditProjectBtn" title="Edit project" aria-label="Edit project">Edit</button>
     <button class="icon-btn" id="topbarAction" style="display:none;">+</button>
   </div>
 
@@ -1637,6 +1654,21 @@
         <input type="file" id="settingsImportProjectInput" accept=".json,application/json" style="display:none;">
         <div id="settingsProjectList"></div>
         <input type="file" id="importNamingFile" accept=".xlsx,.xls" style="display:none;">
+      </div>
+
+      
+      <div class="card" style="margin-top:14px;" id="settingsCustomisationCard">
+        <div class="chart-card-title" style="margin-bottom:6px;">Customisation</div>
+        <p class="section-sub" style="margin-bottom:12px;">Header colour themes. Choices are saved on this device.</p>
+        <div class="field">
+          <label>Top frame (app bar)</label>
+          <div class="palette-grid" id="paletteTopGrid"></div>
+        </div>
+        <div class="field" style="margin-top:14px;">
+          <label>Main project header</label>
+          <div class="palette-grid" id="paletteMainGrid"></div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-block" id="paletteResetBtn" style="margin-top:12px;">Reset to defaults</button>
       </div>
 
       <div class="card" style="margin-top:14px;" id="apsCard">
@@ -2061,8 +2093,109 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.5.7";
-const APP_BUILD = "2026-08-20-gradients-publish";
+const APP_VERSION = "3.5.8";
+const APP_BUILD = "2026-08-20-customise-edit";
+
+/* ---- Header customisation (local) ---- */
+const HEADER_PALETTES = {
+  top: [
+    { id: "F", label: "F · Purple → Teal → Mint", css: "linear-gradient(90deg, #3e0b3b 0%, #2a8f82 52%, #a8d5a2 100%)" },
+    { id: "A", label: "A · Gold → Purple", css: "linear-gradient(90deg, #d5c427 0%, #3e0b3b 100%)" },
+    { id: "B", label: "B · Purple → Gold", css: "linear-gradient(90deg, #3e0b3b 0%, #d5c427 100%)" },
+    { id: "H", label: "H · Purple depth", css: "linear-gradient(90deg, #3e0b3b 0%, #7b5979 100%)" },
+    { id: "E", label: "E · Gold → Teal → Purple", css: "linear-gradient(90deg, #d5c427 0%, #2a8f82 50%, #3e0b3b 100%)" },
+    { id: "solid", label: "Solid purple", css: "#3e0b3b" }
+  ],
+  main: [
+    { id: "B70", label: "B · Purple 70% · Gold 30%", css: "linear-gradient(90deg, #3e0b3b 0%, #3e0b3b 55%, #5c3d1a 78%, #d5c427 100%)" },
+    { id: "B", label: "B · Purple → Gold", css: "linear-gradient(90deg, #3e0b3b 0%, #d5c427 100%)" },
+    { id: "A", label: "A · Gold → Purple", css: "linear-gradient(90deg, #d5c427 0%, #3e0b3b 100%)" },
+    { id: "D", label: "D · Deep → Mid → Gold", css: "linear-gradient(90deg, #3e0b3b 0%, #60365e 50%, #d5c427 100%)" },
+    { id: "F", label: "F · Purple → Teal → Mint", css: "linear-gradient(90deg, #3e0b3b 0%, #2a8f82 52%, #a8d5a2 100%)" },
+    { id: "H", label: "H · Purple depth", css: "linear-gradient(90deg, #3e0b3b 0%, #7b5979 100%)" },
+    { id: "solid", label: "Solid purple", css: "#3e0b3b" }
+  ]
+};
+const HEADER_DEFAULTS = { top: "F", main: "B70" };
+
+function loadHeaderTheme(){
+  try {
+    const raw = localStorage.getItem("atanaHeaderTheme");
+    if(raw) return JSON.parse(raw);
+  } catch(e){}
+  return { top: HEADER_DEFAULTS.top, main: HEADER_DEFAULTS.main };
+}
+function saveHeaderTheme(t){
+  try { localStorage.setItem("atanaHeaderTheme", JSON.stringify(t)); } catch(e){}
+}
+function applyHeaderTheme(theme){
+  theme = theme || loadHeaderTheme();
+  const top = (HEADER_PALETTES.top.find(p => p.id === theme.top) || HEADER_PALETTES.top[0]).css;
+  const main = (HEADER_PALETTES.main.find(p => p.id === theme.main) || HEADER_PALETTES.main[0]).css;
+  document.documentElement.style.setProperty("--header-top-bg", top);
+  document.documentElement.style.setProperty("--header-main-bg", main);
+}
+function renderPaletteGrids(){
+  const theme = loadHeaderTheme();
+  const topGrid = document.getElementById("paletteTopGrid");
+  const mainGrid = document.getElementById("paletteMainGrid");
+  if(!topGrid || !mainGrid) return;
+  function fill(grid, key, list){
+    grid.innerHTML = list.map(p => {
+      const active = theme[key] === p.id ? " active" : "";
+      return `<label class="palette-option${active}" data-palette-key="${key}" data-palette-id="${p.id}">
+        <input type="radio" name="palette-${key}" value="${p.id}" ${theme[key]===p.id?"checked":""}/>
+        <span class="palette-label">${p.label}</span>
+        <span class="palette-swatch" style="background:${p.css}"></span>
+      </label>`;
+    }).join("");
+    grid.querySelectorAll(".palette-option").forEach(el => {
+      el.addEventListener("click", () => {
+        const k = el.getAttribute("data-palette-key");
+        const id = el.getAttribute("data-palette-id");
+        const t = loadHeaderTheme();
+        t[k] = id;
+        saveHeaderTheme(t);
+        applyHeaderTheme(t);
+        renderPaletteGrids();
+      });
+    });
+  }
+  fill(topGrid, "top", HEADER_PALETTES.top);
+  fill(mainGrid, "main", HEADER_PALETTES.main);
+  const reset = document.getElementById("paletteResetBtn");
+  if(reset && !reset._bound){
+    reset._bound = true;
+    reset.addEventListener("click", () => {
+      saveHeaderTheme({ top: HEADER_DEFAULTS.top, main: HEADER_DEFAULTS.main });
+      applyHeaderTheme();
+      renderPaletteGrids();
+      try { showToast("Header colours reset"); } catch(e){}
+    });
+  }
+}
+function syncTopbarEditBtn(show){
+  const btn = document.getElementById("topbarEditProjectBtn");
+  if(!btn) return;
+  btn.classList.toggle("show", !!show);
+}
+document.addEventListener("DOMContentLoaded", () => {
+  try { applyHeaderTheme(); } catch(e){}
+  try { renderPaletteGrids(); } catch(e){}
+  const te = document.getElementById("topbarEditProjectBtn");
+  if(te){
+    te.addEventListener("click", () => {
+      const legacy = document.getElementById("wsEditProjectBtn");
+      if(legacy) legacy.click();
+      else {
+        try {
+          const p = typeof currentProjectId !== "undefined" ? projectById(currentProjectId) : null;
+          if(p && typeof openEditProjectSheet === "function") openEditProjectSheet(p);
+        } catch(e){}
+      }
+    });
+  }
+});
 
 /** Atana IM Framework — path relative to app (same folder on GitHub Pages / local). */
 const IM_FRAMEWORK_URL = "Atana-IM-Framework.html";
@@ -14733,6 +14866,8 @@ function renderTeam(){
 /* ===================== RENDER: WORKSPACE ===================== */
 
 function renderWorkspace(){
+  try { syncTopbarEditBtn(true); } catch(e){}
+
   const project = projectById(currentProjectId);
   if(!project){ switchTab("projects"); return; }
 
@@ -14773,7 +14908,7 @@ function renderWorkspace(){
           <div class="ws-active-notes-label">Active status</div>
           <div class="ws-active-notes-text" id="wsActiveNotesEdit" contenteditable="true" data-placeholder="Click to add active status notes…">${(project.activeNotes && String(project.activeNotes).trim()) ? notesToBulletHtml(project.activeNotes) : ""}</div>
         </div>
-        <button type="button" class="ws-edit-btn" id="wsEditProjectBtn" aria-label="Edit project">Edit</button>
+        <button type="button" class="ws-edit-btn" id="wsEditProjectBtn" aria-label="Edit project" style="display:none;">Edit</button>
       </div>
       <div class="progress-track"><div class="progress-fill" style="width:${prog.pct}%"></div></div>
       <div class="pc-progress-label">${prog.done}/${prog.total} tasks complete &middot; ${prog.pct}%</div>
@@ -17299,6 +17434,8 @@ function switchTab(tab){
 }
 
 function openProject(id){
+  try { syncTopbarEditBtn(true); } catch(e){}
+
   setTimeout(() => { try { wireFabAndCollapse(); updateFabVisibility(); } catch(e){} }, 30);
   currentProjectId = id;
   currentWsView = "imtasks";
