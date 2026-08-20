@@ -1,5 +1,5 @@
 {
-  "version": "1.1-ef-table",
+  "version": "1.2-annotation",
   "standard": "NBS BIM Object Standard v2.2 (July 2023) §5.1.5",
   "delimiter": "_",
   "pattern": "{Originator}_{Source}_{Category}_{Material}_{Object}",
@@ -18642,5 +18642,669 @@
       "level": "3",
       "revitCategory": null
     }
-  ]
+  ],
+  "annotation": {
+    "pattern": "Originator_Source_AnnotationCategory_AnnotationType",
+    "categories": [
+      {
+        "code": "ANN",
+        "label": "Annotation"
+      },
+      {
+        "code": "DET",
+        "label": "DetailedItem"
+      },
+      {
+        "code": "TAG",
+        "label": "Tag"
+      },
+      {
+        "code": "SYM",
+        "label": "Symbol"
+      },
+      {
+        "code": "SEC",
+        "label": "Section"
+      },
+      {
+        "code": "TitleBlock",
+        "label": "TitleBlock"
+      },
+      {
+        "code": "VIE",
+        "label": "View"
+      },
+      {
+        "code": "TTL",
+        "label": "Title"
+      },
+      {
+        "code": "PRO",
+        "label": "Profile"
+      },
+      {
+        "code": "MRK",
+        "label": "Mark"
+      },
+      {
+        "code": "REF",
+        "label": "Reference"
+      },
+      {
+        "code": "PAT",
+        "label": "FillPattern"
+      }
+    ],
+    "types": [
+      {
+        "code": "Symbols",
+        "label": "Symbols"
+      },
+      {
+        "code": "Callout",
+        "label": "Callout"
+      },
+      {
+        "code": "Detail",
+        "label": "Detail"
+      },
+      {
+        "code": "Head",
+        "label": "Section Head"
+      },
+      {
+        "code": "ArrowNorth",
+        "label": "ArrowNorth"
+      },
+      {
+        "code": "Reference",
+        "label": "Reference"
+      },
+      {
+        "code": "CoordinateSpot",
+        "label": "CoordinateSpot"
+      },
+      {
+        "code": "SlopeSpot",
+        "label": "SlopeSpot"
+      },
+      {
+        "code": "Revision",
+        "label": "Revision"
+      },
+      {
+        "code": "Matchline",
+        "label": "Matchline"
+      },
+      {
+        "code": "PlanKey",
+        "label": "PlanKey"
+      },
+      {
+        "code": "Centerline",
+        "label": "Centerline"
+      },
+      {
+        "code": "AlarmFire",
+        "label": "AlarmFire"
+      },
+      {
+        "code": "DeviceElectrical",
+        "label": "DeviceElectrical"
+      },
+      {
+        "code": "FixtureLighting",
+        "label": "FixtureLighting"
+      },
+      {
+        "code": "FixturePlumbing",
+        "label": "FixturePlumbing"
+      },
+      {
+        "code": "Valve",
+        "label": "Valve"
+      },
+      {
+        "code": "FittingPipe",
+        "label": "FittingPipe"
+      },
+      {
+        "code": "FittingDuct",
+        "label": "FittingDuct"
+      },
+      {
+        "code": "Sprinkler",
+        "label": "Sprinkler"
+      },
+      {
+        "code": "Diffuser",
+        "label": "Diffuser"
+      },
+      {
+        "code": "TerminalAir",
+        "label": "TerminalAir"
+      },
+      {
+        "code": "EquipmentSpecialty",
+        "label": "EquipmentSpecialty"
+      },
+      {
+        "code": "SwingDoor",
+        "label": "SwingDoor"
+      },
+      {
+        "code": "SwingWindow",
+        "label": "SwingWindow"
+      },
+      {
+        "code": "LeaderTag",
+        "label": "LeaderTag"
+      },
+      {
+        "code": "Custom",
+        "label": "Custom"
+      },
+      {
+        "code": "DirectionSpan",
+        "label": "DirectionSpan"
+      },
+      {
+        "code": "ElevationSpot",
+        "label": "ElevationSpot"
+      },
+      {
+        "code": "ReferenceView",
+        "label": "ReferenceView"
+      },
+      {
+        "code": "Heads",
+        "label": "REMOVE"
+      },
+      {
+        "code": "Grid",
+        "label": "Grid"
+      },
+      {
+        "code": "Level",
+        "label": "Level"
+      },
+      {
+        "code": "Marks",
+        "label": "Marks"
+      },
+      {
+        "code": "Elevation",
+        "label": "Elevation"
+      },
+      {
+        "code": "Section",
+        "label": "Section"
+      },
+      {
+        "code": "Detailed Items",
+        "label": "Detailed Items"
+      },
+      {
+        "code": "AngleEdge",
+        "label": "AngleEdge"
+      },
+      {
+        "code": "BeadCorner",
+        "label": "BeadCorner"
+      },
+      {
+        "code": "ComponentFloor",
+        "label": "ComponentFloor"
+      },
+      {
+        "code": "ComponentRoof",
+        "label": "ComponentRoof"
+      },
+      {
+        "code": "ComponentWall",
+        "label": "ComponentWall"
+      },
+      {
+        "code": "ConduitElectrical",
+        "label": "ConduitElectrical"
+      },
+      {
+        "code": "ConnectionStructural",
+        "label": "ConnectionStructural"
+      },
+      {
+        "code": "DetailFlashing",
+        "label": "DetailFlashing"
+      },
+      {
+        "code": "DetailFrameDoor",
+        "label": "DetailFrameDoor"
+      },
+      {
+        "code": "DetailFrameWindow",
+        "label": "DetailFrameWindow"
+      },
+      {
+        "code": "EdgeDrip",
+        "label": "EdgeDrip"
+      },
+      {
+        "code": "EquipmentMechanical",
+        "label": "EquipmentMechanical"
+      },
+      {
+        "code": "Fastener",
+        "label": "Fastener"
+      },
+      {
+        "code": "Flashing",
+        "label": "Flashing"
+      },
+      {
+        "code": "Insulation",
+        "label": "Insulation"
+      },
+      {
+        "code": "InsulationBatt",
+        "label": "InsulationBatt"
+      },
+      {
+        "code": "InsulationRigid",
+        "label": "InsulationRigid"
+      },
+      {
+        "code": "JointControl",
+        "label": "JointControl"
+      },
+      {
+        "code": "JointExpansion",
+        "label": "JointExpansion"
+      },
+      {
+        "code": "LineBreak",
+        "label": "LineBreak"
+      },
+      {
+        "code": "MaterialFireproofing",
+        "label": "MaterialFireproofing"
+      },
+      {
+        "code": "MembraneWaterproofing",
+        "label": "MembraneWaterproofing"
+      },
+      {
+        "code": "ProfileConcrete",
+        "label": "ProfileConcrete"
+      },
+      {
+        "code": "ProfileJoist",
+        "label": "ProfileJoist"
+      },
+      {
+        "code": "ProfileWood",
+        "label": "ProfileWood"
+      },
+      {
+        "code": "Sealant",
+        "label": "Sealant"
+      },
+      {
+        "code": "SectionPipeAndDuct",
+        "label": "SectionPipeAndDuct"
+      },
+      {
+        "code": "ShapeRebar",
+        "label": "ShapeRebar"
+      },
+      {
+        "code": "ShapeSteel",
+        "label": "ShapeSteel"
+      },
+      {
+        "code": "Stud",
+        "label": "Stud"
+      },
+      {
+        "code": "SymbolWeld",
+        "label": "SymbolWeld"
+      },
+      {
+        "code": "Profiles",
+        "label": "Profiles"
+      },
+      {
+        "code": "Baluster",
+        "label": "Baluster"
+      },
+      {
+        "code": "BaseWall",
+        "label": "BaseWall"
+      },
+      {
+        "code": "Beam",
+        "label": "Beam"
+      },
+      {
+        "code": "CapWall",
+        "label": "CapWall"
+      },
+      {
+        "code": "Column",
+        "label": "Column"
+      },
+      {
+        "code": "EdgePanelCurtainWall",
+        "label": "EdgePanelCurtainWall"
+      },
+      {
+        "code": "EdgeRamp",
+        "label": "EdgeRamp"
+      },
+      {
+        "code": "EdgeRoof",
+        "label": "EdgeRoof"
+      },
+      {
+        "code": "EdgeSlab",
+        "label": "EdgeSlab"
+      },
+      {
+        "code": "ExtrusionCustom",
+        "label": "ExtrusionCustom"
+      },
+      {
+        "code": "Fascia",
+        "label": "Fascia"
+      },
+      {
+        "code": "FrameCurtainWall",
+        "label": "FrameCurtainWall"
+      },
+      {
+        "code": "Generic",
+        "label": "Generic"
+      },
+      {
+        "code": "Gutter",
+        "label": "Gutter"
+      },
+      {
+        "code": "Handrail",
+        "label": "Handrail"
+      },
+      {
+        "code": "InsulationDuct",
+        "label": "InsulationDuct"
+      },
+      {
+        "code": "InsulationPipe",
+        "label": "InsulationPipe"
+      },
+      {
+        "code": "Mullion",
+        "label": "Mullion"
+      },
+      {
+        "code": "NosingStair",
+        "label": "NosingStair"
+      },
+      {
+        "code": "Rail",
+        "label": "Rail"
+      },
+      {
+        "code": "RailTop",
+        "label": "RailTop"
+      },
+      {
+        "code": "RevealWall",
+        "label": "RevealWall"
+      },
+      {
+        "code": "RiserStair",
+        "label": "RiserStair"
+      },
+      {
+        "code": "SweepRoof",
+        "label": "SweepRoof"
+      },
+      {
+        "code": "SweepWall",
+        "label": "SweepWall"
+      },
+      {
+        "code": "TreadStair",
+        "label": "TreadStair"
+      },
+      {
+        "code": "Annotation",
+        "label": "Annotation"
+      },
+      {
+        "code": "----TitleBlock----",
+        "label": "----TitleBlock----"
+      },
+      {
+        "code": "A0",
+        "label": "TitleBlock"
+      },
+      {
+        "code": "A0+",
+        "label": "TitleBlock"
+      },
+      {
+        "code": "A1",
+        "label": "TitleBlock"
+      },
+      {
+        "code": "A2",
+        "label": "TitleBlock"
+      },
+      {
+        "code": "A3",
+        "label": "TitleBlock"
+      },
+      {
+        "code": "A4",
+        "label": "TitleBlock"
+      },
+      {
+        "code": "B",
+        "label": "TitleBlock Bottom"
+      },
+      {
+        "code": "S",
+        "label": "TitleBlock Side"
+      },
+      {
+        "code": "Schedule",
+        "label": "TitleBlock"
+      },
+      {
+        "code": "StartPage",
+        "label": "TitleBlock"
+      },
+      {
+        "code": "Transmittal",
+        "label": "TitleBlock"
+      },
+      {
+        "code": "MetaData",
+        "label": "TitleBlock"
+      },
+      {
+        "code": "--------",
+        "label": "--------"
+      },
+      {
+        "code": "Views",
+        "label": "Views"
+      },
+      {
+        "code": "Title",
+        "label": "Title"
+      },
+      {
+        "code": "LevelHead",
+        "label": "Level Head"
+      },
+      {
+        "code": "GridHead",
+        "label": "Grid Head"
+      },
+      {
+        "code": "SectionHead",
+        "label": "Section Head"
+      },
+      {
+        "code": "ElevationMark",
+        "label": "Elevation Mark"
+      },
+      {
+        "code": "ViewTitle",
+        "label": "View Title"
+      },
+      {
+        "code": "Viewport",
+        "label": "Viewport"
+      },
+      {
+        "code": "RoomTag",
+        "label": "Room Tag"
+      },
+      {
+        "code": "DoorTag",
+        "label": "Door Tag"
+      },
+      {
+        "code": "WindowTag",
+        "label": "Window Tag"
+      },
+      {
+        "code": "WallTag",
+        "label": "Wall Tag"
+      },
+      {
+        "code": "SpaceTag",
+        "label": "Space Tag"
+      },
+      {
+        "code": "KeynoteTag",
+        "label": "Keynote Tag"
+      },
+      {
+        "code": "SpotElevation",
+        "label": "Spot Elevation"
+      },
+      {
+        "code": "SpotCoordinate",
+        "label": "Spot Coordinate"
+      },
+      {
+        "code": "SpotSlope",
+        "label": "Spot Slope"
+      },
+      {
+        "code": "RevisionCloud",
+        "label": "Revision Cloud"
+      },
+      {
+        "code": "TextNote",
+        "label": "Text Note"
+      },
+      {
+        "code": "DimensionLinear",
+        "label": "Dimension Linear"
+      },
+      {
+        "code": "DimensionAligned",
+        "label": "Dimension Aligned"
+      },
+      {
+        "code": "FilledRegion",
+        "label": "Filled Region"
+      },
+      {
+        "code": "MaskingRegion",
+        "label": "Masking Region"
+      },
+      {
+        "code": "BreakLine",
+        "label": "Break Line"
+      },
+      {
+        "code": "GenericAnnotation",
+        "label": "Generic Annotation"
+      },
+      {
+        "code": "NorthArrow",
+        "label": "North Arrow"
+      },
+      {
+        "code": "ScaleBar",
+        "label": "Scale Bar"
+      },
+      {
+        "code": "ColorFillLegend",
+        "label": "Color Fill Legend"
+      },
+      {
+        "code": "KeynoteLegend",
+        "label": "Keynote Legend"
+      },
+      {
+        "code": "SymbolLegend",
+        "label": "Symbol Legend"
+      }
+    ],
+    "textSizes": [
+      {
+        "code": "1.8",
+        "label": "1.8 mm"
+      },
+      {
+        "code": "2.0",
+        "label": "2.0 mm"
+      },
+      {
+        "code": "2.5",
+        "label": "2.5 mm"
+      },
+      {
+        "code": "3.0",
+        "label": "3.0 mm"
+      },
+      {
+        "code": "3.5",
+        "label": "3.5 mm"
+      },
+      {
+        "code": "5.0",
+        "label": "5.0 mm"
+      },
+      {
+        "code": "1.8Bold",
+        "label": "1.8 mm Bold"
+      },
+      {
+        "code": "2.0Bold",
+        "label": "2.0 mm Bold"
+      },
+      {
+        "code": "2.5Bold",
+        "label": "2.5 mm Bold"
+      },
+      {
+        "code": "3.0Bold",
+        "label": "3.0 mm Bold"
+      }
+    ],
+    "relatedAttributes": [
+      "Status",
+      "Classification",
+      "Revision",
+      "Advisory Group"
+    ],
+    "note": "Annotation size (1.8, 2.0, 2.5, 3.0, Bold variants) is a Revit TYPE name — not part of the annotation family naming pattern."
+  }
 }

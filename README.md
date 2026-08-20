@@ -1,2 +1,2 @@
-# Atana IM Tasks v3.3.8
-EF from Uniclass EF table only · Hein email contact
+# Atana IM Tasks v3.4.0
+Asset + Annotation naming modes · FORMA export MH - Asset Convention

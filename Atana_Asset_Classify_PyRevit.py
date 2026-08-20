@@ -16,6 +16,7 @@ clr.AddReference("RevitAPIUI")
 from Autodesk.Revit.DB import (
     FilteredElementCollector, Family, FamilySymbol,
     StorageType, Transaction, SaveAsOptions,
+    IFamilyLoadOptions, FamilySource,
     ExternalDefinitionCreationOptions, BuiltInCategory,
     Category, SpecTypeId, GroupTypeId, LabelUtils
 )
@@ -430,6 +431,73 @@ def get_open_documents():
     return docs
 
 
+
+class AtanaFamilyLoadOptions(IFamilyLoadOptions):
+    """Always overwrite existing family + parameter values when reloading."""
+    def OnFamilyFound(self, familyInUse, overwriteParameterValues):
+        try:
+            overwriteParameterValues.Value = True
+        except Exception:
+            pass
+        return True
+
+    def OnSharedFamilyFound(self, sharedFamily, familyInUse, source, overwriteParameterValues):
+        try:
+            source.Value = FamilySource.Family
+        except Exception:
+            pass
+        try:
+            overwriteParameterValues.Value = True
+        except Exception:
+            pass
+        return True
+
+
+def load_family_into_project(proj_doc, family_path):
+    """Load .rfa into project with override. Returns (ok, message)."""
+    if proj_doc is None or proj_doc.IsFamilyDocument:
+        return False, "Not a project document"
+    if not family_path or not os.path.isfile(family_path):
+        return False, "Family file not found: {}".format(family_path)
+    try:
+        t = Transaction(proj_doc, "Atana load family (overwrite)")
+        t.Start()
+        try:
+            opts = AtanaFamilyLoadOptions()
+            # LoadFamily returns bool; overloaded with IFamilyLoadOptions
+            result = proj_doc.LoadFamily(family_path, opts)
+            t.Commit()
+            if result:
+                return True, "Loaded with overwrite: {}".format(os.path.basename(family_path))
+            # Some Revit versions return family via out param overload
+            return True, "Load attempted (check project browser): {}".format(os.path.basename(family_path))
+        except Exception as ex:
+            if t.HasStarted():
+                t.RollBack()
+            return False, str(ex)
+    except Exception as ex:
+        return False, str(ex)
+
+
+def task_team_from_name(parts, data):
+    """Best-effort task team code from object list or family name."""
+    obj = (parts or {}).get("object") or ""
+    for team, items in (data.get("objectsByTaskTeam") or {}).items():
+        for it in items or []:
+            if (it.get("name") or "") == obj:
+                return team
+    # fallback: category-based hints
+    cat = ((parts or {}).get("category") or "").upper()
+    hints = {
+        "AIR": "MH", "DCT": "MH", "AHU": "MH",
+        "DOR": "AR", "WIN": "AR", "WAL": "AR", "CEL": "AR", "FLR": "AR",
+        "COL": "ST", "FRM": "ST", "FND": "ST",
+        "LGT": "EE", "PWR": "EE",
+    }
+    return hints.get(cat) or "TASK TEAM"
+
+
+
 def main():
     if doc is None:
         show_result("Atana Asset Classify", ["[NO] No active document."], success=False)
@@ -599,6 +667,7 @@ def main():
 
     show_result("Classification applied", lines, success=bool(written))
 
+    saved_path = None
     if ask_yes_no("Save family as {}.rfa?".format(new_name), "Overwrite if the file already exists."):
         try:
             path = fam_doc.PathName
@@ -609,9 +678,75 @@ def main():
             opts = SaveAsOptions()
             opts.OverwriteExistingFile = True
             fam_doc.SaveAs(target, opts)
+            saved_path = target
             show_result("Saved", ["[OK] " + target], success=True)
         except Exception as ex:
             show_result("Save As failed", ["[NO] " + str(ex)], success=False)
+            saved_path = None
+    else:
+        try:
+            if fam_doc.PathName and os.path.isfile(fam_doc.PathName):
+                saved_path = fam_doc.PathName
+        except Exception:
+            pass
+
+    # Load family back into open project(s) with overwrite
+    project_docs = [d for d in get_open_documents() if d and not d.IsFamilyDocument]
+    if saved_path and project_docs:
+        if ask_yes_no(
+            "Load family into open project?",
+            "This will OVERWRITE the existing family definition in the project "
+            "(types and parameter values from the .rfa will win).\n\n"
+            "File:\n{}".format(saved_path)
+        ):
+            load_lines = []
+            any_ok = False
+            for pd in project_docs:
+                ok, msg = load_family_into_project(pd, saved_path)
+                if ok:
+                    any_ok = True
+                    load_lines.append("[OK] {} — {}".format(pd.Title, msg))
+                else:
+                    load_lines.append("[NO] {} — {}".format(pd.Title, msg))
+            show_result(
+                "Family loaded into project",
+                load_lines + [
+                    "",
+                    "[..] Existing project family was set to OVERWRITE when loaded.",
+                ],
+                success=any_ok,
+            )
+    elif saved_path and not project_docs:
+        show_result(
+            "No project open",
+            [
+                "[..] Family was saved but no project/template is open in this session.",
+                "[..] Open the project, then load the .rfa (overwrite) or run Classify again.",
+                "",
+                saved_path,
+            ],
+            success=True,
+        )
+
+    # Content Catalog harvest guidance
+    team = task_team_from_name(parts, data)
+    show_result(
+        "Content Catalog — next step",
+        [
+            "[OK] Family classified and ready for the catalog",
+            "",
+            "[..] Task team collection: {}".format(team),
+            "[..] Harvest / publish this asset with Content Catalog",
+            "    into the {} collection (BIM Champion write access).".format(team),
+            "",
+            "[..] Do not leave the fixed family only inside the project.",
+            "[..] Catalog is the system of record — notify the project team after publish.",
+            "",
+            "[..] File:",
+            saved_path or "(save the .rfa first)",
+        ],
+        success=True,
+    )
 
 
 if __name__ == "__main__":

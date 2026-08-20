@@ -178,6 +178,11 @@ details.guide .body code{background:#f5f3ff;padding:1px 5px;border-radius:4px;fo
 
 .footer{padding:18px;text-align:center;color:var(--muted);font-size:12px}
 .tt-row{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:4px}
+.mode-tabs{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.mode-tab{flex:1;min-width:140px;padding:10px 14px;border-radius:12px;border:1.5px solid #e5d6e2;background:#fff;font-weight:800;font-size:13px;cursor:pointer;color:var(--brand-dark);box-shadow:var(--field-shadow);text-align:center}
+.mode-tab.active{background:var(--brand);color:#fff;border-color:var(--brand);box-shadow:0 4px 14px rgba(62,11,59,.3)}
+.mode-panel{display:none}
+.mode-panel.active{display:block}
 </style>
 </head>
 <body>
@@ -196,17 +201,15 @@ details.guide .body code{background:#f5f3ff;padding:1px 5px;border-radius:4px;fo
 </header>
 
 <div class="wrap">
-  <div class="toolbar card" style="padding:12px">
-    <button class="btn btn-ghost" id="btnExportData" type="button">Export data Excel</button>
-    <button class="btn btn-ghost" id="btnImportData" type="button">Import data Excel</button>
-    <input type="file" id="fileImport" accept=".xlsx,.xlsm,.xls" hidden/>
-    <button class="btn btn-primary" id="btnExportForma" type="button">Export task team → FORMA template</button>
-    <span class="muted" id="dataStatus">Data: —</span>
+  <div class="mode-tabs" role="tablist">
+    <button type="button" class="mode-tab active" data-mode="asset" id="modeAsset">Build Asset Name</button>
+    <button type="button" class="mode-tab" data-mode="annotation" id="modeAnnotation">Build Annotation Name</button>
   </div>
+  <p class="muted" id="dataStatus" style="margin:0 0 10px">Data: —</p>
 
   <div class="grid2">
-    <section class="card">
-      <h2>Build family name</h2>
+    <section class="card mode-panel active" id="panelAsset">
+      <h2>Build Asset Name</h2>
       <div class="tt-row">
         <div>
           <label>Task team (scopes Object list)</label>
@@ -268,6 +271,63 @@ details.guide .body code{background:#f5f3ff;padding:1px 5px;border-radius:4px;fo
         <button class="btn btn-ghost" id="btnCopyClass" type="button">Copy classifications</button>
       </div>
       <div class="status" id="actionStatus"></div>
+    </section>
+
+    <section class="card mode-panel" id="panelAnnotation">
+      <h2>Build Annotation Name</h2>
+      <p class="hint">Pattern: <strong>Originator_Source_AnnotationCategory_AnnotationType</strong> · no Uniclass mapping (N/A)</p>
+      <div class="seq" title="Annotation name left → right">
+        <div class="seq-step">
+          <span class="seq-num">1</span>
+          <label>Originator</label>
+          <select id="annOriginator"></select>
+        </div>
+        <div class="seq-step">
+          <span class="seq-num">2</span>
+          <label>Source</label>
+          <select id="annSource"></select>
+        </div>
+        <div class="seq-step">
+          <span class="seq-num">3</span>
+          <label>Annotation Category</label>
+          <select id="annCategory"></select>
+        </div>
+        <div class="seq-step">
+          <span class="seq-num">4</span>
+          <label>Annotation Type</label>
+          <select id="annType" size="8" style="height:160px"></select>
+        </div>
+      </div>
+      
+  <div class="toolbar card" style="padding:12px;margin-top:14px" id="exportToolbar">
+    <div style="font-weight:800;font-size:12px;color:var(--brand-dark);width:100%;margin-bottom:6px">Export / import</div>
+    <button class="btn btn-ghost" id="btnExportData" type="button">Export data Excel</button>
+    <button class="btn btn-ghost" id="btnImportData" type="button">Import data Excel</button>
+    <input type="file" id="fileImport" accept=".xlsx,.xlsm,.xls" hidden/>
+    <button class="btn btn-primary" id="btnExportForma" type="button">Export → FORMA template</button>
+    <button class="btn btn-ghost" id="btnExportAnnForma" type="button">Export Annotation → FORMA</button>
+    <span class="muted" id="exportHint">Asset export uses active task team (e.g. MH - Asset Convention)</span>
+  </div>
+
+<div class="card" style="margin-top:12px;padding:12px;background:linear-gradient(180deg,#faf6f9,#fff);border:1px solid #e5d6e2;box-shadow:var(--field-shadow)">
+        <div style="font-weight:800;font-size:12px;color:var(--brand-dark);margin-bottom:8px">Add annotation type (PascalCase)</div>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
+          <div>
+            <label>Name / description</label>
+            <input type="text" id="addAnnInput" placeholder="e.g. section head arrow" autocomplete="off"/>
+          </div>
+          <button type="button" class="btn btn-primary" id="btnAddAnnType">Add type</button>
+        </div>
+        <div class="status" id="addAnnStatus"></div>
+      </div>
+      <div class="hint" style="margin-top:10px">
+        <strong>Revit type sizes (not in family name):</strong> use type names like
+        <code>1.8</code>, <code>2.0</code>, <code>2.5</code>, <code>3.0</code>, or <code>1.8 Bold</code> / <code>2.5Bold</code> for text note &amp; tag types.
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
+        <button class="btn btn-accent" id="btnCopyAnn" type="button">Copy name</button>
+      </div>
+      <div class="status" id="annActionStatus"></div>
     </section>
 
     <section class="card">
@@ -512,6 +572,8 @@ function sourceLabel(s){
 }
 
 function init(){
+  try { fillAnnSelects(); } catch(e){}
+
   const teams = DATA.taskTeams || [];
   fillSelect(document.getElementById('taskTeam'), teams, t=>t.code, t=>t.code + ' — ' + t.label, false);
   fillSelect(document.getElementById('originator'), DATA.originators||[], o=>o.code, o=>o.code + (o.label? ' — '+o.label:''), false);
@@ -648,7 +710,81 @@ function buildName(){
   return parts.join('_');
 }
 
+let CURRENT_MODE = 'asset';
+
+function setMode(mode){
+  CURRENT_MODE = mode === 'annotation' ? 'annotation' : 'asset';
+  document.querySelectorAll('.mode-tab').forEach(b=> b.classList.toggle('active', b.dataset.mode === CURRENT_MODE));
+  const pa = document.getElementById('panelAsset');
+  const pn = document.getElementById('panelAnnotation');
+  if(pa) pa.classList.toggle('active', CURRENT_MODE==='asset');
+  if(pn) pn.classList.toggle('active', CURRENT_MODE==='annotation');
+  try { updatePreview(); } catch(e){}
+}
+
+function fillAnnSelects(){
+  if(!DATA) return;
+  const fill = (id, items, defCode)=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    const prev = el.value;
+    el.innerHTML = '';
+    (items||[]).forEach(it=>{
+      if(it.isGroup){ const o=document.createElement('option'); o.disabled=true; o.textContent='── '+(it.label||it.code||'')+' ──'; el.appendChild(o); return; }
+      const code = it.code || it.name;
+      if(!code) return;
+      if(String(code).startsWith('----') || code==='--------'){ const o=document.createElement('option'); o.disabled=true; o.textContent='── '+(it.label||code)+' ──'; el.appendChild(o); return; }
+      const label = it.label || it.description || '';
+      const o=document.createElement('option'); o.value=code; o.textContent=code+(label && label!==code ? ' — '+label : ''); el.appendChild(o);
+    });
+    if(prev && [...el.options].some(o=>o.value===prev)) el.value=prev;
+    else if(defCode && [...el.options].some(o=>o.value===defCode)) el.value=defCode;
+  };
+  fill('annOriginator', DATA.originators||[], 'ATA');
+  fill('annSource', DATA.sources||[], 'STD');
+  fill('annCategory', (DATA.annotation&&DATA.annotation.categories)||[], 'ANN');
+  fill('annType', (DATA.annotation&&DATA.annotation.types)||[], null);
+}
+
+function addAnnType(){
+  const raw = (document.getElementById('addAnnInput')&&document.getElementById('addAnnInput').value||'').trim();
+  const st = document.getElementById('addAnnStatus');
+  if(!raw){ if(st){ st.textContent='Enter a name'; st.style.color='#b91c1c'; } return; }
+  const name = (typeof toPascalCase==='function') ? toPascalCase(raw) : raw.replace(/[^a-zA-Z0-9]+/g,' ');
+  if(!DATA.annotation) DATA.annotation = {categories:[], types:[]};
+  if(!DATA.annotation.types) DATA.annotation.types = [];
+  if(DATA.annotation.types.some(t => String(t.code||'').toLowerCase()===String(name).toLowerCase())){
+    if(st){ st.textContent='Type already exists'; st.style.color='#b91c1c'; } return;
+  }
+  if(!confirm('Add annotation type "'+name+'"?')) return;
+  DATA.annotation.types.push({code:name, label:raw, local:true});
+  try { localStorage.setItem(LS_KEY, JSON.stringify(DATA)); } catch(e){}
+  fillAnnSelects();
+  const sel = document.getElementById('annType');
+  if(sel) sel.value = name;
+  updatePreview();
+  if(st){ st.textContent='Added '+name; st.style.color='#047857'; }
+}
+
 function updatePreview(){
+  if(typeof CURRENT_MODE !== 'undefined' && CURRENT_MODE === 'annotation'){
+    const parts = [
+      {k:'Originator', v:document.getElementById('annOriginator')&&document.getElementById('annOriginator').value},
+      {k:'Source', v:document.getElementById('annSource')&&document.getElementById('annSource').value},
+      {k:'AnnCategory', v:document.getElementById('annCategory')&&document.getElementById('annCategory').value},
+      {k:'AnnType', v:document.getElementById('annType')&&document.getElementById('annType').value}
+    ];
+    const name = parts.every(p=>p.v) ? parts.map(p=>p.v).join('_') : '';
+    document.getElementById('preview').textContent = name || '— complete annotation fields 1–4 —';
+    document.getElementById('pills').innerHTML = parts.map((p,i)=>{
+      const set = !!p.v;
+      return '<span class="pill'+(set?' is-set':'')+'"><span class="n">'+(i+1)+'</span> '+(p.v||p.k)+'</span>';
+    }).join('<span class="pill-sep">_</span>');
+    ['clsSs','clsEf','clsPr','clsMa','clsIfc','clsRev'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='N/A'; });
+    const meta = document.getElementById('meta');
+    if(meta) meta.innerHTML = '<span class="badge">Annotation</span> · Classification write-back <strong>N/A</strong> · Type size e.g. <strong>1.8 / 2.0 / 2.5 / 3.0 / Bold</strong> is a Revit type';
+    return;
+  }
   const parts = [
     {k:'Originator', v:document.getElementById('originator').value},
     {k:'Source', v:document.getElementById('source').value},
@@ -678,7 +814,8 @@ function updatePreview(){
   document.getElementById('clsIfc').textContent = (obj && obj.ifc4) || '—';
   document.getElementById('clsRev').textContent = (obj && obj.revitCategory) || '—';
   const team = document.getElementById('taskTeam').value;
-  document.getElementById('meta').innerHTML =
+  const meta = document.getElementById('meta');
+  if(meta) meta.innerHTML =
     '<span class="badge">NBS §5.1.5</span> · Task team <strong>'+team+'</strong> · ' +
     currentObjects().length + ' objects · Source default <strong>STD</strong>';
 }
@@ -726,7 +863,7 @@ function exportDataExcel(){
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), ('Object-'+team).slice(0,31));
   });
-  XLSX.writeFile(wb, 'Atana-Asset-Naming-Data.xlsx');
+  XLSX.writeFile(wb, team+' - Asset Convention.xlsx');
   setStatus('Exported backend data Excel', true);
 }
 
@@ -794,6 +931,38 @@ function importDataExcel(file){
   reader.readAsArrayBuffer(file);
 }
 
+function exportAnnFormaTemplate(){
+  if(typeof XLSX === 'undefined'){ alert('Excel library not loaded'); return; }
+  if(!DATA){ alert('Data not loaded'); return; }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['***IMPORTANT: DO NOT DELETE THIS TAB***'],
+    ['BIM Annotation Convention'],
+    ['Pattern: Originator_Source_AnnotationCategory_AnnotationType'],
+    ['Delimiter: Underscore'],
+    ['Classification mapping: N/A']
+  ]), 'INSTRUCTIONS');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['Naming standard name','Description','Delimiter'],
+    ['BIM Annotation Convention','Atana annotation families','Underscore']
+  ]), 'SETTINGS');
+  const drop = (name, desc, items)=>{
+    const rows = [['Name','Description','Type','Required','Attribute value','Attribute description','Location']];
+    let first=true;
+    (items||[]).forEach(it=>{
+      const code=it.code||it.name; if(!code||String(code).startsWith('----')) return;
+      rows.push([first?name:'', first?desc:'', first?'Drop-down list':'', first?'Yes':'', code, it.label||'', first?'Naming convention':'']);
+      first=false;
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name.substring(0,31));
+  };
+  drop('Originator','Object provider', DATA.originators||[]);
+  drop('Source','STD = Standard generic', DATA.sources||[]);
+  drop('Annotation Category','', (DATA.annotation&&DATA.annotation.categories)||[]);
+  drop('Annotation Type','', (DATA.annotation&&DATA.annotation.types)||[]);
+  XLSX.writeFile(wb, 'BIM Annotation Convention.xlsx');
+}
+
 function exportFormaTemplate(){
   if(typeof XLSX === 'undefined'){ alert('Excel library not loaded'); return; }
   const team = document.getElementById('taskTeam').value || 'ME';
@@ -808,7 +977,7 @@ function exportFormaTemplate(){
   ]), 'INSTRUCTIONS');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
     ['Naming standard name','Description','Delimiter'],
-    ['BIM Objects Convention — ' + team, 'NBS-based · Task team ' + team, 'Underscore']
+    [team + ' - Asset Convention', 'NBS-based · Task team ' + team, 'Underscore']
   ]), 'SETTINGS');
   function ddSheet(title, desc, items, codeKey, labelKey){
     const rows=[['Name','Description','Type','Attribute value','Attribute description','Location']];
@@ -824,8 +993,8 @@ function exportFormaTemplate(){
   const mats=(DATA.materials||[]).filter(m=>!m.isGroup).map(m=>({code:m.code,label:(m.uniclassCode?m.uniclassCode+' — ':'')+(m.uniclassDescription||m.label||'')}));
   ddSheet('Material','Uniclass Ma/Pr', mats, 'code','label');
   const objs=(DATA.objectsByTaskTeam[team]||[]).map(it=>({code:it.name,label:(it.uniclassPr?it.uniclassPr+' — ':'')+(it.uniclassDescription||'')+(it.ifc4?' | IFC4: '+it.ifc4:'')}));
-  ddSheet('SubtypeProduct Code','Object · Uniclass Pr · '+team, objs, 'code','label');
-  XLSX.writeFile(wb, 'BIM-Objects-Convention-'+team+'.xlsx');
+  ddSheet(team + ' - Object','Object · Uniclass Pr · '+team, objs, 'code','label');
+  XLSX.writeFile(wb, team + ' - Asset Convention.xlsx');
   setStatus('Exported FORMA template for '+team, true);
 }
 
@@ -863,9 +1032,18 @@ document.getElementById('btnCopyClass').onclick = async ()=>{
 document.getElementById('btnExportData').onclick = exportDataExcel;
 document.getElementById('btnImportData').onclick = ()=>document.getElementById('fileImport').click();
 document.getElementById('fileImport').onchange = e=>{ const f=e.target.files&&e.target.files[0]; if(f) importDataExcel(f); e.target.value=''; };
+try{ document.getElementById('btnExportAnnForma').onclick = exportAnnFormaTemplate; }catch(e){}
 document.getElementById('btnExportForma').onclick = exportFormaTemplate;
 
-document.getElementById('btnReload').onclick = ()=>{ localStorage.removeItem(LS_KEY); loadData(); setStatus('Reloaded file data', true); };
+document.getElementById('btnReload').onclick = ()=>{ localStorage.removeItem(LS_KEY); document.querySelectorAll('.mode-tab').forEach(b=> b.addEventListener('click', ()=> setMode(b.dataset.mode)));
+['annOriginator','annSource','annCategory','annType'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('change', updatePreview); });
+const btnAddAnn = document.getElementById('btnAddAnnType'); if(btnAddAnn) btnAddAnn.addEventListener('click', addAnnType);
+const btnCopyAnn = document.getElementById('btnCopyAnn'); if(btnCopyAnn) btnCopyAnn.addEventListener('click', async ()=>{
+  const n = ['annOriginator','annSource','annCategory','annType'].map(id=>document.getElementById(id)&&document.getElementById(id).value).filter(Boolean).join('_');
+  if(!n) return;
+  try { await navigator.clipboard.writeText(n); const s=document.getElementById('annActionStatus'); if(s) s.textContent='Copied '+n; } catch(e){ alert(n); }
+});
+loadData(); setStatus('Reloaded file data', true); };
 document.getElementById('btnPop').onclick = ()=>{ const w=window.open(location.href,'atana-asset-naming','width=1100,height=900'); if(!w) alert('Pop-out blocked'); };
 
 function toPascalCase(str){
