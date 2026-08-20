@@ -1104,56 +1104,63 @@ def apply_titleblocks(doc, designed_by, checked_by):
     return count
 
 def match_sheets_to_plan(doc, plan_rows, role):
-    """Match ViewSheets whose SheetNumber equals the FULL plan document id.
+    """Match ViewSheets by FULL SheetNumber == plan document id.
 
-    Example plan id:  MD6264-ATA-01-ZZ-DR-AR-1003
-    Sheet number must be that full string (not only 'AR' or '1003').
-    Role only filters which plan rows are considered.
+    Role filters plan rows when the id contains role as a segment (e.g. -AR-).
+    Falls back to all plan ids if role filter yields nothing (avoids empty sets).
     """
     sheets = list(FilteredElementCollector(doc).OfClass(ViewSheet))
     if not plan_rows:
         return []
 
     role_u = (role or "").strip().upper()
-    plan_ids = []
-    for r in plan_rows:
-        if not isinstance(r, dict):
-            continue
-        did = (r.get("documentId") or r.get("number") or r.get("name") or "").strip()
-        if not did:
-            continue
-        did_u = re.sub(r"\.(PDF|DWG|RVT|IFC)$", "", did.upper(), flags=re.I)
-        if role_u:
-            segs = [p for p in did_u.replace("_", "-").split("-") if p]
-            if role_u not in segs:
+
+    def ids_from_rows(rows, require_role):
+        out = []
+        for r in rows:
+            if not isinstance(r, dict):
                 continue
-        plan_ids.append(did_u)
+            did = (r.get("documentId") or r.get("number") or r.get("name") or "").strip()
+            if not did:
+                continue
+            did_u = re.sub(r"\.(PDF|DWG|RVT|IFC)$", "", did.upper(), flags=re.I)
+            if require_role and role_u:
+                segs = [p for p in did_u.replace("_", "-").split("-") if p]
+                if role_u not in segs:
+                    continue
+            out.append(did_u)
+        return out
+
+    plan_ids = ids_from_rows(plan_rows, require_role=True)
+    if not plan_ids and role_u:
+        plan_ids = ids_from_rows(plan_rows, require_role=False)
 
     plan_set = set(plan_ids)
-    matched = []
-    seen = set()
+    # Map sheet number -> element
+    by_num = {}
     for s in sheets:
         try:
             num = re.sub(r"\.(PDF|DWG)$", "", (s.SheetNumber or "").strip().upper(), flags=re.I)
         except Exception:
             continue
-        if not num or num in seen:
-            continue
-        # STRICT: full sheet number must equal full document id
-        if num in plan_set:
+        if num:
+            by_num[num] = s
+
+    matched = []
+    for pid in plan_ids:
+        s = by_num.get(pid)
+        if s is not None and s not in matched:
             matched.append(s)
-            seen.add(num)
     return matched
 
 
 def create_or_update_print_set(doc, set_name, sheets):
-    """Create or UPDATE an existing named ViewSheetSet, then select it as current.
+    """Put ALL given sheets into named ViewSheetSet and select it.
 
-    - If a set with set_name already exists, its Views are replaced with the
-      provided sheets (full plan match for this work stage / role).
-    - Does not delete the set; updates in place so Publish Settings keeps it.
-    - Opens the set as CurrentViewSheetSet (selected). Include-tick for cloud
-      publish is a UI flag the user confirms once in Publish Settings.
+    - Existing set is updated in place (Views membership = full sheet list).
+    - Set is Open()'d as current so it is selected in Publish Settings.
+    - Include checkbox: Revit has no stable public API for the cloud-publish
+      Include tick; we select/open the set and leave a clear note for the user.
     """
     if not sheets:
         return 0
@@ -1163,20 +1170,32 @@ def create_or_update_print_set(doc, set_name, sheets):
 
     from Autodesk.Revit.DB import ViewSheetSet, PrintRange, ViewSet
 
+    # De-dupe sheet elements by Id
+    unique = []
+    seen_ids = set()
+    for s in sheets:
+        try:
+            sid = s.Id.IntegerValue
+        except Exception:
+            continue
+        if sid in seen_ids:
+            continue
+        seen_ids.add(sid)
+        unique.append(s)
+    sheets = unique
+
     t = Transaction(doc, "Atana — publish set " + set_name)
     t.Start()
     try:
-        # Build ViewSet of target sheets
         vs = ViewSet()
         count = 0
         for s in sheets:
             try:
                 vs.Insert(s)
                 count += 1
-            except Exception:
-                pass
+            except Exception as ex:
+                print("ViewSet.Insert failed", ex)
 
-        # Find existing ViewSheetSet element by name
         existing = None
         try:
             for ss in FilteredElementCollector(doc).OfClass(ViewSheetSet):
@@ -1190,42 +1209,42 @@ def create_or_update_print_set(doc, set_name, sheets):
             print("collect ViewSheetSet", ex)
 
         if existing is not None:
-            # Update in place — do NOT delete / recreate
             try:
+                # Full membership replace so all plan sheets are present
                 existing.Views = vs
             except Exception as ex:
-                print("set Views on existing", ex)
-                # fallback: delete + recreate via PrintManager
+                print("existing.Views assign failed, recreate", ex)
                 try:
                     doc.Delete(existing.Id)
-                    existing = None
                 except Exception:
                     pass
+                existing = None
 
         if existing is None:
-            # Create via PrintManager.SaveAs
             pm = doc.PrintManager
             try:
                 pm.PrintRange = PrintRange.Select
             except Exception:
                 pass
             vss = pm.ViewSheetSetting
+            # If a same-named set exists in the setting store, open it first
+            try:
+                vss.Open(set_name)
+            except Exception:
+                pass
             try:
                 vss.CurrentViewSheetSet.Views = vs
             except Exception as ex:
                 print("assign current views", ex)
             try:
                 vss.SaveAs(set_name)
-            except Exception as ex:
-                # name may already exist in session — try Save after Open
+            except Exception:
                 try:
-                    vss.Open(set_name)
-                    vss.CurrentViewSheetSet.Views = vs
                     vss.Save()
                 except Exception as ex2:
-                    print("SaveAs/Open/Save", ex, ex2)
+                    print("SaveAs/Save failed", ex2)
 
-        # Select / open as current so it is active in the session
+        # Always try to make this the active/selected set
         try:
             pm = doc.PrintManager
             try:
@@ -1237,8 +1256,20 @@ def create_or_update_print_set(doc, set_name, sheets):
                 vss.Open(set_name)
             except Exception:
                 pass
+            try:
+                # Re-assert views on the opened current set and Save
+                vss.CurrentViewSheetSet.Views = vs
+                try:
+                    vss.Save()
+                except Exception:
+                    try:
+                        vss.SaveAs(set_name)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
         except Exception as ex:
-            print("open current set", ex)
+            print("select current set", ex)
 
         t.Commit()
         return count
@@ -1984,7 +2015,13 @@ def sync_sheets_ui(doc, pack, role, stage_code, designed_by, checked_by, functio
         pub_name = "SW" + sn_u.lstrip("S")
     else:
         pub_name = sn_u
-    pub_msg = ensure_publish_set(doc, pub_name, [])
+    # Re-match model sheets by full document id and write into publish set now
+    try:
+        matched_now = match_sheets_to_plan(doc, plan, role)
+        n_pub = create_or_update_print_set(doc, pub_name, matched_now) if matched_now else 0
+        pub_msg = "Publish set %s: %d sheet(s). Tick Include next to the set in Publish Settings if needed." % (pub_name, n_pub)
+    except Exception as ex:
+        pub_msg = "Publish set update skipped: %s" % ex
 
     lines = [
         "Sheets complete.",
@@ -2232,23 +2269,60 @@ def main():
             n = apply_titleblocks(doc, designed_by, checked_by)
             info("Updated parameters on {} title block instance(s).".format(n))
 
-    # Publish set
+    # Publish set — match AFTER sheet create so new sheets are included
     matched = match_sheets_to_plan(doc, plan_rows, role)
     set_name = stage_code if stage_code else "S1"
-    if set_name.startswith("S") and not set_name.startswith("WS"):
-        set_name = "WS" + set_name[1:]
-    if matched and plan_rows:
+    if str(set_name).startswith("S") and not str(set_name).startswith("WS"):
+        set_name = "WS" + str(set_name)[1:]
+
+    # Count plan ids for role (expected)
+    role_u = (role or "").strip().upper()
+    expected_ids = []
+    for r in (plan_rows or []):
+        if not isinstance(r, dict):
+            continue
+        did = (r.get("documentId") or r.get("number") or "").strip()
+        if not did:
+            continue
+        did_u = re.sub(r"\.(PDF|DWG|RVT|IFC)$", "", did.upper(), flags=re.I)
+        if role_u:
+            segs = [p for p in did_u.replace("_", "-").split("-") if p]
+            if role_u not in segs:
+                continue
+        expected_ids.append(did_u)
+    expected_ids = sorted(set(expected_ids))
+    matched_nums = []
+    for s in matched:
+        try:
+            matched_nums.append((s.SheetNumber or "").upper())
+        except Exception:
+            pass
+    missing = [x for x in expected_ids if x not in set(matched_nums)]
+
+    if plan_rows:
         msg = (
             "Publish Set: " + str(set_name) + chr(10) + chr(10)
-            + "Sheets in model with FULL number matching plan document id: "
-            + str(len(matched)) + chr(10)
-            + "Role filter: " + str(role or "all") + chr(10) + chr(10)
-            + "Add these sheets to the publish set?" + chr(10)
-            + "(Existing set is kept and updated — not replaced.)"
+            + "Plan sheets for role " + str(role or "all") + ": " + str(len(expected_ids)) + chr(10)
+            + "Found in model (full sheet number match): " + str(len(matched)) + chr(10)
         )
-        if confirm(msg):
+        if missing:
+            msg += "Not in model yet: " + str(len(missing)) + chr(10)
+            for mid in missing[:6]:
+                msg += "  - " + mid + chr(10)
+            if len(missing) > 6:
+                msg += "  ... +" + str(len(missing) - 6) + " more" + chr(10)
+        msg += chr(10) + "Update publish set with the " + str(len(matched)) + " matched sheet(s)?"
+        msg += chr(10) + "(Set is selected as current. Tick Include next to the set name in Publish Settings if it is empty — Revit API cannot set that checkbox.)"
+        if matched and confirm(msg):
             n = create_or_update_print_set(doc, set_name, matched)
-            info("Publish set \"{}\" processed ({} sheet(s)).".format(set_name, n))
+            info(
+                "Publish set " + str(set_name) + chr(10) + chr(10)
+                + "Sheets written to set: " + str(n) + chr(10) + chr(10)
+                + "Open Publish Settings and tick Include next to "
+                + str(set_name) + " if it is not already checked."
+            )
+        elif not matched:
+            info("No sheets in the model matched plan document ids for role " + str(role or "?") + ". Create sheets first.")
 
     folder = os.path.dirname(json_path) if json_path else load_sync_folder()
     inv = None
