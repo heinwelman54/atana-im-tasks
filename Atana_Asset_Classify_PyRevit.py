@@ -153,32 +153,38 @@ def parse_family_name(name):
     }
 
 
-def ef_from_pr(pr, pr_desc):
-    """Map Pr_AA_BB_CC_DD → EF_AA_BB_CC using product hierarchy."""
-    if not pr:
+def lookup_ef_from_table(data, *texts):
+    """Match text against Uniclass EF table shipped in asset-naming-data.json (never invent codes)."""
+    table = data.get("uniclassEfTable") or []
+    if not table:
         return None, None
-    import re
-    m = re.match(r"Pr[_\s]?(\d{2})[_\s]?(\d{2})[_\s]?(\d{2})(?:[_\s]?(\d{2}))?", str(pr), re.I)
-    if not m:
+    blob = " ".join([(t or "").lower() for t in texts])
+    if not blob.strip():
         return None, None
-    a, b, c, d = m.groups()
-    ef = "EF_{}_{}_{}".format(a, b, c)
-    known = {
-        "EF_65_40_33": "General space ventilation",
-        "EF_65_40_32": "Fume extraction",
-        "EF_65_40_80": "Smoke extraction and control",
-        "EF_65_80_12": "Central air conditioning",
-        "EF_60_40_37": "Heating",
-        "EF_60_40_17": "Cooling",
-        "EF_55_70_38": "Hot and cold water supply",
-        "EF_25_30_25": "Doors",
-        "EF_25_30_97": "Windows",
-        "EF_30_20": "Floors",
-        "EF_30_10": "Roofs",
-        "EF_20_10_30": "Framed structures",
-        "EF_20_05_30": "Foundations",
-    }
-    return ef, known.get(ef) or pr_desc or None
+    # Prefer explicit description containment, deeper levels first
+    best = None
+    best_score = 0
+    for e in table:
+        desc = (e.get("description") or "").lower()
+        num = e.get("number") or ""
+        if not desc or not num.startswith("EF_"):
+            continue
+        score = 0
+        if desc in blob:
+            score += 50
+        for word in desc.replace("/", " ").split():
+            if len(word) > 3 and word in blob:
+                score += 8
+        try:
+            score += int(e.get("level") or 0)
+        except Exception:
+            pass
+        if score > best_score:
+            best_score = score
+            best = e
+    if best and best_score >= 12:
+        return best.get("number"), best.get("description")
+    return None, None
 
 
 def lookup_classification(data, parts):
@@ -194,6 +200,10 @@ def lookup_classification(data, parts):
         if (c.get("code") or "").upper() == (parts["category"] or "").upper():
             out["ss"] = c.get("uniclassSs") or None
             out["ssDesc"] = c.get("uniclassDescription") or c.get("label") or None
+            # category-level EF only if already mapped from real EF table in data
+            if c.get("uniclassEf"):
+                out["ef"] = c.get("uniclassEf")
+                out["efDesc"] = c.get("uniclassEfDescription")
             break
 
     for m in data.get("materials") or []:
@@ -210,17 +220,23 @@ def lookup_classification(data, parts):
                 out["pr"] = it.get("uniclassPr") or None
                 out["prDesc"] = it.get("uniclassDescription") or None
                 out["ifc4"] = it.get("ifc4") or None
-                # EF primarily from Pr
+                # EF must be real Uniclass EF table value pre-mapped in data
                 if it.get("uniclassEf"):
                     out["ef"] = it.get("uniclassEf")
                     out["efDesc"] = it.get("uniclassEfDescription")
                 break
 
-    # Always prefer EF derived from Pr code
-    ef, efd = ef_from_pr(out.get("pr"), out.get("prDesc"))
-    if ef:
-        out["ef"] = ef
-        if efd:
+    # If still no EF, match Pr/object text to uniclassEfTable entries (no Pr→EF digit rewrite)
+    if not out.get("ef"):
+        ef, efd = lookup_ef_from_table(
+            data,
+            out.get("prDesc"),
+            obj_name,
+            parts.get("object"),
+            out.get("ssDesc"),
+        )
+        if ef:
+            out["ef"] = ef
             out["efDesc"] = efd
     return out
 

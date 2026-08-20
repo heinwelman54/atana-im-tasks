@@ -958,12 +958,12 @@ function addObjectToDb(){
     refreshObjects();
     document.getElementById('object').value = suggestion.name;
     updatePreview();
-    setAddStatus('Added locally. Upload JSON to SharePoint Data folder and email Heinz to update the live DB.', true);
+    setAddStatus('Added locally. Upload JSON to SharePoint Data folder and email Hein at hein.welman@atana.co.za to update the live site DB.', true);
     try {
       const blob = new Blob([JSON.stringify(DATA,null,2)], {type:'application/json'});
       const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='asset-naming-data.json'; a.click();
     } catch(e){}
-    alert('Object added in this browser.\n\n1) Upload asset-naming-data.json to SharePoint → AtanaIM/Data\n2) Email Heinz to update the GitHub site DB.\n\nThis browser keeps the new object until then.');
+    alert('Object added in this browser.\n\n1) Upload asset-naming-data.json to SharePoint → AtanaIM/Data\n2) Email Hein at hein.welman@atana.co.za to update the GitHub site DB.\n\nThis browser keeps the new object until then.');
   } catch(e){
     setAddStatus('Add failed: '+(e.message||e), false);
     console.error(e);
