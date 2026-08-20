@@ -1,25 +1,3 @@
-Atana Project Sync — setup
-==========================
-
-SHARED PARAMETERS (required by Revit API — must be a LOCAL file)
-----------------------------------------------------------------
-Revit cannot load shared parameters from a website.
-Copy ATA_ZZ_SharedParameters_MERGED.txt to:
-
-  1) Same folder as your ProjectSync script.py
-     e.g. ...\ProjectSync.pushbutton\ATA_ZZ_SharedParameters_MERGED.txt
-
-  OR
-
-  2) %APPDATA%\Atana\ATA_ZZ_SharedParameters_MERGED.txt
-
-SHEET NUMBERS
--------------
-New sheets use the FULL document id as the sheet number, e.g.:
-  MD6264-ATA-01-ZZ-DR-AR-1003
-
-Matching existing sheets uses the same full id (not only the last digits).
-
-PUBLISH SET
------------
-Updates the work-stage set with matched sheets (does not blindly replace).
+Copy Atana_ProjectSync_pyRevit.py → script.py
+Copy ATA_ZZ_SharedParameters_MERGED.txt next to script.py
+  or into %APPDATA%\Atana\

@@ -1104,61 +1104,123 @@ def apply_titleblocks(doc, designed_by, checked_by):
     return count
 
 def match_sheets_to_plan(doc, plan_rows, role):
+    """Match ViewSheets whose SheetNumber equals the FULL plan document id.
+
+    Example plan id:  MD6264-ATA-01-ZZ-DR-AR-1003
+    Sheet number must be that full string (not only 'AR' or '1003').
+    Role only filters which plan rows are considered.
+    """
     sheets = list(FilteredElementCollector(doc).OfClass(ViewSheet))
     if not plan_rows:
-        return sheets  # no plan → leave empty; caller decides
-    ids = set()
+        return []
+
+    role_u = (role or "").strip().upper()
+    plan_ids = []
     for r in plan_rows:
-        did = (r.get("documentId") or r.get("name") or "").upper()
-        if role and ("-" + role + "-") not in did and not did.endswith("-" + role):
-            # soft filter by role segment
-            pass
-        ids.add(re.sub(r"\.[A-Z0-9]+$", "", did))
+        if not isinstance(r, dict):
+            continue
+        did = (r.get("documentId") or r.get("number") or r.get("name") or "").strip()
+        if not did:
+            continue
+        did_u = re.sub(r"\.(PDF|DWG|RVT|IFC)$", "", did.upper(), flags=re.I)
+        if role_u:
+            segs = [p for p in did_u.replace("_", "-").split("-") if p]
+            if role_u not in segs:
+                continue
+        plan_ids.append(did_u)
+
+    plan_set = set(plan_ids)
     matched = []
+    seen = set()
     for s in sheets:
         try:
-            num = (s.SheetNumber or "").upper()
-            name = (s.Name or "").upper()
-            key = num
-            for pid in ids:
-                if num and num in pid:
-                    matched.append(s)
-                    break
-                if name and name in pid:
-                    matched.append(s)
-                    break
+            num = re.sub(r"\.(PDF|DWG)$", "", (s.SheetNumber or "").strip().upper(), flags=re.I)
         except Exception:
-            pass
+            continue
+        if not num or num in seen:
+            continue
+        # STRICT: full sheet number must equal full document id
+        if num in plan_set:
+            matched.append(s)
+            seen.add(num)
     return matched
 
+
 def create_or_update_print_set(doc, set_name, sheets):
-    """Best-effort in-session ViewSheetSet via PrintManager."""
+    """Update (or create) a named sheet set and make it the current/selected set.
+
+    Existing sets are NOT deleted. Views from `sheets` are assigned and SaveAs
+    updates the named set. CurrentViewSheetSet is left selected (ticked).
+    """
     if not sheets:
         return 0
-    t = Transaction(doc, "Atana — publish set " + set_name)
+    t = Transaction(doc, "Atana — publish set " + str(set_name))
     t.Start()
     try:
+        from Autodesk.Revit.DB import PrintRange, ViewSet
         pm = doc.PrintManager
-        pm.PrintRange = pm.PrintRange.Select
-        vss = pm.ViewSheetSetting
-        vs = ViewSet()
-        for s in sheets:
-            vs.Insert(s)
-        # Remove existing with same name if possible
         try:
-            existing = vss.InSession
+            pm.PrintRange = PrintRange.Select
         except Exception:
-            existing = None
+            pass
+        vss = pm.ViewSheetSetting
+
+        # Build view set of target sheets
+        vs = ViewSet()
+        count = 0
+        for s in sheets:
+            try:
+                vs.Insert(s)
+                count += 1
+            except Exception:
+                pass
+
+        # Try load existing named set first (reuse), then assign views and save
+        loaded = False
+        try:
+            # Some API versions: Open existing
+            names = []
+            try:
+                for ss in FilteredElementCollector(doc).OfClass(__import__("Autodesk.Revit.DB", fromlist=["ViewSheetSet"]).ViewSheetSet):
+                    names.append(ss.Name)
+            except Exception:
+                pass
+            if set_name in names:
+                try:
+                    vss.Open(set_name)
+                    loaded = True
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
         try:
             vss.CurrentViewSheetSet.Views = vs
-            vss.SaveAs(set_name)
-        except Exception:
+        except Exception as ex:
+            print("assign views", ex)
+
+        try:
+            if loaded:
+                try:
+                    vss.Save()
+                except Exception:
+                    vss.SaveAs(set_name)
+            else:
+                vss.SaveAs(set_name)
+        except Exception as ex:
             try:
                 vss.SaveAs(set_name)
-            except Exception as ex:
-                print("SaveAs set", ex)
+            except Exception as ex2:
+                print("SaveAs set", ex2)
+
+        # Attempt to leave this set as the in-session / selected set
+        try:
+            vss.Open(set_name)
+        except Exception:
+            pass
+
         t.Commit()
-        return len(list(sheets))
+        return count
     except Exception as ex:
         print("publish set", ex)
         try:
@@ -1166,6 +1228,7 @@ def create_or_update_print_set(doc, set_name, sheets):
         except Exception:
             pass
         return 0
+
 
 def export_sheet_inventory(folder, role, pack, doc):
     try:
@@ -1609,11 +1672,11 @@ def sheet_picker_form(plan_items, existing_map, titleblock_names):
     for item in plan_items:
         num = item.get("number") or ""
         title = item.get("title") or ""
-        match = existing_map.get(num)
+        # Exact full sheet number only (document id == sheet number)
+        match = existing_map.get(num) or existing_map.get(num.upper()) or existing_map.get(num.lower())
         if not match:
-            short = num.split("-")[-1] if num else ""
             for k, vs in existing_map.items():
-                if short and (k == short or k.endswith(short) or num.endswith(k)):
+                if k and num and k.upper() == num.upper():
                     match = vs
                     break
         label = "%s  |  %s" % (num, title)
@@ -1644,7 +1707,7 @@ def sheet_picker_form(plan_items, existing_map, titleblock_names):
     cmb.Left = 12
     cmb.Top = 372
     cmb.Width = 500
-    cmb.DropDownStyle = 2  # DropDownList
+    # DropDownStyle: IronPython/Revit host only accepts 0; leave default
     for n in (titleblock_names or []):
         cmb.Items.Add(n)
     if cmb.Items.Count > 0:
@@ -2091,9 +2154,14 @@ def main():
     if set_name.startswith("S") and not set_name.startswith("WS"):
         set_name = "WS" + set_name[1:]
     if matched and plan_rows:
-        msg = ("Publish Set \"{}\"\n\n"
-               "Matched {} sheet(s) from the plan for role {}.\n"
-               "Create / replace this publish set?").format(set_name, len(matched), role or "all")
+        msg = (
+            "Publish Set: " + str(set_name) + chr(10) + chr(10)
+            + "Sheets in model with FULL number matching plan document id: "
+            + str(len(matched)) + chr(10)
+            + "Role filter: " + str(role or "all") + chr(10) + chr(10)
+            + "Add these sheets to the publish set?" + chr(10)
+            + "(Existing set is kept and updated — not replaced.)"
+        )
         if confirm(msg):
             n = create_or_update_print_set(doc, set_name, matched)
             info("Publish set \"{}\" processed ({} sheet(s)).".format(set_name, n))
