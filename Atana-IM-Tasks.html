@@ -19,8 +19,8 @@
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
 <style>
   :root{
-    --header-top-bg: linear-gradient(90deg, #3e0b3b 0%, #2a8f82 52%, #a8d5a2 100%);
-    --header-main-bg: linear-gradient(90deg, #3e0b3b 0%, #3e0b3b 55%, #5c3d1a 78%, #d5c427 100%);
+    --header-top-bg: #3e0b3b;
+    --header-main-bg: #3e0b3b;
 
     --purple-950:#2b0729;
     --purple-900:#3e0b3b;
@@ -73,7 +73,7 @@
 
   /* ============ TOP BAR ============ */
   .topbar{
-    position:sticky;top:0;z-index:20;
+    position:sticky;top:0;z-index:20; /* chrome-safe */
     background:var(--header-top-bg);
     color:#fff;
     padding:calc(14px + env(safe-area-inset-top)) 18px 14px;
@@ -107,9 +107,10 @@
   }
   .app-version-badge:hover{color:rgba(255,255,255,0.55);}
   .topbar-edit-btn{
-    display:none;margin-left:6px;border:1px solid rgba(255,255,255,0.4);background:rgba(255,255,255,0.12);
-    color:#fff;font-size:12px;font-weight:600;padding:6px 12px;border-radius:999px;cursor:pointer;
-    -webkit-app-region:no-drag;app-region:no-drag;
+    display:none;margin-left:8px;border:1px solid rgba(255,255,255,0.35);background:rgba(255,255,255,0.12);
+    color:#fff;font-size:14px;font-weight:600;width:34px;height:34px;padding:0;border-radius:999px;cursor:pointer;
+    align-items:center;justify-content:center;
+    -webkit-app-region:no-drag;app-region:no-drag;flex-shrink:0;
   }
   .topbar-edit-btn.show{display:inline-flex;align-items:center;}
   .topbar-edit-btn:active{background:rgba(255,255,255,0.22);}
@@ -1443,8 +1444,9 @@
       <span class="acc-status-dot" id="accStatusDot"></span>
       <span class="acc-status-lbl">FORMA</span>
     </button>
-    <button type="button" class="topbar-edit-btn" id="topbarEditProjectBtn" title="Edit project" aria-label="Edit project">Edit</button>
+    <button type="button" class="topbar-edit-btn" id="topbarEditProjectBtn" title="Edit project" aria-label="Edit project">✎</button>
     <button class="icon-btn" id="topbarAction" style="display:none;">+</button>
+    <div class="topbar-chrome-safe" aria-hidden="true"></div>
   </div>
 
   <main id="mainContent">
@@ -1657,9 +1659,12 @@
       </div>
 
       
-      <div class="card" style="margin-top:14px;" id="settingsCustomisationCard">
-        <div class="chart-card-title" style="margin-bottom:6px;">Customisation</div>
-        <p class="section-sub" style="margin-bottom:12px;">Header colour themes. Choices are saved on this device.</p>
+      <details class="card" style="margin-top:14px;" id="settingsCustomisationCard">
+        <summary class="chart-card-title" style="margin-bottom:6px;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;">
+          <span>Customisation</span>
+          <span style="font-size:12px;font-weight:500;color:var(--muted);">expand</span>
+        </summary>
+        <p class="section-sub" style="margin:10px 0 12px;">Header colour themes. Default is solid purple. Choices are saved on this device.</p>
         <div class="field">
           <label>Top frame (app bar)</label>
           <div class="palette-grid" id="paletteTopGrid"></div>
@@ -1668,8 +1673,8 @@
           <label>Main project header</label>
           <div class="palette-grid" id="paletteMainGrid"></div>
         </div>
-        <button type="button" class="btn btn-ghost btn-block" id="paletteResetBtn" style="margin-top:12px;">Reset to defaults</button>
-      </div>
+        <button type="button" class="btn btn-ghost btn-block" id="paletteResetBtn" style="margin-top:12px;">Reset to defaults (solid purple)</button>
+      </details>
 
       <div class="card" style="margin-top:14px;" id="apsCard">
         <div class="chart-card-title" style="margin-bottom:6px;">Autodesk ACC</div>
@@ -2093,8 +2098,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.5.8";
-const APP_BUILD = "2026-08-20-customise-edit";
+const APP_VERSION = "3.5.9";
+const APP_BUILD = "2026-08-20-ws-author-ui";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -2116,7 +2121,7 @@ const HEADER_PALETTES = {
     { id: "solid", label: "Solid purple", css: "#3e0b3b" }
   ]
 };
-const HEADER_DEFAULTS = { top: "F", main: "B70" };
+const HEADER_DEFAULTS = { top: "solid", main: "solid", topReverse: false, mainReverse: false };
 
 function loadHeaderTheme(){
   try {
@@ -2128,10 +2133,24 @@ function loadHeaderTheme(){
 function saveHeaderTheme(t){
   try { localStorage.setItem("atanaHeaderTheme", JSON.stringify(t)); } catch(e){}
 }
+function _mirrorGradient(css){
+  if(!css || css.indexOf("linear-gradient") < 0) return css;
+  // reverse colour stops: split by comma after (
+  try {
+    const m = css.match(/^linear-gradient\(([^,]+),(.+)\)$/);
+    if(!m) return css;
+    const angle = m[1].trim();
+    const stops = m[2].split(/,(?![^(]*\))/).map(s => s.trim()).filter(Boolean);
+    if(stops.length < 2) return css;
+    return "linear-gradient(" + angle + ", " + stops.reverse().join(", ") + ")";
+  } catch(e){ return css; }
+}
 function applyHeaderTheme(theme){
   theme = theme || loadHeaderTheme();
-  const top = (HEADER_PALETTES.top.find(p => p.id === theme.top) || HEADER_PALETTES.top[0]).css;
-  const main = (HEADER_PALETTES.main.find(p => p.id === theme.main) || HEADER_PALETTES.main[0]).css;
+  let top = (HEADER_PALETTES.top.find(p => p.id === theme.top) || HEADER_PALETTES.top[0]).css;
+  let main = (HEADER_PALETTES.main.find(p => p.id === theme.main) || HEADER_PALETTES.main[0]).css;
+  if(theme.topReverse) top = _mirrorGradient(top);
+  if(theme.mainReverse) main = _mirrorGradient(main);
   document.documentElement.style.setProperty("--header-top-bg", top);
   document.documentElement.style.setProperty("--header-main-bg", main);
 }
@@ -2141,20 +2160,38 @@ function renderPaletteGrids(){
   const mainGrid = document.getElementById("paletteMainGrid");
   if(!topGrid || !mainGrid) return;
   function fill(grid, key, list){
+    const revKey = key + "Reverse";
+    const rev = !!theme[revKey];
     grid.innerHTML = list.map(p => {
       const active = theme[key] === p.id ? " active" : "";
+      const sw = rev ? _mirrorGradient(p.css) : p.css;
       return `<label class="palette-option${active}" data-palette-key="${key}" data-palette-id="${p.id}">
         <input type="radio" name="palette-${key}" value="${p.id}" ${theme[key]===p.id?"checked":""}/>
         <span class="palette-label">${p.label}</span>
-        <span class="palette-swatch" style="background:${p.css}"></span>
+        <span class="palette-swatch" style="background:${sw}"></span>
       </label>`;
-    }).join("");
-    grid.querySelectorAll(".palette-option").forEach(el => {
+    }).join("") + `<label class="palette-option" style="margin-top:4px;">
+        <input type="checkbox" data-palette-reverse="${key}" ${rev?"checked":""}/>
+        <span class="palette-label">Reverse gradient</span>
+        <span class="palette-swatch" style="background:transparent;border:none;"></span>
+      </label>`;
+    grid.querySelectorAll(".palette-option[data-palette-id]").forEach(el => {
       el.addEventListener("click", () => {
         const k = el.getAttribute("data-palette-key");
         const id = el.getAttribute("data-palette-id");
         const t = loadHeaderTheme();
         t[k] = id;
+        saveHeaderTheme(t);
+        applyHeaderTheme(t);
+        renderPaletteGrids();
+      });
+    });
+    grid.querySelectorAll("[data-palette-reverse]").forEach(cb => {
+      cb.addEventListener("change", (e) => {
+        e.stopPropagation();
+        const k = cb.getAttribute("data-palette-reverse");
+        const t = loadHeaderTheme();
+        t[k + "Reverse"] = !!cb.checked;
         saveHeaderTheme(t);
         applyHeaderTheme(t);
         renderPaletteGrids();
@@ -16007,11 +16044,19 @@ function buildRevitSyncPack(project){
 
   const nameOfFunc = (fn) => {
     const u = String(fn || "").toUpperCase();
-    const m = members.find(x =>
-      String(x.func || "").toUpperCase() === u ||
-      String(x.roleCode || "").toUpperCase() === u ||
-      String(x.defaultRole || "").toUpperCase().indexOf(u) >= 0
-    );
+    const aliases = {
+      PDM: ["PDM", "PROJECT DELIVERY MANAGER", "DESIGN MANAGER"],
+      IM: ["IM", "INFORMATION MANAGER", "INFORMATION LEAD", "BIM MANAGER"],
+      DTL: ["DTL", "DELIVERY TEAM LEAD", "PROJECT MANAGER"],
+      DM: ["DM", "DOCUMENT MANAGER"]
+    };
+    const keys = aliases[u] || [u];
+    const m = members.find(x => {
+      const blob = [
+        x.func, x.roleCode, x.defaultRole, x.role, x.roleName, x.title
+      ].map(v => String(v || "").toUpperCase()).join(" | ");
+      return keys.some(k => blob === k || blob.indexOf(k) >= 0);
+    });
     return m ? (m.name || "") : "";
   };
 
@@ -16158,8 +16203,8 @@ function buildRevitSyncPack(project){
     planRows: sheetPlan,
     allPlanRows: sheetPlan,
     sheets: {
-      publishSetName: stageId,
-      publishSetNameAlt: "SW" + stageIdx,
+      publishSetName: wsCode,
+      publishSetNameAlt: wsCode,
       forms: [],
       plan: sheetPlan,
       allPlanned: sheetPlan,
