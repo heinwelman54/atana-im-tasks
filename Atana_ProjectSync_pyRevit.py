@@ -395,7 +395,9 @@ def choose_json_source():
 
     body = Label()
     body.Text = (
-        "Choose how to get the project information file for Revit sync.\n\n"
+        "Choose how to get the project information file for Revit sync.
+
+"
         "Local File — JSON from Atana IM (export / push) — recommended.\n"
         "Sign In — Autodesk (APS). Prefer Edge so company SSO is used."
     )
@@ -523,7 +525,9 @@ def prompt_paste_auth_code(auth_url):
 
     lbl = Label()
     lbl.Text = (
-        "Complete Autodesk login in Edge (company SSO).\n\n"
+        "Complete Autodesk login in Edge (company SSO).
+
+"
         "1) Browser should open Autodesk login (or open the URL shown after OK).\n"
         "2) Sign in and Allow.\n"
         "3) Browser may show an error page — that is OK.\n"
@@ -607,9 +611,15 @@ def aps_login_interactive(cfg):
     if not listener_ok:
         # --- Windows block path ---
         info(
-            "Windows blocked HttpListener on port %d.\n\n"
-            "Fix (run once in Command Prompt as Administrator):\n\n"
-            "  netsh http add urlacl url=http://127.0.0.1:%d/ user=%%USERNAME%%\n\n"
+            "Windows blocked HttpListener on port %d.
+
+"
+            "Fix (run once in Command Prompt as Administrator):
+
+"
+            "  netsh http add urlacl url=http://127.0.0.1:%d/ user=%%USERNAME%%
+
+"
             "Or use the next dialog to paste the browser redirect URL / code."
             % (APS_CALLBACK_PORT, APS_CALLBACK_PORT)
         )
@@ -648,7 +658,9 @@ def aps_login_interactive(cfg):
 
     info(
         ("Browser opened for Autodesk login." if opened else "Could not auto-open browser — copy the URL from the next step.")
-        + "\n\nYou have %d seconds.\n"
+        + "
+
+You have %d seconds.\n"
         "Callback must be:\n%s"
         % (APS_LOGIN_TIMEOUT_SEC, redirect)
     )
@@ -660,9 +672,13 @@ def aps_login_interactive(cfg):
         except Exception:
             pass
         info(
-            "Local callback timed out (Windows often blocks this).\n\n"
+            "Local callback timed out (Windows often blocks this).
+
+"
             "Next dialog: paste the browser address bar URL\n"
-            "(http://127.0.0.1:%d/callback?code=...).\n\n"
+            "(http://127.0.0.1:%d/callback?code=...).
+
+"
             "Optional permanent fix (Admin CMD):\n"
             "  netsh http add urlacl url=http://127.0.0.1:%d/ user=%%USERNAME%%"
             % (APS_CALLBACK_PORT, APS_CALLBACK_PORT)
@@ -729,7 +745,9 @@ def aps_login_interactive(cfg):
 def ensure_aps_token():
     cfg = load_aps_cfg()
     if not cfg.get("clientId") or not cfg.get("clientSecret"):
-        info("APS Client ID / Secret are not set in script.py.\n\n"
+        info("APS Client ID / Secret are not set in script.py.
+
+"
              "A site admin must set APS_CLIENT_ID and APS_CLIENT_SECRET "
              "at the top of script.py (company APS app).")
         # last resort prompt for admin machines only
@@ -1163,16 +1181,37 @@ def extract_stage(pack):
             pack.get("currentStageId") or "S1")
 
 def extract_plan_rows(pack):
-    # deliverables / stageDeliverables / midp
-    rows = pack.get("deliverables") or pack.get("planRows") or []
-    if rows:
-        return rows
+    """All planned deliverables from Revit sync JSON (every stage / team)."""
+    rows = []
+    for key in ("deliverables", "planRows", "allPlanRows", "sheetPlan"):
+        block = pack.get(key)
+        if isinstance(block, list) and block:
+            rows.extend(block)
+    sheets = pack.get("sheets") or {}
+    if isinstance(sheets, dict):
+        for key in ("plan", "allPlanned", "rows"):
+            block = sheets.get(key)
+            if isinstance(block, list) and block:
+                rows.extend(block)
     sd = pack.get("stageDeliverables") or {}
-    stage = extract_stage(pack)
-    block = sd.get(stage) or {}
-    if isinstance(block, dict):
-        return block.get("rows") or []
-    return []
+    if isinstance(sd, dict):
+        for stage, block in sd.items():
+            if isinstance(block, dict):
+                rows.extend(block.get("rows") or [])
+            elif isinstance(block, list):
+                rows.extend(block)
+    # de-dupe by documentId / number
+    seen = set()
+    out = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        k = str(r.get("documentId") or r.get("number") or r.get("name") or id(r))
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(r)
+    return out
 
 def extract_titleblock_map(pack):
     """role → {designedBy, checkedBy} from organogram / projectTeam."""
@@ -1261,38 +1300,98 @@ def _row_stage(row):
     return ""
 
 
-def collect_plan_sheets(pack, role_code, stage_code=None):
-    """DR/SH rows for this role (and optionally stage)."""
+def parse_model_codes(path):
+    """From model file name: project-orig-func-spatial-form-role-number → codes."""
+    base = os.path.basename(path or "")
+    base = re.sub(r"\.rvt$", "", base, flags=re.I)
+    parts = [p for p in base.replace("_", "-").split("-") if p]
+    out = {"project": "", "originator": "", "functional": "", "spatial": "", "form": "", "role": "", "number": ""}
+    if len(parts) >= 6:
+        out["project"] = parts[0].upper()
+        out["originator"] = parts[1].upper()
+        out["functional"] = parts[2].upper()
+        out["spatial"] = parts[3].upper()
+        out["form"] = parts[4].upper()
+        out["role"] = parts[5].upper()
+        if len(parts) >= 7:
+            out["number"] = parts[6].upper()
+    elif len(parts) >= 2:
+        out["role"] = parts[-2].upper()
+    return out
+
+
+def _row_functional(row):
+    for k in ("functional", "Functional", "functionalBreakdown", "Functional Breakdown", "volume", "Volume", "func"):
+        v = row.get(k) if isinstance(row, dict) else None
+        if v:
+            return str(v).strip().upper()
+    did = _sheet_number_from_row(row)
+    parts = [p for p in did.replace("_", "-").split("-") if p]
+    # PROJ-ORIG-FUNC-...
+    if len(parts) >= 3:
+        return parts[2].upper()
+    return ""
+
+
+def collect_plan_sheets(pack, role_code, functional_code=None, stage_code=None):
+    """Match planned items by Task team (role) + functional breakdown from model name.
+    No form filter — all planned deliverables for that team/func are candidates.
+    """
     rows = extract_plan_rows(pack) or []
+    # also merge pack.sheetPlan / pack.planSheets if present
+    extra = pack.get("sheetPlan") or pack.get("planSheets") or pack.get("allPlanRows") or []
+    if isinstance(extra, list):
+        rows = list(rows) + [r for r in extra if r not in rows]
+
     role_code = (role_code or "").upper()
     role_full = discipline_full_name(role_code).upper()
+    functional_code = (functional_code or "").upper()
     out = []
+    seen = set()
     for r in rows:
         if not isinstance(r, dict):
             continue
-        form = _row_form(r)
-        if form not in ("DR", "SH"):
-            # also accept if number contains -DR- / -SH-
-            did = _sheet_number_from_row(r).upper()
-            if "-DR-" not in did and not did.endswith("-DR") and "-SH-" not in did and not did.endswith("-SH"):
-                if "DR" != form and "SH" != form:
-                    continue
         rrole = _row_role(r)
-        if role_code and rrole and rrole not in (role_code, role_full) and role_code not in rrole and role_full not in rrole:
-            # also match if role is substring of task team name
-            if role_code not in rrole and not rrole.startswith(role_code):
+        rfunc = _row_functional(r)
+
+        # Task team / role match
+        role_ok = True
+        if role_code:
+            if rrole:
+                role_ok = (
+                    rrole == role_code
+                    or rrole == role_full
+                    or role_code in rrole
+                    or rrole.startswith(role_code)
+                    or role_full in rrole
+                )
+            # if row has no role, keep (will rely on functional)
+        if not role_ok:
+            continue
+
+        # Functional breakdown match when both sides known
+        if functional_code and rfunc:
+            if rfunc != functional_code and functional_code not in rfunc and rfunc not in functional_code:
                 continue
+
         num = _sheet_number_from_row(r)
         if not num:
             continue
+        key = num.upper()
+        if key in seen:
+            continue
+        seen.add(key)
         out.append({
             "number": num,
             "title": _sheet_title_from_row(r) or num,
-            "form": form or "DR",
+            "form": _row_form(r),
             "stage": _row_stage(r),
+            "role": rrole,
+            "functional": rfunc,
             "row": r,
         })
     return out
+
 
 
 def existing_sheets_map(doc):
@@ -1413,18 +1512,19 @@ def ensure_publish_set(doc, set_name, sheet_ids):
         return "Publish set: " + str(ex)
 
 
-def sync_sheets_ui(doc, pack, role, stage_code, designed_by, checked_by):
+def sync_sheets_ui(doc, pack, role, stage_code, designed_by, checked_by, functional_code=None):
     """Interactive sheet create/update for DR/SH of this role."""
-    plan = collect_plan_sheets(pack, role, stage_code)
+    plan = collect_plan_sheets(pack, role, functional_code=functional_code, stage_code=stage_code)
     if not plan:
-        if not confirm("No DR/SH sheets found in the plan JSON for role %s.\\nContinue without sheet sync?" % (role or "?")):
+        if not confirm("No DR/SH sheets found in the plan JSON for role %s.\
+Continue without sheet sync?" % (role or "?")):
             return
         info("Sheet sync skipped (no matching DR/SH in plan).")
         return
 
     if not confirm(
         "Sheet sync for role %s\\n\\n"
-        "%d planned DR/SH sheet(s) in JSON.\\n\\n"
+        "%d planned sheet(s) in JSON (matched by task team + functional).\\n\\n"
         "Yes = review & create/update sheets\\nNo = skip"
         % (discipline_full_name(role) or role, len(plan))
     ):
@@ -1450,7 +1550,7 @@ def sync_sheets_ui(doc, pack, role, stage_code, designed_by, checked_by):
             to_create.append(item)
 
     lines = [
-        "Planned DR/SH: %d" % len(plan),
+        "Planned sheets: %d" % len(plan),
         "Already in model: %d" % len(to_update),
         "Missing (to create): %d" % len(to_create),
         "",
@@ -1583,20 +1683,28 @@ def main():
         cfg, tok = ensure_aps_token()
         if not tok:
             info(
-                "Sign-in did not complete.\n\n"
+                "Sign-in did not complete.
+
+"
                 "Tips:\n"
                 "• Sign in to Autodesk in Edge first (same PC user).\n"
                 "• APS Callback URL must be exactly:\n  " + APS_CALLBACK_URL + "\n"
-                "• Client ID / Secret must match that APS app.\n\n"
+                "• Client ID / Secret must match that APS app.
+
+"
                 "You can still load a Local File next."
             )
             source_mode = "local"
         else:
             info(
-                "Signed in to Autodesk.\n\n"
+                "Signed in to Autodesk.
+
+"
                 "ACC folder browse is limited here.\n"
                 "Use Atana IM → Push DB JSON, then choose Local File,\n"
-                "or keep the JSON in your remembered sync folder.\n\n"
+                "or keep the JSON in your remembered sync folder.
+
+"
                 "Checking the saved sync folder…"
             )
             folder = load_sync_folder()
@@ -1619,7 +1727,9 @@ def main():
             json_path = find_db_json_in_folder(folder)
         if not json_path:
             # ask file or folder
-            if confirm("Pick a JSON file?\n\nYes = file\nNo = folder"):
+            if confirm("Pick a JSON file?
+
+Yes = file\nNo = folder"):
                 json_path = pick_json_file()
                 if json_path:
                     save_sync_folder(os.path.dirname(json_path))
@@ -1677,7 +1787,7 @@ def main():
         "Project Address": pi_src.get("Project Address") or pi_src.get("projectAddress") or "",
         "Organization Name": pi_src.get("Organization Name") or pi_src.get("organizationName") or "",
         "ATA_ZZ_ClientContractNumber": pi_src.get("ATA_ZZ_ClientContractNumber") or "",
-        "ATA_ZZ_ProjectDiscipline": role or pi_src.get("ATA_ZZ_ProjectDiscipline") or "",
+        "ATA_ZZ_ProjectDiscipline": discipline_full_name(role) or discipline_full_name(pi_src.get("ATA_ZZ_ProjectDiscipline")) or discipline_full_name(pi_src.get("discipline")) or "",
         "ATA_ZZ_ProjectStage": pi_src.get("ATA_ZZ_ProjectStage") or stage_code,
     }
 
@@ -1720,7 +1830,8 @@ def main():
 
     # Sheet create/update (DR/SH) for this model role
     try:
-        sync_sheets_ui(doc, pack, role, stage_code, designed_by, checked_by)
+        mcodes = parse_model_codes(model_path(doc) if "model_path" in dir() else (doc.PathName if doc else ""))
+        sync_sheets_ui(doc, pack, role, stage_code, designed_by, checked_by, functional_code=mcodes.get("functional"))
     except Exception as ex:
         info("Sheet sync error:\n" + str(ex))
 
@@ -1728,7 +1839,7 @@ def main():
     # Globals
     globals_map = {
         "GLOBAL_ZZ_ClientContractNumber": desired_pi.get("ATA_ZZ_ClientContractNumber"),
-        "GLOBAL_ZZ_ProjectDiscipline": desired_pi.get("ATA_ZZ_ProjectDiscipline"),
+        "GLOBAL_ZZ_ProjectDiscipline": desired_pi.get("ATA_ZZ_ProjectDiscipline") or discipline_full_name(role),
         "GLOBAL_ZZ_ProjectStage": desired_pi.get("ATA_ZZ_ProjectStage"),
         "GLOBAL_ZZ_ProjectDeliveryManager": "",
         "GLOBAL_ZZ_InformationManager": "",
@@ -1747,9 +1858,13 @@ def main():
 
     # Title blocks
     if designed_by or checked_by:
-        msg = ("Title blocks for task team {}:\n\n"
+        msg = ("Title blocks for task team {}:
+
+"
                "Designed By (TTM): {}\n"
-               "Checked By (Peer): {}\n\n"
+               "Checked By (Peer): {}
+
+"
                "Apply to all title blocks in this model?").format(
                    role or "—", designed_by or "—", checked_by or "—")
         if confirm(msg):
@@ -1762,7 +1877,9 @@ def main():
     if set_name.startswith("S") and not set_name.startswith("WS"):
         set_name = "WS" + set_name[1:]
     if matched and plan_rows:
-        msg = ("Publish Set \"{}\"\n\n"
+        msg = ("Publish Set \"{}\"
+
+"
                "Matched {} sheet(s) from the plan for role {}.\n"
                "Create / replace this publish set?").format(set_name, len(matched), role or "all")
         if confirm(msg):
@@ -1775,7 +1892,9 @@ def main():
         inv = export_sheet_inventory(folder, role or "ZZ", pack, doc)
 
     info(
-        "Project Sync complete.\n\n"
+        "Project Sync complete.
+
+"
         "Source: {}\n"
         "JSON: {}\n"
         "Role: {}\n"
