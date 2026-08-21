@@ -1448,6 +1448,14 @@
     display:flex;flex-wrap:nowrap;gap:4px;align-items:center;
   }
   .midp-docs-toolbar-one-row .btn{ white-space:nowrap; }
+.task-row.ghost, .wbs-row.ghost, .gantt-row.ghost{opacity:0.55;}
+  .task-row.ghost .task-name::after{content:" · view only";font-size:10px;color:#888;font-weight:500;}
+  .task-row.ghost button.task-check,
+  .task-row.ghost button.task-assignee,
+  .task-row.ghost [data-est-task]{pointer-events:none;opacity:0.5;}
+  .role-pill{display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:6px;background:#ede9fe;color:#3e0b3b;}
+  .role-pill.ghost{background:#e5e7eb;color:#6b7280;}
+  .role-pill.zz{background:#fef3c7;color:#92400e;}
 </style>
 <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js" crossorigin="anonymous"></script>
 </head>
@@ -1930,6 +1938,7 @@
               <option value="DTL">DTL</option>
               <option value="PDM">PDM</option>
               <option value="TTM">TTM</option>
+              <option value="ZZ">ZZ shared milestones</option>
               <option value="ALL">All roles (merged)</option>
             </select>
           </div>
@@ -2198,11 +2207,21 @@ const APP_FEATURES = [
   { id: "project.delete", label: "Delete project", group: "Admin" },
   { id: "admin.accessMatrix", label: "Access matrix", group: "Admin" },
   { id: "admin.staffPool", label: "Staff pool (incl. cost)", group: "Admin" },
-  { id: "im.tasks", label: "IM Tasks", group: "IM Planner" },
+  { id: "im.tasks", label: "IM Tasks (legacy tab)", group: "IM Planner" },
   { id: "im.progress", label: "Progress", group: "IM Planner" },
   { id: "im.wbs", label: "WBS / Planner", group: "IM Planner" },
   { id: "im.gantt", label: "Gantt", group: "IM Planner" },
   { id: "im.clash", label: "Clash schedule", group: "IM Planner" },
+  { id: "tasks.IM.view", label: "IM Tasks · view", group: "Role task lists" },
+  { id: "tasks.IM.edit", label: "IM Tasks · edit (access)", group: "Role task lists" },
+  { id: "tasks.DTL.view", label: "DTL Tasks · view", group: "Role task lists" },
+  { id: "tasks.DTL.edit", label: "DTL Tasks · edit (access)", group: "Role task lists" },
+  { id: "tasks.PDM.view", label: "PDM Tasks · view", group: "Role task lists" },
+  { id: "tasks.PDM.edit", label: "PDM Tasks · edit (access)", group: "Role task lists" },
+  { id: "tasks.TTM.view", label: "TTM Tasks · view", group: "Role task lists" },
+  { id: "tasks.TTM.edit", label: "TTM Tasks · edit (access)", group: "Role task lists" },
+  { id: "tasks.ZZ.view", label: "ZZ shared milestones · view", group: "Role task lists" },
+  { id: "tasks.ZZ.edit", label: "ZZ shared milestones · edit", group: "Role task lists" },
   { id: "midp.view", label: "MIDP view", group: "MIDP" },
   { id: "midp.edit", label: "MIDP edit / import", group: "MIDP" },
   { id: "dpow.view", label: "DPoW view", group: "DPoW" },
@@ -2218,13 +2237,16 @@ const APP_FEATURES = [
 const DEFAULT_ACCESS_MATRIX = {
   ADMIN: APP_FEATURES.map(f => f.id),
   IM: APP_FEATURES.map(f => f.id).filter(id => id !== "admin.staffPool"),
-  PDM: ["im.progress","im.wbs","im.gantt","midp.view","dpow.view","docs.templates"],
-  DTL: ["im.progress","im.wbs","im.gantt","midp.view","dpow.view","docs.templates"],
-  TTM: ["im.progress","im.wbs","im.gantt","midp.view","dpow.view","tools.naming"],
-  TTIM: ["im.progress","midp.view","midp.edit","dpow.view","forma.sync","tools.naming"],
-  PEER: ["im.progress","midp.view","dpow.view"],
-  IA: ["im.progress","midp.view","tools.naming"],
-  DM: ["midp.view","forma.sync","docs.templates"]
+  PDM: ["im.progress","im.wbs","im.gantt","midp.view","dpow.view","docs.templates",
+        "tasks.IM.view","tasks.DTL.view","tasks.PDM.view","tasks.PDM.edit","tasks.TTM.view","tasks.ZZ.view","tasks.ZZ.edit"],
+  DTL: ["im.progress","im.wbs","im.gantt","midp.view","dpow.view","docs.templates",
+        "tasks.IM.view","tasks.DTL.view","tasks.DTL.edit","tasks.PDM.view","tasks.TTM.view","tasks.ZZ.view","tasks.ZZ.edit"],
+  TTM: ["im.progress","im.wbs","im.gantt","midp.view","dpow.view","tools.naming",
+        "tasks.TTM.view","tasks.TTM.edit","tasks.ZZ.view","tasks.IM.view"],
+  TTIM: ["im.progress","midp.view","midp.edit","dpow.view","forma.sync","tools.naming","tasks.IM.view","tasks.ZZ.view"],
+  PEER: ["im.progress","midp.view","dpow.view","tasks.IM.view","tasks.ZZ.view"],
+  IA: ["im.progress","midp.view","tools.naming","tasks.IM.view","tasks.ZZ.view"],
+  DM: ["midp.view","forma.sync","docs.templates","tasks.ZZ.view"]
 };
 
 function getAccessMatrix(){
@@ -2273,8 +2295,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.6.5";
-const APP_BUILD = "2026-08-21-topbar-role-export";
+const APP_VERSION = "3.6.6";
+const APP_BUILD = "2026-08-21-role-ghost-zz";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -7573,6 +7595,7 @@ function isIsoRequiredTask(task){ return isAppClientTask(task); }
  */
 function isTaskDisabled(project, task){
   if(!task || !project) return false;
+  if(task.ghost) return true; // other-role task: view only
   const st = (project.tasks && project.tasks[task.id]) || {};
   if(st.forceEnabled) return false;
   if(st.disabled === true) return true;
@@ -12742,57 +12765,7 @@ function isCurrentStage(project, stageId){
 /* Flat list of all task ids, built once from getHierarchy(), for progress math */
 
 
-const ROLE_TASK_PACKS = {"DTL": {"schema": "atana-role-tasks/1.0", "functionalRole": "DTL", "label": "Delivery Team Lead", "source": "ISO 19650 · Atana R&R · Information Management Framework", "wbsCoding": {"scheme": "Uniclass2015-inspired", "segments": ["Role", "Stage", "Activity", "InformationForm"], "notes": "Role code + stage + activity form the WBS index. Cross-role dependencies use dependsOnRole."}, "tasks": [{"id": "dtl-s1-root", "name": "Delivery leadership — Stage 1", "stageId": "S1", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s1-1", "name": "Confirm appointing-party requirements & EIR", "stageId": "S1", "parentId": "dtl-s1-root", "depth": 1, "defaultEstHours": 8, "dependencies": [], "critical": true, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s1-2", "name": "Appoint / confirm Delivery Team structure", "stageId": "S1", "parentId": "dtl-s1-root", "depth": 1, "defaultEstHours": 4, "dependencies": ["dtl-s1-1"], "critical": true, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s1-3", "name": "Agree high-level programme & information milestones", "stageId": "S1", "parentId": "dtl-s1-root", "depth": 1, "defaultEstHours": 6, "dependencies": ["dtl-s1-2"], "critical": false, "category": "Programme", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s1-4", "name": "Endorse CDE strategy with IM", "stageId": "S1", "parentId": "dtl-s1-root", "depth": 1, "defaultEstHours": 2, "dependencies": ["dtl-s1-2"], "critical": false, "category": "Governance", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s2-root", "name": "Delivery leadership — Stage 2", "stageId": "S2", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s2-1", "name": "Confirm Task Team appointments", "stageId": "S2", "parentId": "dtl-s2-root", "depth": 1, "defaultEstHours": 4, "dependencies": [], "critical": true, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s2-2", "name": "Approve BEP / MIDP baseline with IM", "stageId": "S2", "parentId": "dtl-s2-root", "depth": 1, "defaultEstHours": 4, "dependencies": ["dtl-s2-1"], "critical": true, "category": "Governance", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s2-3", "name": "Chair concept federation readiness review", "stageId": "S2", "parentId": "dtl-s2-root", "depth": 1, "defaultEstHours": 3, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s3-root", "name": "Delivery leadership — Stage 3", "stageId": "S3", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s3-1", "name": "Authorise BIM kick-off", "stageId": "S3", "parentId": "dtl-s3-root", "depth": 1, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Coordination", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s3-2", "name": "Review peer / QA gateway before WS3 submittal", "stageId": "S3", "parentId": "dtl-s3-root", "depth": 1, "defaultEstHours": 4, "dependencies": [], "critical": true, "category": "Assurance", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s3-3", "name": "Sign-off work stage information exchange", "stageId": "S3", "parentId": "dtl-s3-root", "depth": 1, "defaultEstHours": 3, "dependencies": ["dtl-s3-2"], "critical": true, "category": "Assurance", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s4-root", "name": "Delivery leadership — Stage 4", "stageId": "S4", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s4-1", "name": "Monitor detailed design information risks", "stageId": "S4", "parentId": "dtl-s4-root", "depth": 1, "defaultEstHours": 4, "dependencies": [], "critical": false, "category": "Risk", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s4-2", "name": "Review WS4 submittal readiness", "stageId": "S4", "parentId": "dtl-s4-root", "depth": 1, "defaultEstHours": 4, "dependencies": [], "critical": true, "category": "Assurance", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s5-root", "name": "Delivery leadership — Stage 5", "stageId": "S5", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s5-1", "name": "Onboard contractor information requirements", "stageId": "S5", "parentId": "dtl-s5-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s5-2", "name": "Oversee construction information compliance", "stageId": "S5", "parentId": "dtl-s5-root", "depth": 1, "defaultEstHours": 8, "dependencies": [], "critical": false, "category": "Assurance", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s6-root", "name": "Delivery leadership — Stage 6", "stageId": "S6", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s6-1", "name": "Confirm AIM / handover acceptance path", "stageId": "S6", "parentId": "dtl-s6-root", "depth": 1, "defaultEstHours": 4, "dependencies": [], "critical": true, "category": "Handover", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s6-2", "name": "Close-out lessons learned (delivery)", "stageId": "S6", "parentId": "dtl-s6-root", "depth": 1, "defaultEstHours": 4, "dependencies": [], "critical": false, "category": "Handover", "appClient": "N", "functionalRole": "DTL"}]}, "PDM": {"schema": "atana-role-tasks/1.0", "functionalRole": "PDM", "label": "Project Delivery Manager", "source": "ISO 19650 · Atana R&R · Information Management Framework", "wbsCoding": {"scheme": "Uniclass2015-inspired", "segments": ["Role", "Stage", "Activity", "InformationForm"], "notes": "Role code + stage + activity form the WBS index. Cross-role dependencies use dependsOnRole."}, "tasks": [{"id": "pdm-s1-root", "name": "Design management — Stage 1", "stageId": "S1", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Design management", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s1-1", "name": "Define design responsibility boundaries", "stageId": "S1", "parentId": "pdm-s1-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Design management", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s1-2", "name": "Align scope with EIR / AIR", "stageId": "S1", "parentId": "pdm-s1-root", "depth": 1, "defaultEstHours": 6, "dependencies": ["pdm-s1-1"], "critical": false, "category": "Scope", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s1-3", "name": "Coordinate with IM on CDE project setup needs", "stageId": "S1", "parentId": "pdm-s1-root", "depth": 1, "defaultEstHours": 3, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s2-root", "name": "Design management — Stage 2", "stageId": "S2", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Design management", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s2-1", "name": "Issue design programme to Task Teams", "stageId": "S2", "parentId": "pdm-s2-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Programme", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s2-2", "name": "Confirm TIDP inputs from each TTM", "stageId": "S2", "parentId": "pdm-s2-root", "depth": 1, "defaultEstHours": 4, "dependencies": ["pdm-s2-1"], "critical": false, "category": "Information planning", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s2-3", "name": "Review concept design information completeness", "stageId": "S2", "parentId": "pdm-s2-root", "depth": 1, "defaultEstHours": 8, "dependencies": [], "critical": false, "category": "Assurance", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s3-root", "name": "Design management — Stage 3", "stageId": "S3", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Design management", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s3-1", "name": "Coordinate spatial / services zone strategy with IM", "stageId": "S3", "parentId": "pdm-s3-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Coordination", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s3-2", "name": "Drive structural opening & reticulation requirements", "stageId": "S3", "parentId": "pdm-s3-root", "depth": 1, "defaultEstHours": 8, "dependencies": [], "critical": true, "category": "Coordination", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s3-3", "name": "Chair design coordination reviews (pre-peer)", "stageId": "S3", "parentId": "pdm-s3-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s3-4", "name": "Approve design package for peer review gateway", "stageId": "S3", "parentId": "pdm-s3-root", "depth": 1, "defaultEstHours": 4, "dependencies": ["pdm-s3-3"], "critical": true, "category": "Assurance", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s4-root", "name": "Design management — Stage 4", "stageId": "S4", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Design management", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s4-1", "name": "Track detailed design deliverable progress vs MIDP", "stageId": "S4", "parentId": "pdm-s4-root", "depth": 1, "defaultEstHours": 8, "dependencies": [], "critical": false, "category": "Information planning", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s4-2", "name": "Resolve cross-discipline design clashes (design intent)", "stageId": "S4", "parentId": "pdm-s4-root", "depth": 1, "defaultEstHours": 10, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s4-3", "name": "WS4 design submittal readiness", "stageId": "S4", "parentId": "pdm-s4-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Assurance", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s5-root", "name": "Design management — Stage 5", "stageId": "S5", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Design management", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s5-1", "name": "Support contractor model federation requirements", "stageId": "S5", "parentId": "pdm-s5-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s5-2", "name": "Snagging / design clarification register", "stageId": "S5", "parentId": "pdm-s5-root", "depth": 1, "defaultEstHours": 8, "dependencies": [], "critical": false, "category": "Assurance", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s6-root", "name": "Design management — Stage 6", "stageId": "S6", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Design management", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s6-1", "name": "Verify as-built design information completeness", "stageId": "S6", "parentId": "pdm-s6-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Handover", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s6-2", "name": "Design close-out certificate inputs", "stageId": "S6", "parentId": "pdm-s6-root", "depth": 1, "defaultEstHours": 4, "dependencies": [], "critical": false, "category": "Handover", "appClient": "N", "functionalRole": "PDM"}]}, "TTM": {"schema": "atana-role-tasks/1.0", "functionalRole": "TTM", "label": "Task Team Manager", "source": "ISO 19650 · Atana R&R · Information Management Framework", "wbsCoding": {"scheme": "Uniclass2015-inspired", "segments": ["Role", "Stage", "Activity", "InformationForm"], "notes": "Role code + stage + activity form the WBS index. Cross-role dependencies use dependsOnRole."}, "tasks": [{"id": "ttm-s1-root", "name": "Task team setup — Stage 1", "stageId": "S1", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Team setup", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s1-1", "name": "Acknowledge appointment & scope for task team", "stageId": "S1", "parentId": "ttm-s1-root", "depth": 1, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Team setup", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s1-2", "name": "Provide resource plan to PDM / DTL", "stageId": "S1", "parentId": "ttm-s1-root", "depth": 1, "defaultEstHours": 3, "dependencies": ["ttm-s1-1"], "critical": false, "category": "Programme", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s2-root", "name": "Task team mobilisation — Stage 2", "stageId": "S2", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Team setup", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s2-1", "name": "Confirm task team members on CDE", "stageId": "S2", "parentId": "ttm-s2-root", "depth": 1, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "CDE", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s2-2", "name": "Produce / update TIDP for task team", "stageId": "S2", "parentId": "ttm-s2-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Information planning", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s2-3", "name": "Brief Information Authors on naming & CDE states", "stageId": "S2", "parentId": "ttm-s2-root", "depth": 1, "defaultEstHours": 3, "dependencies": ["ttm-s2-1"], "critical": false, "category": "Team setup", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s2-4", "name": "Contribute concept model content per TIDP", "stageId": "S2", "parentId": "ttm-s2-root", "depth": 1, "defaultEstHours": 16, "dependencies": [], "critical": false, "category": "Authoring", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s3-root", "name": "Developed design delivery — Stage 3", "stageId": "S3", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Delivery", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s3-1", "name": "Attend BIM kick-off", "stageId": "S3", "parentId": "ttm-s3-root", "depth": 1, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Coordination", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s3-2", "name": "Deliver developed design models & drawings (MIDP)", "stageId": "S3", "parentId": "ttm-s3-root", "depth": 1, "defaultEstHours": 40, "dependencies": [], "critical": true, "category": "Authoring", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s3-3", "name": "Respond to spatial coordination / openings requests", "stageId": "S3", "parentId": "ttm-s3-root", "depth": 1, "defaultEstHours": 8, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s3-4", "name": "Close priority 01–02 clash issues for task team", "stageId": "S3", "parentId": "ttm-s3-root", "depth": 1, "defaultEstHours": 12, "dependencies": [], "critical": true, "category": "Coordination", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s3-5", "name": "Submit task team package for peer review", "stageId": "S3", "parentId": "ttm-s3-root", "depth": 1, "defaultEstHours": 4, "dependencies": ["ttm-s3-2"], "critical": true, "category": "Assurance", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s3-6", "name": "Release approved information to SHARED", "stageId": "S3", "parentId": "ttm-s3-root", "depth": 1, "defaultEstHours": 2, "dependencies": ["ttm-s3-5"], "critical": false, "category": "CDE", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s4-root", "name": "Technical design delivery — Stage 4", "stageId": "S4", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Delivery", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s4-1", "name": "Deliver technical design information (MIDP)", "stageId": "S4", "parentId": "ttm-s4-root", "depth": 1, "defaultEstHours": 40, "dependencies": [], "critical": true, "category": "Authoring", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s4-2", "name": "Close remaining clash priorities for task team", "stageId": "S4", "parentId": "ttm-s4-root", "depth": 1, "defaultEstHours": 12, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s4-3", "name": "Peer review & SHARED / PUBLISHED gateways", "stageId": "S4", "parentId": "ttm-s4-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Assurance", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s5-root", "name": "Construction information support — Stage 5", "stageId": "S5", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Delivery", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s5-1", "name": "Respond to contractor RFIs (information)", "stageId": "S5", "parentId": "ttm-s5-root", "depth": 1, "defaultEstHours": 12, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s5-2", "name": "Update models for construction-issue information", "stageId": "S5", "parentId": "ttm-s5-root", "depth": 1, "defaultEstHours": 16, "dependencies": [], "critical": false, "category": "Authoring", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s5-3", "name": "Support manufacture LOD coordination where required", "stageId": "S5", "parentId": "ttm-s5-root", "depth": 1, "defaultEstHours": 8, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s6-root", "name": "Close-out — Stage 6", "stageId": "S6", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Handover", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s6-1", "name": "Verify task team AIM / record information", "stageId": "S6", "parentId": "ttm-s6-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Handover", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s6-2", "name": "Archive task team WIP & confirm PUBLISHED set", "stageId": "S6", "parentId": "ttm-s6-root", "depth": 1, "defaultEstHours": 3, "dependencies": [], "critical": false, "category": "CDE", "appClient": "N", "functionalRole": "TTM"}]}};
-
-/** Resolve person from project organogram first, then global DATA.team */
-function resolveProjectMember(project, id){
-  if(id == null || id === "") return null;
-  const key = String(id);
-  const team = (project && project.projectTeam && project.projectTeam.members) || [];
-  let m = team.find(x => String(x.id) === key || String(x.email||"") === key || String(x.name||"") === key);
-  if(m){
-    return {
-      id: m.id || m.email || m.name,
-      name: m.name || m.email || "Member",
-      email: m.email || "",
-      func: m.func || "",
-      discipline: m.discipline || "",
-      color: m.color || ((typeof MEMBER_COLORS !== "undefined" && MEMBER_COLORS[0]) || "#3e0b3b")
-    };
-  }
-  try {
-    if(typeof memberById === "function"){
-      const g = memberById(id);
-      if(g) return g;
-    }
-  } catch(e){}
-  try {
-    const g = (DATA.team || []).find(x => String(x.id) === key || String(x.email||"") === key || String(x.name||"") === key);
-    if(g) return g;
-  } catch(e){}
-  return null;
-}
-
-function getProjectViewerRole(project){
-  const u = (typeof getCurrentUser === "function") ? getCurrentUser() : null;
-  if(u && u.func){
-    return { func: String(u.func).toUpperCase(), discipline: u.discipline || "", memberId: u.id || u.email || "", name: u.name || "" };
-  }
-  if(project && project.viewerRole && project.viewerRole.func){
-    return { func: String(project.viewerRole.func).toUpperCase(), discipline: project.viewerRole.discipline || "", memberId: project.viewerRole.memberId || "", name: project.viewerRole.name || "" };
-  }
-  return { func: "IM", discipline: "", memberId: "", name: "" };
-}
-
-function taskFunctionalRole(task){
-  if(!task) return "IM";
-  if(task.functionalRole) return String(task.functionalRole).toUpperCase();
-  const id = String(task.id || "");
-  if(id.indexOf("dtl-") === 0) return "DTL";
-  if(id.indexOf("pdm-") === 0) return "PDM";
-  if(id.indexOf("ttm-") === 0) return "TTM";
-  return "IM";
-}
+const ROLE_TASK_PACKS = {"ZZ": {"schema": "atana-role-tasks/1", "functionalRole": "ZZ", "label": "Shared project milestones (all roles)", "source": "ISO 19650 stage gate + Atana CDE approvals", "tasks": [{"id": "zz-s1-start", "name": "Stage 1 start (project mobilisation)", "stageId": "S1", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Stage start", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s1-cde", "name": "CDE approval workflows enabled", "stageId": "S1", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "CDE approvals", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s2-peer", "name": "Peer readiness check (S2)", "stageId": "S2", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Stage gate", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s2-qa", "name": "QA review — Stage 2", "stageId": "S2", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Stage gate", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s2-submit", "name": "Work stage submittal — Stage 2", "stageId": "S2", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Stage gate", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s3-peer", "name": "PEER REVIEW — Stage 3 (2 weeks before submittal)", "stageId": "S3", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Stage gate", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s3-qa", "name": "QA REVIEW — Stage 3 (1 week before submittal)", "stageId": "S3", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Stage gate", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s3-submit", "name": "WORK STAGE SUBMITTAL — Stage 3", "stageId": "S3", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Stage gate", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s3-clash-start", "name": "WS3 clash cycle start", "stageId": "S3", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Clash cycle", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s3-clash-end", "name": "WS3 clash cycle end (P01–P02 complete)", "stageId": "S3", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Clash cycle", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s4-peer", "name": "PEER REVIEW — Stage 4 (2 weeks before submittal)", "stageId": "S4", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Stage gate", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s4-qa", "name": "QA REVIEW — Stage 4 (1 week before submittal)", "stageId": "S4", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Stage gate", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s4-submit", "name": "WORK STAGE SUBMITTAL — Stage 4", "stageId": "S4", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Stage gate", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s4-clash-start", "name": "WS4 clash cycle start", "stageId": "S4", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Clash cycle", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s4-clash-end", "name": "WS4 clash cycle end", "stageId": "S4", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Clash cycle", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s5-qa", "name": "QA REVIEW — Stage 5", "stageId": "S5", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Stage gate", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s5-submit", "name": "WORK STAGE SUBMITTAL — Stage 5", "stageId": "S5", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Stage gate", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s5-snag", "name": "Snagging mapping (default week 2 of WS5)", "stageId": "S5", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Snagging", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s6-qa", "name": "Handover QA review", "stageId": "S6", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Close-out", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}, {"id": "zz-s6-submit", "name": "Close-out / AIM submittal", "stageId": "S6", "parentId": null, "depth": 0, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Close-out", "appClient": "N", "functionalRole": "ZZ", "isMilestone": true, "shared": true}]}, "DTL": {"schema": "atana-role-tasks/1.0", "functionalRole": "DTL", "label": "Delivery Team Lead", "source": "ISO 19650 · Atana R&R · Information Management Framework", "wbsCoding": {"scheme": "Uniclass2015-inspired", "segments": ["Role", "Stage", "Activity", "InformationForm"], "notes": "Role code + stage + activity form the WBS index. Cross-role dependencies use dependsOnRole."}, "tasks": [{"id": "dtl-s1-root", "name": "Delivery leadership — Stage 1", "stageId": "S1", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s1-1", "name": "Confirm appointing-party requirements & EIR", "stageId": "S1", "parentId": "dtl-s1-root", "depth": 1, "defaultEstHours": 8, "dependencies": [], "critical": true, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s1-2", "name": "Appoint / confirm Delivery Team structure", "stageId": "S1", "parentId": "dtl-s1-root", "depth": 1, "defaultEstHours": 4, "dependencies": ["dtl-s1-1"], "critical": true, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s1-3", "name": "Agree high-level programme & information milestones", "stageId": "S1", "parentId": "dtl-s1-root", "depth": 1, "defaultEstHours": 6, "dependencies": ["dtl-s1-2"], "critical": false, "category": "Programme", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s1-4", "name": "Endorse CDE strategy with IM", "stageId": "S1", "parentId": "dtl-s1-root", "depth": 1, "defaultEstHours": 2, "dependencies": ["dtl-s1-2"], "critical": false, "category": "Governance", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s2-root", "name": "Delivery leadership — Stage 2", "stageId": "S2", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s2-1", "name": "Confirm Task Team appointments", "stageId": "S2", "parentId": "dtl-s2-root", "depth": 1, "defaultEstHours": 4, "dependencies": [], "critical": true, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s2-2", "name": "Approve BEP / MIDP baseline with IM", "stageId": "S2", "parentId": "dtl-s2-root", "depth": 1, "defaultEstHours": 4, "dependencies": ["dtl-s2-1"], "critical": true, "category": "Governance", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s2-3", "name": "Chair concept federation readiness review", "stageId": "S2", "parentId": "dtl-s2-root", "depth": 1, "defaultEstHours": 3, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s3-root", "name": "Delivery leadership — Stage 3", "stageId": "S3", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s3-1", "name": "Authorise BIM kick-off", "stageId": "S3", "parentId": "dtl-s3-root", "depth": 1, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Coordination", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s3-2", "name": "Review peer / QA gateway before WS3 submittal", "stageId": "S3", "parentId": "dtl-s3-root", "depth": 1, "defaultEstHours": 4, "dependencies": [], "critical": true, "category": "Assurance", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s3-3", "name": "Sign-off work stage information exchange", "stageId": "S3", "parentId": "dtl-s3-root", "depth": 1, "defaultEstHours": 3, "dependencies": ["dtl-s3-2"], "critical": true, "category": "Assurance", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s4-root", "name": "Delivery leadership — Stage 4", "stageId": "S4", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s4-1", "name": "Monitor detailed design information risks", "stageId": "S4", "parentId": "dtl-s4-root", "depth": 1, "defaultEstHours": 4, "dependencies": [], "critical": false, "category": "Risk", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s4-2", "name": "Review WS4 submittal readiness", "stageId": "S4", "parentId": "dtl-s4-root", "depth": 1, "defaultEstHours": 4, "dependencies": [], "critical": true, "category": "Assurance", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s5-root", "name": "Delivery leadership — Stage 5", "stageId": "S5", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s5-1", "name": "Onboard contractor information requirements", "stageId": "S5", "parentId": "dtl-s5-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s5-2", "name": "Oversee construction information compliance", "stageId": "S5", "parentId": "dtl-s5-root", "depth": 1, "defaultEstHours": 8, "dependencies": [], "critical": false, "category": "Assurance", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s6-root", "name": "Delivery leadership — Stage 6", "stageId": "S6", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Leadership", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s6-1", "name": "Confirm AIM / handover acceptance path", "stageId": "S6", "parentId": "dtl-s6-root", "depth": 1, "defaultEstHours": 4, "dependencies": [], "critical": true, "category": "Handover", "appClient": "N", "functionalRole": "DTL"}, {"id": "dtl-s6-2", "name": "Close-out lessons learned (delivery)", "stageId": "S6", "parentId": "dtl-s6-root", "depth": 1, "defaultEstHours": 4, "dependencies": [], "critical": false, "category": "Handover", "appClient": "N", "functionalRole": "DTL"}]}, "PDM": {"schema": "atana-role-tasks/1.0", "functionalRole": "PDM", "label": "Project Delivery Manager", "source": "ISO 19650 · Atana R&R · Information Management Framework", "wbsCoding": {"scheme": "Uniclass2015-inspired", "segments": ["Role", "Stage", "Activity", "InformationForm"], "notes": "Role code + stage + activity form the WBS index. Cross-role dependencies use dependsOnRole."}, "tasks": [{"id": "pdm-s1-root", "name": "Design management — Stage 1", "stageId": "S1", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Design management", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s1-1", "name": "Define design responsibility boundaries", "stageId": "S1", "parentId": "pdm-s1-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Design management", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s1-2", "name": "Align scope with EIR / AIR", "stageId": "S1", "parentId": "pdm-s1-root", "depth": 1, "defaultEstHours": 6, "dependencies": ["pdm-s1-1"], "critical": false, "category": "Scope", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s1-3", "name": "Coordinate with IM on CDE project setup needs", "stageId": "S1", "parentId": "pdm-s1-root", "depth": 1, "defaultEstHours": 3, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s2-root", "name": "Design management — Stage 2", "stageId": "S2", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Design management", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s2-1", "name": "Issue design programme to Task Teams", "stageId": "S2", "parentId": "pdm-s2-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Programme", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s2-2", "name": "Confirm TIDP inputs from each TTM", "stageId": "S2", "parentId": "pdm-s2-root", "depth": 1, "defaultEstHours": 4, "dependencies": ["pdm-s2-1"], "critical": false, "category": "Information planning", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s2-3", "name": "Review concept design information completeness", "stageId": "S2", "parentId": "pdm-s2-root", "depth": 1, "defaultEstHours": 8, "dependencies": [], "critical": false, "category": "Assurance", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s3-root", "name": "Design management — Stage 3", "stageId": "S3", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Design management", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s3-1", "name": "Coordinate spatial / services zone strategy with IM", "stageId": "S3", "parentId": "pdm-s3-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Coordination", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s3-2", "name": "Drive structural opening & reticulation requirements", "stageId": "S3", "parentId": "pdm-s3-root", "depth": 1, "defaultEstHours": 8, "dependencies": [], "critical": true, "category": "Coordination", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s3-3", "name": "Chair design coordination reviews (pre-peer)", "stageId": "S3", "parentId": "pdm-s3-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s3-4", "name": "Approve design package for peer review gateway", "stageId": "S3", "parentId": "pdm-s3-root", "depth": 1, "defaultEstHours": 4, "dependencies": ["pdm-s3-3"], "critical": true, "category": "Assurance", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s4-root", "name": "Design management — Stage 4", "stageId": "S4", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Design management", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s4-1", "name": "Track detailed design deliverable progress vs MIDP", "stageId": "S4", "parentId": "pdm-s4-root", "depth": 1, "defaultEstHours": 8, "dependencies": [], "critical": false, "category": "Information planning", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s4-2", "name": "Resolve cross-discipline design clashes (design intent)", "stageId": "S4", "parentId": "pdm-s4-root", "depth": 1, "defaultEstHours": 10, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s4-3", "name": "WS4 design submittal readiness", "stageId": "S4", "parentId": "pdm-s4-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Assurance", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s5-root", "name": "Design management — Stage 5", "stageId": "S5", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Design management", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s5-1", "name": "Support contractor model federation requirements", "stageId": "S5", "parentId": "pdm-s5-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s5-2", "name": "Snagging / design clarification register", "stageId": "S5", "parentId": "pdm-s5-root", "depth": 1, "defaultEstHours": 8, "dependencies": [], "critical": false, "category": "Assurance", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s6-root", "name": "Design management — Stage 6", "stageId": "S6", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Design management", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s6-1", "name": "Verify as-built design information completeness", "stageId": "S6", "parentId": "pdm-s6-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Handover", "appClient": "N", "functionalRole": "PDM"}, {"id": "pdm-s6-2", "name": "Design close-out certificate inputs", "stageId": "S6", "parentId": "pdm-s6-root", "depth": 1, "defaultEstHours": 4, "dependencies": [], "critical": false, "category": "Handover", "appClient": "N", "functionalRole": "PDM"}]}, "TTM": {"schema": "atana-role-tasks/1.0", "functionalRole": "TTM", "label": "Task Team Manager", "source": "ISO 19650 · Atana R&R · Information Management Framework", "wbsCoding": {"scheme": "Uniclass2015-inspired", "segments": ["Role", "Stage", "Activity", "InformationForm"], "notes": "Role code + stage + activity form the WBS index. Cross-role dependencies use dependsOnRole."}, "tasks": [{"id": "ttm-s1-root", "name": "Task team setup — Stage 1", "stageId": "S1", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Team setup", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s1-1", "name": "Acknowledge appointment & scope for task team", "stageId": "S1", "parentId": "ttm-s1-root", "depth": 1, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Team setup", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s1-2", "name": "Provide resource plan to PDM / DTL", "stageId": "S1", "parentId": "ttm-s1-root", "depth": 1, "defaultEstHours": 3, "dependencies": ["ttm-s1-1"], "critical": false, "category": "Programme", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s2-root", "name": "Task team mobilisation — Stage 2", "stageId": "S2", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Team setup", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s2-1", "name": "Confirm task team members on CDE", "stageId": "S2", "parentId": "ttm-s2-root", "depth": 1, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "CDE", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s2-2", "name": "Produce / update TIDP for task team", "stageId": "S2", "parentId": "ttm-s2-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Information planning", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s2-3", "name": "Brief Information Authors on naming & CDE states", "stageId": "S2", "parentId": "ttm-s2-root", "depth": 1, "defaultEstHours": 3, "dependencies": ["ttm-s2-1"], "critical": false, "category": "Team setup", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s2-4", "name": "Contribute concept model content per TIDP", "stageId": "S2", "parentId": "ttm-s2-root", "depth": 1, "defaultEstHours": 16, "dependencies": [], "critical": false, "category": "Authoring", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s3-root", "name": "Developed design delivery — Stage 3", "stageId": "S3", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Delivery", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s3-1", "name": "Attend BIM kick-off", "stageId": "S3", "parentId": "ttm-s3-root", "depth": 1, "defaultEstHours": 2, "dependencies": [], "critical": true, "category": "Coordination", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s3-2", "name": "Deliver developed design models & drawings (MIDP)", "stageId": "S3", "parentId": "ttm-s3-root", "depth": 1, "defaultEstHours": 40, "dependencies": [], "critical": true, "category": "Authoring", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s3-3", "name": "Respond to spatial coordination / openings requests", "stageId": "S3", "parentId": "ttm-s3-root", "depth": 1, "defaultEstHours": 8, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s3-4", "name": "Close priority 01–02 clash issues for task team", "stageId": "S3", "parentId": "ttm-s3-root", "depth": 1, "defaultEstHours": 12, "dependencies": [], "critical": true, "category": "Coordination", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s3-5", "name": "Submit task team package for peer review", "stageId": "S3", "parentId": "ttm-s3-root", "depth": 1, "defaultEstHours": 4, "dependencies": ["ttm-s3-2"], "critical": true, "category": "Assurance", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s3-6", "name": "Release approved information to SHARED", "stageId": "S3", "parentId": "ttm-s3-root", "depth": 1, "defaultEstHours": 2, "dependencies": ["ttm-s3-5"], "critical": false, "category": "CDE", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s4-root", "name": "Technical design delivery — Stage 4", "stageId": "S4", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Delivery", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s4-1", "name": "Deliver technical design information (MIDP)", "stageId": "S4", "parentId": "ttm-s4-root", "depth": 1, "defaultEstHours": 40, "dependencies": [], "critical": true, "category": "Authoring", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s4-2", "name": "Close remaining clash priorities for task team", "stageId": "S4", "parentId": "ttm-s4-root", "depth": 1, "defaultEstHours": 12, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s4-3", "name": "Peer review & SHARED / PUBLISHED gateways", "stageId": "S4", "parentId": "ttm-s4-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Assurance", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s5-root", "name": "Construction information support — Stage 5", "stageId": "S5", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Delivery", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s5-1", "name": "Respond to contractor RFIs (information)", "stageId": "S5", "parentId": "ttm-s5-root", "depth": 1, "defaultEstHours": 12, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s5-2", "name": "Update models for construction-issue information", "stageId": "S5", "parentId": "ttm-s5-root", "depth": 1, "defaultEstHours": 16, "dependencies": [], "critical": false, "category": "Authoring", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s5-3", "name": "Support manufacture LOD coordination where required", "stageId": "S5", "parentId": "ttm-s5-root", "depth": 1, "defaultEstHours": 8, "dependencies": [], "critical": false, "category": "Coordination", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s6-root", "name": "Close-out — Stage 6", "stageId": "S6", "parentId": null, "depth": 0, "defaultEstHours": 0, "dependencies": [], "critical": false, "category": "Handover", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s6-1", "name": "Verify task team AIM / record information", "stageId": "S6", "parentId": "ttm-s6-root", "depth": 1, "defaultEstHours": 6, "dependencies": [], "critical": true, "category": "Handover", "appClient": "N", "functionalRole": "TTM"}, {"id": "ttm-s6-2", "name": "Archive task team WIP & confirm PUBLISHED set", "stageId": "S6", "parentId": "ttm-s6-root", "depth": 1, "defaultEstHours": 3, "dependencies": [], "critical": false, "category": "CDE", "appClient": "N", "functionalRole": "TTM"}]}};
 
 function hierarchyFromRolePack(pack){
   if(!pack || !Array.isArray(pack.tasks)) return [];
@@ -12839,18 +12812,18 @@ function hierarchyFromRolePack(pack){
 
 function getHierarchyForRole(roleCode){
   const role = String(roleCode || "IM").toUpperCase();
-  if(role === "IM" || role === "ADMIN" || role === "DM" || role === "PEER" || role === "TTIM" || role === "IA"){
-    // IM list is default for IM; other roles without a pack fall back to IM until templates exist
-    if(role === "IM" || role === "ADMIN"){
-      try { return (typeof getHierarchy === "function") ? getHierarchy() : BUILTIN_HIERARCHY; } catch(e){ return BUILTIN_HIERARCHY; }
+  try {
+    if(DATA && DATA.settings && DATA.settings.roleHierarchies && DATA.settings.roleHierarchies[role] && DATA.settings.roleHierarchies[role].length){
+      return DATA.settings.roleHierarchies[role];
     }
+  } catch(e){}
+  if(role === "IM" || role === "ADMIN"){
+    try { return (typeof getHierarchy === "function") ? getHierarchy() : BUILTIN_HIERARCHY; } catch(e){ return BUILTIN_HIERARCHY; }
   }
   const pack = (typeof ROLE_TASK_PACKS !== "undefined") ? ROLE_TASK_PACKS[role] : null;
   if(pack) return hierarchyFromRolePack(pack);
   try { return (typeof getHierarchy === "function") ? getHierarchy() : BUILTIN_HIERARCHY; } catch(e){ return BUILTIN_HIERARCHY; }
 }
-
-
 function getHierarchy(){
   try{
     if(typeof DATA !== "undefined" && DATA && DATA.settings && Array.isArray(DATA.settings.taskHierarchy) && DATA.settings.taskHierarchy.length)
@@ -12859,149 +12832,134 @@ function getHierarchy(){
   return BUILTIN_HIERARCHY;
 }
 /** Stages for a project: base hierarchy + optional extra stages from settings. */
-function getProjectHierarchy(project){
+
+/** True if current user may view or edit a role task list (access matrix). */
+function canRoleTask(mode, targetRole){
+  const role = String(targetRole || "IM").toUpperCase();
+  const feat = "tasks." + role + "." + (mode === "edit" ? "edit" : "view");
+  const user = (typeof getCurrentUser === "function") ? getCurrentUser() : null;
+  const userRole = user && user.isAdmin ? "ADMIN" : (user && user.func ? String(user.func).toUpperCase() : "IM");
+  if(userRole === "ADMIN") return true;
+  const matrix = (typeof getAccessMatrix === "function") ? getAccessMatrix() : {};
+  const allowed = matrix[userRole] || [];
+  if(allowed.indexOf(feat) >= 0) return true;
+  if(mode === "view" && allowed.indexOf("tasks." + role + ".edit") >= 0) return true;
+  return false;
+}
+
+function getVisibleTaskRoles(project){
+  const all = ["IM","DTL","PDM","TTM","ZZ"];
+  let edit = all.filter(function(r){ return canRoleTask("edit", r); });
+  let view = all.filter(function(r){ return canRoleTask("view", r) || canRoleTask("edit", r); });
   const viewer = (typeof getProjectViewerRole === "function") ? getProjectViewerRole(project) : { func: "IM" };
-  const roleHier = (typeof getHierarchyForRole === "function") ? getHierarchyForRole(viewer.func) : ((typeof getHierarchy === "function") ? getHierarchy() : []);
-  const base = (roleHier || []).map(s => Object.assign({}, s));
-  const extra = (project && Array.isArray(project.extraStages)) ? project.extraStages : [];
-  extra.forEach(ex => {
-    if(!ex || !ex.id) return;
-    if(base.some(s => s.id === ex.id)) return;
-    base.push({
-      id: String(ex.id),
-      label: String(ex.label || ex.id),
-      categories: Array.isArray(ex.categories) ? ex.categories : []
+  const primary = String((viewer && viewer.func) || "IM").toUpperCase();
+  if(["IM","DTL","PDM","TTM"].indexOf(primary) >= 0){
+    if(edit.indexOf(primary) < 0) edit.push(primary);
+    if(view.indexOf(primary) < 0) view.push(primary);
+  }
+  if(view.indexOf("ZZ") < 0) view.push("ZZ");
+  return { edit: edit, view: view, primary: primary };
+}
+
+function cloneHierarchyDeep(hier){
+  return JSON.parse(JSON.stringify(hier || []));
+}
+
+function markHierarchyRole(hier, role, ghost){
+  const walk = function(nodes){
+    (nodes || []).forEach(function(n){
+      n.sourceRole = role;
+      n.ghost = !!ghost;
+      if(n.isMilestone || String(n.id||"").indexOf("zz-") === 0 || String(n.id||"").indexOf("ms-") === 0){
+        n.isMilestone = true;
+      }
+      if(n.children && n.children.length) walk(n.children);
     });
+  };
+  (hier || []).forEach(function(st){
+    (st.categories || []).forEach(function(cat){
+      (cat.subs || []).forEach(function(sub){ walk(sub.tasks); });
+    });
+  });
+  return hier;
+}
+
+function mergeRoleHierarchies(roleSpecs){
+  const stageOrder = ["S1","S2","S3","S4","S5","S6"];
+  const byStage = {};
+  stageOrder.forEach(function(sid){ byStage[sid] = { id: sid, label: sid, categories: [] }; });
+  try {
+    const base = (typeof BUILTIN_HIERARCHY !== "undefined") ? BUILTIN_HIERARCHY : [];
+    base.forEach(function(s){ if(byStage[s.id]) byStage[s.id].label = s.label; });
+  } catch(e){}
+  roleSpecs.forEach(function(spec){
+    const role = spec.role;
+    const ghost = !!spec.ghost;
+    const hier = markHierarchyRole(cloneHierarchyDeep(spec.hier), role, ghost);
+    (hier || []).forEach(function(st){
+      if(!byStage[st.id]) byStage[st.id] = { id: st.id, label: st.label || st.id, categories: [] };
+      if(st.label) byStage[st.id].label = st.label;
+      (st.categories || []).forEach(function(cat){
+        const titleBase = cat.title || cat.num || "General";
+        const title = role === "ZZ" ? ("ZZ · " + titleBase) : (ghost ? ("[" + role + "] " + titleBase) : titleBase);
+        byStage[st.id].categories.push({
+          num: String(cat.num || "1") + (role === "ZZ" ? "-ZZ" : (ghost ? "-" + role : "")),
+          title: title,
+          ghost: ghost,
+          sourceRole: role,
+          subs: (cat.subs || []).map(function(sub){
+            return { num: sub.num, title: sub.title, ghost: ghost, sourceRole: role, tasks: sub.tasks || [] };
+          })
+        });
+      });
+    });
+  });
+  return stageOrder.map(function(sid){ return byStage[sid]; }).filter(function(s){ return s.categories && s.categories.length; });
+}
+
+function getProjectHierarchy(project){
+  const vis = (typeof getVisibleTaskRoles === "function") ? getVisibleTaskRoles(project) : { edit: ["IM"], view: ["IM","ZZ"], primary: "IM" };
+  const specs = [];
+  const ordered = [];
+  (vis.edit || []).forEach(function(r){ if(ordered.indexOf(r) < 0 && r !== "ZZ") ordered.push(r); });
+  (vis.view || []).forEach(function(r){ if(ordered.indexOf(r) < 0 && r !== "ZZ") ordered.push(r); });
+  // Prefer primary role first among editables
+  if(vis.primary && ordered.indexOf(vis.primary) > 0){
+    ordered.splice(ordered.indexOf(vis.primary), 1);
+    ordered.unshift(vis.primary);
+  }
+  ordered.forEach(function(r){
+    let hier = [];
+    try { hier = (typeof getHierarchyForRole === "function") ? getHierarchyForRole(r) : []; } catch(e){}
+    if(!hier || !hier.length) return;
+    const ghost = (vis.edit || []).indexOf(r) < 0;
+    specs.push({ role: r, hier: hier, ghost: ghost });
+  });
+  if((vis.view || []).indexOf("ZZ") >= 0 || (vis.edit || []).indexOf("ZZ") >= 0){
+    let zzHier = [];
+    try { zzHier = getHierarchyForRole("ZZ"); } catch(e){}
+    if(zzHier && zzHier.length){
+      specs.push({ role: "ZZ", hier: zzHier, ghost: (vis.edit || []).indexOf("ZZ") < 0 });
+    }
+  }
+  let base;
+  if(specs.length > 1){
+    base = mergeRoleHierarchies(specs);
+  } else if(specs.length === 1){
+    base = markHierarchyRole(cloneHierarchyDeep(specs[0].hier), specs[0].role, specs[0].ghost);
+  } else {
+    try { base = (getHierarchy() || []).map(function(s){ return Object.assign({}, s); }); }
+    catch(e){ base = []; }
+  }
+  const extra = (project && Array.isArray(project.extraStages)) ? project.extraStages : [];
+  extra.forEach(function(ex){
+    if(!ex || !ex.id) return;
+    if(base.some(function(s){ return s.id === ex.id; })) return;
+    base.push({ id: String(ex.id), label: String(ex.label || ex.id), categories: Array.isArray(ex.categories) ? ex.categories : [] });
   });
   return base;
 }
-function addProjectWorkStage(project, label){
-  if(!project) return null;
-  if(!Array.isArray(project.extraStages)) project.extraStages = [];
-  const n = getProjectHierarchy(project).length + 1;
-  const id = "S" + n;
-  // avoid collision
-  let id2 = id; let k = n;
-  while(getProjectHierarchy(project).some(s => s.id === id2)){ k++; id2 = "S" + k; }
-  const lab = label || ("Stage " + k);
-  project.extraStages.push({ id: id2, label: lab, categories: [] });
-  if(!project.stageDurations) project.stageDurations = defaultStageDurations();
-  project.stageDurations[id2] = 1;
-  if(!project.stageLabels) project.stageLabels = {};
-  project.stageLabels[id2] = lab;
-  return id2;
-}
 
-
-
-/** Walk task tree depth-first */
-function walkTaskTree(tasks, fn, depth, parent){
-  depth = depth || 0;
-  (tasks || []).forEach(t => {
-    fn(t, depth, parent || null);
-    if(t.children && t.children.length) walkTaskTree(t.children, fn, depth + 1, t);
-  });
-}
-function flattenTaskTree(tasks){
-  const out = [];
-  walkTaskTree(tasks, t => out.push(t));
-  return out;
-}
-function leafTasks(tasks){
-  const out = [];
-  walkTaskTree(tasks, t => { if(!t.children || !t.children.length) out.push(t); });
-  return out;
-}
-function isParentTask(t){ return !!(t && t.children && t.children.length); }
-
-function findTaskNodeById(taskId){
-  let found = null;
-  getHierarchy().forEach(stage => stage.categories.forEach(cat => cat.subs.forEach(sub => {
-    walkTaskTree(sub.tasks || [], (t, depth, parent) => {
-      if(t.id === taskId) found = { task: t, parent, stage, cat, sub };
-    });
-  })));
-  return found;
-}
-function leafChildrenOf(task){
-  return leafTasks(task.children || []);
-}
-function parentAllChildrenDone(project, parentTask){
-  const leaves = leafChildrenOf(parentTask);
-  if(!leaves.length) return false;
-  return leaves.every(ch => {
-    if(isTaskDisabled(project, ch)) return true;
-    return !!(project.tasks[ch.id] && project.tasks[ch.id].done);
-  });
-}
-/** When a leaf is toggled, roll completion up to ancestor parents. */
-function syncParentCompletion(project, taskId){
-  let node = findTaskNodeById(taskId);
-  let guard = 0;
-  while(node && node.parent && guard++ < 20){
-    const parent = node.parent;
-    const st = ensureTaskState(project, parent.id);
-    const allDone = parentAllChildrenDone(project, parent);
-    if(st.done !== allDone){
-      st.done = allDone;
-    }
-    node = findTaskNodeById(parent.id);
-  }
-}
-function isTaskComplete(project, task){
-  if(isParentTask(task)) return parentAllChildrenDone(project, task);
-  return !!(project.tasks[task.id] && project.tasks[task.id].done);
-}
-
-
-function getAllTaskIds(){
-  const ids = [];
-  getHierarchy().forEach(stage => stage.categories.forEach(cat => cat.subs.forEach(sub => {
-    walkTaskTree(sub.tasks || [], t => ids.push(t.id));
-  })));
-  return ids;
-}
-const ALL_TASK_IDS = [];
-function refreshAllTaskIds(){
-  ALL_TASK_IDS.length = 0;
-  getAllTaskIds().forEach(id => ALL_TASK_IDS.push(id));
-}
-refreshAllTaskIds();
-const TOTAL_TASKS = ALL_TASK_IDS.length;
-
-
-/* Categories repeat across stages (e.g. CDE appears under several stages with
-   different subsections each time). This flattens that back into one entry
-   per category with its full subsection list, for the home-screen subsection
-   overview and the WBS Uniclass cross-reference. */
-const CATEGORY_SUBS = (function(){
-  const map = new Map();
-  getHierarchy().forEach(stage => stage.categories.forEach(cat => {
-    if(!map.has(cat.num)) map.set(cat.num, { num: cat.num, title: cat.title, subs: [] });
-    const entry = map.get(cat.num);
-    (cat.subs || []).forEach(sub => {
-      if(!entry.subs.some(s => String(s.num) === String(sub.num))){
-        entry.subs.push(sub);
-      }
-    });
-  }));
-  return Array.from(map.values()).sort((a,b) => parseFloat(a.num) - parseFloat(b.num));
-})();
-
-/* Indicative Uniclass 2015 PM (Project Management table) cross-reference per
-   category. This is an editorial mapping for orientation -- not an official
-   Uniclass classification of this task list. PM group codes are current as
-   published by NBS (PM_10 Project information, PM_40 Design and approvals
-   information, PM_60 Construction management information, PM_70 Testing,
-   commissioning and completion information, etc). */
-const UNICLASS_PM_MAP = {
-  "1": { code: "PM_40_60", label: "Project information management information" },
-  "2": { code: "PM_10", label: "Project information" },
-  "3": { code: "PM_40", label: "Design and approvals information" },
-  "4": { code: "PM_40", label: "Design and approvals information" },
-  "5": { code: "PM_70", label: "Testing, commissioning and completion information" },
-  "6": { code: "PM_60", label: "Construction management information" }
-};
 
 /* ===================== HOUR ESTIMATES ===================== */
 const DEFAULT_EST = 1.0;
@@ -15787,11 +15745,11 @@ function renderTaskRow(project, task, taskSched, wbsCode){
   if(parent && state.done !== showDone){ state.done = showDone; }
   const dateRowCls = taskDateToneClass(project, task.id, taskSched);
   return `
-    <div class="task-row ${showDone ? "done" : ""} ${late ? "late" : ""} ${disabled ? "disabled-task" : ""} ${isBlocker ? "blocker" : ""} ${parent ? "parent-task" : ""} ${isMyDayTask(project, task.id) ? "my-day" : ""} depth-${depth} ${dateRowCls}" data-task-id="${task.id}" data-edit-task="${task.id}">
+    <div class="task-row ${showDone ? "done" : ""} ${late ? "late" : ""} ${disabled ? "disabled-task" : ""} ${isBlocker ? "blocker" : ""} ${parent ? "parent-task" : ""} ${task && task.ghost ? "ghost" : ""} ${isMyDayTask(project, task.id) ? "my-day" : ""} depth-${depth} ${dateRowCls}" data-task-id="${task.id}" data-edit-task="${task.id}">
       <div class="task-row-main">
         <button type="button" class="btn-star ${isMyDayTask(project, task.id) ? "on" : ""}" data-my-day="${task.id}" title="Add to my day" aria-label="Add to my day">${isMyDayTask(project, task.id) ? "★" : "☆"}</button>
         <button class="task-check ${showDone ? "checked" : ""}" data-toggle-task="${task.id}" aria-label="Toggle done" ${disabled || parent ? "disabled" : ""}>${showDone ? "&#10003;" : ""}</button>
-        <div class="task-name">${code ? `<span class="wbs-code small">${escapeHtml(code)}</span> ` : ""}${escapeHtml(displayName)}${msDate?` <span class="ms-date-inline">${escapeHtml(fmtMilestoneDate(msDate))}</span>`:""}${isRepeating ? ` <span class="rep-badge">REPEATING</span>` : ""}${state.milestone ? ` <span class="iso-badge on" title="Milestone">⚑</span>` : ""}${isBlocker ? ` <span class="blocker-badge">BLOCKER</span>` : ""}${task.custom ? ` <span class="iso-badge">Custom</span>` : ""}${appTask ? ` <span class="iso-badge ${project.clientAppRequirements ? "on" : ""}" title="Depends on appointing party / client requirements">APP</span>` : ""}${late ? ` <span class="late-badge">LATE</span>` : ""}${disabled ? ` <span class="iso-badge">Off</span>` : ""}</div>
+        <div class="task-name">${code ? `<span class="wbs-code small">${escapeHtml(code)}</span> ` : ""}${escapeHtml(displayName)}${(task && task.sourceRole) ? `<span class="role-pill ${task.ghost?"ghost":""} ${task.sourceRole==="ZZ"?"zz":""}">${escapeHtml(task.sourceRole)}</span>` : ""}${msDate?` <span class="ms-date-inline">${escapeHtml(fmtMilestoneDate(msDate))}</span>`:""}${isRepeating ? ` <span class="rep-badge">REPEATING</span>` : ""}${state.milestone ? ` <span class="iso-badge on" title="Milestone">⚑</span>` : ""}${isBlocker ? ` <span class="blocker-badge">BLOCKER</span>` : ""}${task.custom ? ` <span class="iso-badge">Custom</span>` : ""}${appTask ? ` <span class="iso-badge ${project.clientAppRequirements ? "on" : ""}" title="Depends on appointing party / client requirements">APP</span>` : ""}${late ? ` <span class="late-badge">LATE</span>` : ""}${disabled ? ` <span class="iso-badge">Off</span>` : ""}</div>
         <div class="task-row-actions">
           <button type="button" class="btn-xxs ${state.milestone?"on":""}" data-toggle-milestone="${task.id}" title="Mark as milestone for roadmap">⚑</button>
           <button type="button" class="btn-xxs" data-toggle-disable-task="${task.id}" title="Disable or enable this task">${escapeHtml(disableLabel)}</button>
