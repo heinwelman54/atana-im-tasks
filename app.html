@@ -2250,11 +2250,28 @@ const DEFAULT_ACCESS_MATRIX = {
 };
 
 function getAccessMatrix(){
+  const base = JSON.parse(JSON.stringify(DEFAULT_ACCESS_MATRIX));
   try {
     const raw = localStorage.getItem("atanaAccessMatrix");
-    if(raw) return Object.assign({}, DEFAULT_ACCESS_MATRIX, JSON.parse(raw));
+    if(raw){
+      const saved = JSON.parse(raw);
+      Object.keys(saved || {}).forEach(function(role){
+        const savedList = saved[role] || [];
+        const defList = base[role] || [];
+        // Union: keep user ticks, but ensure newly introduced feature ids from defaults are present
+        const set = {};
+        defList.forEach(function(id){ set[id] = true; });
+        savedList.forEach(function(id){ set[id] = true; });
+        // If saved is an old matrix without any tasks.* keys, adopt default tasks.* for that role
+        const hasTaskFeat = savedList.some(function(id){ return String(id).indexOf("tasks.") === 0; });
+        if(!hasTaskFeat){
+          defList.forEach(function(id){ if(String(id).indexOf("tasks.") === 0) set[id] = true; });
+        }
+        base[role] = Object.keys(set);
+      });
+    }
   } catch(e){}
-  return Object.assign({}, DEFAULT_ACCESS_MATRIX);
+  return base;
 }
 function saveAccessMatrix(m){
   try { localStorage.setItem("atanaAccessMatrix", JSON.stringify(m)); } catch(e){}
@@ -2295,8 +2312,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.6.7";
-const APP_BUILD = "2026-08-21-walkTaskTree-topbar";
+const APP_VERSION = "3.6.8";
+const APP_BUILD = "2026-08-21-category-subs-roles";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -12849,13 +12866,33 @@ function canRoleTask(mode, targetRole){
 
 function getVisibleTaskRoles(project){
   const all = ["IM","DTL","PDM","TTM","ZZ"];
-  let edit = all.filter(function(r){ return canRoleTask("edit", r); });
-  let view = all.filter(function(r){ return canRoleTask("view", r) || canRoleTask("edit", r); });
+  const user = (typeof getCurrentUser === "function") ? getCurrentUser() : null;
+  const userRole = user && user.isAdmin ? "ADMIN" : (user && user.func ? String(user.func).toUpperCase() : "IM");
   const viewer = (typeof getProjectViewerRole === "function") ? getProjectViewerRole(project) : { func: "IM" };
-  const primary = String((viewer && viewer.func) || "IM").toUpperCase();
+  const primary = String((viewer && viewer.func) || userRole || "IM").toUpperCase();
+
+  let edit = [];
+  let view = [];
+  all.forEach(function(r){
+    if(typeof canRoleTask === "function"){
+      if(canRoleTask("edit", r)) edit.push(r);
+      if(canRoleTask("view", r) || canRoleTask("edit", r)) view.push(r);
+    }
+  });
+  // Guarantees: own functional role is always editable; ZZ always visible
   if(["IM","DTL","PDM","TTM"].indexOf(primary) >= 0){
     if(edit.indexOf(primary) < 0) edit.push(primary);
     if(view.indexOf(primary) < 0) view.push(primary);
+  }
+  // IM and ADMIN can always view every role pack (ghost others)
+  if(userRole === "ADMIN" || userRole === "IM" || primary === "IM" || primary === "ADMIN"){
+    all.forEach(function(r){ if(view.indexOf(r) < 0) view.push(r); });
+    if(edit.indexOf("IM") < 0) edit.push("IM");
+    if(edit.indexOf("ZZ") < 0) edit.push("ZZ");
+  }
+  // DTL/PDM can view all packs by default (edit own)
+  if(userRole === "DTL" || userRole === "PDM" || primary === "DTL" || primary === "PDM"){
+    all.forEach(function(r){ if(view.indexOf(r) < 0) view.push(r); });
   }
   if(view.indexOf("ZZ") < 0) view.push("ZZ");
   return { edit: edit, view: view, primary: primary };
@@ -12960,6 +12997,49 @@ function getProjectHierarchy(project){
   return base;
 }
 
+
+
+function getCategorySubs(project){
+  const map = new Map();
+  let hier = [];
+  try {
+    if(project && typeof getProjectHierarchy === "function") hier = getProjectHierarchy(project);
+    else if(typeof getHierarchy === "function") hier = getHierarchy();
+  } catch(e){
+    try { hier = getHierarchy(); } catch(e2){ hier = []; }
+  }
+  (hier || []).forEach(function(stage){
+    (stage.categories || []).forEach(function(cat){
+      const key = String(cat.num || cat.title || "");
+      if(!key) return;
+      if(!map.has(key)) map.set(key, { num: cat.num, title: cat.title, subs: [], sourceRole: cat.sourceRole, ghost: cat.ghost });
+      const entry = map.get(key);
+      (cat.subs || []).forEach(function(sub){
+        if(!entry.subs.some(function(s){ return String(s.num) === String(sub.num) && String(s.title) === String(sub.title); })){
+          entry.subs.push(sub);
+        }
+      });
+    });
+  });
+  return Array.from(map.values()).sort(function(a,b){
+    const na = parseFloat(a.num); const nb = parseFloat(b.num);
+    if(!isNaN(na) && !isNaN(nb)) return na - nb;
+    return String(a.num).localeCompare(String(b.num));
+  });
+}
+/** @deprecated use getCategorySubs(project) — kept for boot-time progress UI */
+var CATEGORY_SUBS = [];
+function refreshCategorySubs(project){
+  try { CATEGORY_SUBS = getCategorySubs(project); } catch(e){ CATEGORY_SUBS = []; }
+}
+const UNICLASS_PM_MAP = {
+  "1": { code: "PM_40_60", label: "Project information management information" },
+  "2": { code: "PM_10", label: "Project information" },
+  "3": { code: "PM_40", label: "Design and approvals information" },
+  "4": { code: "PM_40", label: "Design and approvals information" },
+  "5": { code: "PM_70", label: "Testing, commissioning and completion information" },
+  "6": { code: "PM_60", label: "Construction management information" }
+};
 
 /* ===================== HOUR ESTIMATES ===================== */
 const DEFAULT_EST = 1.0;
@@ -13723,7 +13803,8 @@ function renderSubsectionRings(project){
   if(!el) return;
   const taskSched = autoScheduleProject(project);
 
-  el.innerHTML = CATEGORY_SUBS.map(cat => `
+  refreshCategorySubs(project);
+  el.innerHTML = getCategorySubs(project).map(cat => `
     <div class="subcat-group">
       <div class="subcat-group-title">${escapeHtml(cat.num)}. ${escapeHtml(cat.title)}</div>
       <div class="topic-ring-row">
@@ -15394,6 +15475,7 @@ function renderWorkspace(){
   if(!project){ switchTab("projects"); return; }
   try { syncTopbarEditBtn(true); } catch(e){}
   try { refreshRoleSwitcher(project); } catch(e){ console.warn("whoami", e); }
+  try { refreshCategorySubs(project); } catch(e){}
 
   const prog = projectProgress(project);
   const hrs = projectHours(project);
