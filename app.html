@@ -113,6 +113,19 @@
     -webkit-app-region:no-drag;app-region:no-drag;
   }
   .topbar-role-switch.show{display:inline-block;}
+  .whoami-bar{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    margin:0 0 12px;padding:10px 12px;border-radius:12px;
+    background:linear-gradient(135deg,#f7f3fb 0%,#fff 60%);
+    border:1px solid #e5dceb;box-shadow:0 2px 8px rgba(62,11,59,0.08);
+  }
+  .whoami-bar label{font-size:12px;font-weight:700;color:var(--purple-900);white-space:nowrap;}
+  .whoami-bar select{
+    flex:1;min-width:180px;max-width:360px;height:36px;border-radius:10px;
+    border:1.5px solid var(--purple-900);background:#fff;color:#1a1a1a;
+    font-size:13px;font-weight:600;padding:0 10px;cursor:pointer;
+  }
+  .whoami-bar .whoami-hint{font-size:11px;color:var(--slate-500);flex-basis:100%;}
   .topbar-role-switch option{color:#111;}
   .topbar-edit-btn{
     display:none;margin-left:8px;border:1px solid rgba(255,255,255,0.35);background:rgba(255,255,255,0.12);
@@ -1818,6 +1831,13 @@
     <!-- PROJECT WORKSPACE (overlay-style panel, not a tab) -->
     <section class="panel" id="panel-workspace">
       <div class="ws-header-card" id="wsHeaderCard"></div>
+      <div class="whoami-bar" id="whoamiBar" style="margin:10px 14px 0;">
+        <label for="workspaceRoleSwitcher">Who am I?</label>
+        <select id="workspaceRoleSwitcher" aria-label="Who am I on this project">
+          <option value="">Select your role on this project…</option>
+        </select>
+        <span class="whoami-hint">This sets your functional role and which task list you see (IM / DTL / PDM / TTM).</span>
+      </div>
       <div class="ws-sticky-chrome" id="wsStickyChrome">
       <div class="stage-picker-wrap">
         <div class="stage-picker-label" id="wsStagePickerLabel">CURRENT WORK STAGE</div>
@@ -2223,8 +2243,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.6.3";
-const APP_BUILD = "2026-08-21-role-assign-matrix";
+const APP_VERSION = "3.6.4";
+const APP_BUILD = "2026-08-21-whoami-visible";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -2388,57 +2408,101 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function refreshRoleSwitcher(project){
-  const sel = document.getElementById("topbarRoleSwitcher");
-  if(!sel) return;
-  if(!project){ sel.classList.remove("show"); return; }
-  sel.classList.add("show");
-  const team = ensureProjectTeam(project);
-  const members = (team.members || []).slice().sort((a,b) => String(a.name||"").localeCompare(String(b.name||"")));
-  const cur = getCurrentUser();
-  const opts = ['<option value="">Who am I...</option>'];
-  members.forEach(m => {
-    const val = m.id || m.email || m.name;
-    const lab = (m.name || "?") + " · " + (m.func || "") + (m.discipline ? ("-" + m.discipline) : "");
-    const selAttr = cur && (cur.id === m.id || cur.email === m.email || cur.name === m.name) ? " selected" : "";
-    opts.push('<option value="' + String(val).replace(/"/g, "&quot;") + '"' + selAttr + ">" + lab.replace(/</g,"&lt;") + "</option>");
+  const sels = [
+    document.getElementById("topbarRoleSwitcher"),
+    document.getElementById("workspaceRoleSwitcher")
+  ].filter(Boolean);
+  const bar = document.getElementById("whoamiBar");
+  if(!sels.length && !bar) return;
+  if(!project){
+    sels.forEach(function(s){
+      if(s.id === "topbarRoleSwitcher"){ s.classList.remove("show"); s.style.display = "none"; }
+    });
+    if(bar) bar.style.display = "none";
+    return;
+  }
+  if(bar) bar.style.display = "flex";
+  const team = (typeof ensureProjectTeam === "function") ? ensureProjectTeam(project) : (project.projectTeam || { members: [] });
+  const members = (team.members || []).slice().sort(function(a,b){ return String(a.name||"").localeCompare(String(b.name||"")); });
+  const cur = (typeof getCurrentUser === "function") ? getCurrentUser() : null;
+  const viewer = (typeof getProjectViewerRole === "function") ? getProjectViewerRole(project) : { func: "IM" };
+
+  var opts = '<option value="">Who am I on this project?</option>';
+  if(members.length){
+    opts += '<optgroup label="Project team">';
+    members.forEach(function(m){
+      var val = "m:" + String(m.id || m.email || m.name);
+      var lab = (m.name || "?") + " · " + (m.func || "") + (m.discipline ? ("-" + m.discipline) : "");
+      var selected = cur && (cur.id === m.id || cur.email === m.email || cur.name === m.name);
+      opts += '<option value="' + String(val).replace(/"/g,"&quot;") + '"' + (selected ? " selected" : "") + ">" + lab.replace(/</g,"&lt;") + "</option>";
+    });
+    opts += "</optgroup>";
+  }
+  opts += '<optgroup label="Functional role (task list)">';
+  var roles = (typeof FUNCTIONAL_ROLES !== "undefined" && FUNCTIONAL_ROLES.length) ? FUNCTIONAL_ROLES : [
+    { code:"DTL", label:"Delivery Team Lead" },
+    { code:"PDM", label:"Project Delivery Manager" },
+    { code:"IM", label:"Information Manager" },
+    { code:"TTM", label:"Task Team Manager" }
+  ];
+  roles.forEach(function(r){
+    var code = r.code || r;
+    var label = r.label || code;
+    var selected = (!cur || !cur.id) && viewer && String(viewer.func) === String(code);
+    opts += '<option value="role:' + code + '"' + (selected ? " selected" : "") + ">" + code + " — " + String(label).replace(/</g,"&lt;") + "</option>";
   });
-  opts.push('<option value="__admin__"' + (cur && cur.isAdmin ? ' selected' : '') + '>Admin (elevated)</option>');
-  sel.innerHTML = opts.join("");
-  if(!sel._bound){
-    sel._bound = true;
-    sel.addEventListener("change", () => {
-      const v = sel.value;
-      if(!v){ setCurrentUser(null); return; }
-      if(v === "__admin__"){
-        setCurrentUser({ name: "Admin", func: "ADMIN", isAdmin: true });
-        try {
-          if(project){
-            project.viewerRole = { func: "IM", discipline: "", memberId: "", name: "Admin" };
-            saveData(DATA);
-          }
-        } catch(e){}
-        try { showToast("Signed in as Admin (IM task list)"); } catch(e){}
-        try { if(typeof renderWorkspace === "function") renderWorkspace(); } catch(e){}
+  opts += "</optgroup>";
+  opts += '<option value="__admin__"' + (cur && cur.isAdmin ? " selected" : "") + ">Admin (elevated)</option>";
+
+  function bindSel(sel){
+    sel.innerHTML = opts;
+    if(sel.id === "topbarRoleSwitcher"){
+      sel.classList.add("show");
+      sel.style.display = "inline-block";
+    }
+    if(sel._whoBound) return;
+    sel._whoBound = true;
+    sel.addEventListener("change", function(){
+      var v = sel.value;
+      var proj = (typeof projectById === "function" && typeof currentProjectId !== "undefined") ? projectById(currentProjectId) : project;
+      if(!v){
+        if(typeof setCurrentUser === "function") setCurrentUser(null);
+        if(proj){ proj.viewerRole = null; try{ saveData(DATA); }catch(e){} }
+        try{ renderWorkspace(); }catch(e){}
         return;
       }
-      const m = members.find(x => (x.id || x.email || x.name) === v);
-      if(m){
-        setCurrentUser({
-          id: m.id, name: m.name, email: m.email,
-          func: m.func, discipline: m.discipline || "",
-          isAdmin: m.func === "IM" || m.func === "DTL" || m.func === "ADMIN"
-        });
-        try {
-          if(project){
-            project.viewerRole = { func: m.func, discipline: m.discipline || "", memberId: m.id || m.email || "", name: m.name || "" };
-            saveData(DATA);
+      if(v === "__admin__"){
+        setCurrentUser({ name: "Admin", func: "ADMIN", isAdmin: true });
+        if(proj){ proj.viewerRole = { func: "IM", name: "Admin" }; try{ saveData(DATA); }catch(e){} }
+        try{ showToast("Admin · IM task list"); }catch(e){}
+        try{ renderWorkspace(); }catch(e){}
+        return;
+      }
+      if(v.indexOf("role:") === 0){
+        var code = v.slice(5);
+        setCurrentUser({ name: code, func: code, isAdmin: (code === "IM" || code === "DTL") });
+        if(proj){ proj.viewerRole = { func: code, name: code }; try{ saveData(DATA); }catch(e){} }
+        try{ showToast("Task list: " + code); }catch(e){}
+        try{ renderWorkspace(); }catch(e){}
+        return;
+      }
+      if(v.indexOf("m:") === 0){
+        var key = v.slice(2);
+        var mems = ((proj && proj.projectTeam && proj.projectTeam.members) || []);
+        var mem = mems.find(function(x){ return String(x.id)===key || String(x.email||"")===key || String(x.name||"")===key; });
+        if(mem){
+          setCurrentUser({ id: mem.id, name: mem.name, email: mem.email, func: mem.func, discipline: mem.discipline || "", isAdmin: mem.func==="IM"||mem.func==="DTL" });
+          if(proj){
+            proj.viewerRole = { func: mem.func, discipline: mem.discipline || "", memberId: mem.id || mem.email || "", name: mem.name || "" };
+            try{ saveData(DATA); }catch(e){}
           }
-        } catch(e){}
-        try { showToast("Working as " + m.name + " (" + m.func + (m.discipline ? "-" + m.discipline : "") + ") · task list: " + (m.func || "IM")); } catch(e){}
-        try { if(typeof renderWorkspace === "function") renderWorkspace(); } catch(e){}
+          try{ showToast("Working as " + mem.name + " (" + mem.func + ")"); }catch(e){}
+          try{ renderWorkspace(); }catch(e){}
+        }
       }
     });
   }
+  sels.forEach(bindSel);
 }
 
 function syncTopbarEditBtn(show){
@@ -15249,11 +15313,10 @@ function renderTeam(){
 /* ===================== RENDER: WORKSPACE ===================== */
 
 function renderWorkspace(){
-  try { syncTopbarEditBtn(true); } catch(e){}
-  try { refreshRoleSwitcher(typeof project !== "undefined" ? project : (typeof currentProjectId !== "undefined" ? projectById(currentProjectId) : null)); } catch(e){}
-
   const project = projectById(currentProjectId);
   if(!project){ switchTab("projects"); return; }
+  try { syncTopbarEditBtn(true); } catch(e){}
+  try { refreshRoleSwitcher(project); } catch(e){ console.warn("whoami", e); }
 
   const prog = projectProgress(project);
   const hrs = projectHours(project);
