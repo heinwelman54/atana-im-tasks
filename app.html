@@ -112,7 +112,32 @@
     color:#fff;font-size:11px;padding:0 10px;
     -webkit-app-region:no-drag;app-region:no-drag;
   }
-  .topbar-role-switch.show{display:inline-block;}
+  .topbar-role-switch.show{display:inline-block !important;}
+  .topbar-chrome-safe{
+    width:calc(120px + env(safe-area-inset-right,0px));min-width:100px;height:100%;flex-shrink:0;margin-left:auto;
+    background:transparent !important;pointer-events:none;
+  }
+  .topbar-cluster{
+    position:absolute;left:50%;top:50%;transform:translate(-10%,-50%);
+    display:flex;align-items:center;gap:8px;z-index:5;
+    -webkit-app-region:no-drag;app-region:no-drag;
+  }
+  .topbar-cluster .acc-status-btn{position:static !important;left:auto !important;top:auto !important;transform:none !important;}
+  .topbar-cluster .topbar-role-switch{
+    position:static;display:none;min-width:120px;max-width:190px;height:32px;
+    border:1.5px solid rgba(255,255,255,0.55);background:rgba(255,255,255,0.22);
+    color:#fff;font-size:11px;font-weight:600;border-radius:999px;padding:0 10px;
+  }
+  .topbar-cluster .topbar-role-switch.show{display:inline-block !important;}
+  .topbar-cluster .topbar-edit-btn{position:static;margin:0;display:none;}
+  .topbar-cluster .topbar-edit-btn.show, .topbar-edit-btn.show{display:inline-flex !important;align-items:center;justify-content:center;}
+  .app-version-badge{
+    position:absolute;left:50%;top:50%;transform:translate(-130%,-50%);
+    margin:0;padding:0;border:none;background:transparent;
+    font-family:var(--mono);font-size:10px;font-weight:500;
+    color:rgba(255,255,255,0.45);letter-spacing:0.04em;white-space:nowrap;
+    pointer-events:none;z-index:2;
+  }
   .whoami-bar{
     display:flex;align-items:center;gap:10px;flex-wrap:wrap;
     margin:0 0 12px;padding:10px 12px;border-radius:12px;
@@ -1471,14 +1496,16 @@
     <img id="topbarProjectImg" alt="" style="display:none;">
     <h1 id="topbarTitle">Projects</h1>
     <span class="app-version-badge" id="appVersionBadge" title="App build">v…</span>
-    <button type="button" class="acc-status-btn" id="accStatusBtn" title="FORMA / Autodesk" aria-label="FORMA login status">
-      <span class="acc-status-dot" id="accStatusDot"></span>
-      <span class="acc-status-lbl">FORMA</span>
-    </button>
-    <select id="topbarRoleSwitcher" class="topbar-role-switch" title="Who am I on this project?" aria-label="Current user / role">
-      <option value="">Who am I...</option>
-    </select>
-    <button type="button" class="topbar-edit-btn" id="topbarEditProjectBtn" title="Edit project" aria-label="Edit project">✎</button>
+    <div class="topbar-cluster" id="topbarCluster">
+      <button type="button" class="acc-status-btn" id="accStatusBtn" title="FORMA / Autodesk" aria-label="FORMA login status">
+        <span class="acc-status-dot" id="accStatusDot"></span>
+        <span class="acc-status-lbl">FORMA</span>
+      </button>
+      <select id="topbarRoleSwitcher" class="topbar-role-switch" title="Who am I on this project?" aria-label="Current user / role">
+        <option value="">Who am I...</option>
+      </select>
+      <button type="button" class="topbar-edit-btn" id="topbarEditProjectBtn" title="Edit project" aria-label="Edit project">✎</button>
+    </div>
     <button class="icon-btn" id="topbarAction" style="display:none;">+</button>
     <div class="topbar-chrome-safe" aria-hidden="true"></div>
   </div>
@@ -1831,13 +1858,6 @@
     <!-- PROJECT WORKSPACE (overlay-style panel, not a tab) -->
     <section class="panel" id="panel-workspace">
       <div class="ws-header-card" id="wsHeaderCard"></div>
-      <div class="whoami-bar" id="whoamiBar" style="margin:10px 14px 0;">
-        <label for="workspaceRoleSwitcher">Who am I?</label>
-        <select id="workspaceRoleSwitcher" aria-label="Who am I on this project">
-          <option value="">Select your role on this project…</option>
-        </select>
-        <span class="whoami-hint">This sets your functional role and which task list you see (IM / DTL / PDM / TTM).</span>
-      </div>
       <div class="ws-sticky-chrome" id="wsStickyChrome">
       <div class="stage-picker-wrap">
         <div class="stage-picker-label" id="wsStagePickerLabel">CURRENT WORK STAGE</div>
@@ -1901,8 +1921,18 @@
           </div>
         </div>
         <div class="card" style="margin-top:12px;" id="wbsTaskListTools">
-          <div class="chart-card-title" style="margin-bottom:6px;">Task list template</div>
-          <p class="section-sub" style="margin-bottom:10px;">Prefer <strong>CSV</strong> on phone Excel. Columns: StageId, StageLabel, CatNum, CatTitle, SubNum, SubTitle, TaskId, TaskName, DefaultEstHours, <strong>AllocatedHours</strong> (current project time allocation), AppClient (Y/N).</p>
+          <div class="chart-card-title" style="margin-bottom:6px;">Task list / WBS by role</div>
+          <p class="section-sub" style="margin-bottom:10px;">Export or import a role task list. WBS codes are role-prefixed (IM-…, DTL-…). Prefer <strong>CSV</strong> on phone Excel.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;">
+            <label style="font-size:12px;font-weight:600;">Role</label>
+            <select id="exportRoleSelect" style="height:34px;border-radius:10px;border:1px solid #ddd;padding:0 10px;font-size:13px;">
+              <option value="IM">IM</option>
+              <option value="DTL">DTL</option>
+              <option value="PDM">PDM</option>
+              <option value="TTM">TTM</option>
+              <option value="ALL">All roles (merged)</option>
+            </select>
+          </div>
           <div class="wbs-export-bar">
             <button class="btn btn-primary" id="exportTaskListCsvBtn" type="button">Export task list (.csv)</button>
             <button class="btn btn-ghost" id="exportTaskListBtn" type="button">Export task list (Excel XML)</button>
@@ -2243,8 +2273,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.6.4";
-const APP_BUILD = "2026-08-21-whoami-visible";
+const APP_VERSION = "3.6.5";
+const APP_BUILD = "2026-08-21-topbar-role-export";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -15355,7 +15385,7 @@ function renderWorkspace(){
           <div class="ws-active-notes-label">Active status</div>
           <div class="ws-active-notes-text" id="wsActiveNotesEdit" contenteditable="true" data-placeholder="Click to add active status notes…">${(project.activeNotes && String(project.activeNotes).trim()) ? notesToBulletHtml(project.activeNotes) : ""}</div>
         </div>
-        <button type="button" class="ws-edit-btn" id="wsEditProjectBtn" aria-label="Edit project" style="display:none;">Edit</button>
+        
       </div>
       <div class="progress-track"><div class="progress-fill" style="width:${prog.pct}%"></div></div>
       <div class="pc-progress-label">${prog.done}/${prog.total} tasks complete &middot; ${prog.pct}%</div>
@@ -15562,7 +15592,7 @@ function renderTaskTree(project){
     }</div>`;
   }).join("")}</div>` : "";
 
-  el.innerHTML = roadmap + getHierarchy().map(stage => {
+  el.innerHTML = roadmap + getProjectHierarchy(project).map(stage => {
     const sProg = stageProgress(project, stage);
     const sHrs = stageHours(project, stage);
     const isCurrent = isCurrentStage(project, stage.id);
@@ -15804,7 +15834,7 @@ function renderWbsTree(project){
   const taskSched = autoScheduleProject(project);
   window.__wbsCodeMap = wbsCodeLookup(project);
 
-  el.innerHTML = getHierarchy().map((stage, sIdx) => {
+  el.innerHTML = getProjectHierarchy(project).map((stage, sIdx) => {
     const stageWbs = String(sIdx + 1);
     const sProg = stageProgress(project, stage);
     const sHrs = stageHours(project, stage);
@@ -20807,15 +20837,21 @@ function hierarchyFromTaskListRows(rawRows){
   return stages;
 }
 
-function applyImportedTaskHierarchy(hier){
+function applyImportedTaskHierarchy(hier, role){
   if(!DATA.settings) DATA.settings = {};
-  DATA.settings.taskHierarchy = hier;
-  refreshAllTaskIds();
+  const r = String(role || "IM").toUpperCase();
+  if(r === "IM"){
+    DATA.settings.taskHierarchy = hier;
+  } else {
+    if(!DATA.settings.roleHierarchies) DATA.settings.roleHierarchies = {};
+    DATA.settings.roleHierarchies[r] = hier;
+  }
+  try { refreshAllTaskIds(); } catch(e){}
   saveData(DATA);
-  renderAll();
-    try { wireFabAndCollapse(); updateFabVisibility(); } catch(e){}
-  if(currentProjectId) renderWorkspace();
-  showToast("Task list imported · " + getAllTaskIds().length + " tasks");
+  try { renderAll(); } catch(e){}
+  try { wireFabAndCollapse(); updateFabVisibility(); } catch(e){}
+  if(typeof currentProjectId !== "undefined" && currentProjectId) renderWorkspace();
+  showToast("Task list imported · " + r + " · " + (typeof getAllTaskIds === "function" ? getAllTaskIds().length : "?") + " tasks");
 }
 
 function resetTaskListToBuiltin(){
@@ -20880,8 +20916,39 @@ function handleTaskListFile(file){
       let raw;
       if(/<table/i.test(text) || /<html/i.test(text)) raw = parseTaskListTableFromHtml(text);
       else raw = parseCsvText(text);
-      const hier = hierarchyFromTaskListRows(raw);
-      applyImportedTaskHierarchy(hier);
+      if(!raw || raw.length < 2) throw new Error("No data rows");
+      const header = raw[0].map(function(h){ return String(h || "").trim().toLowerCase().replace(/\s+/g, ""); });
+      const roleIdx = header.indexOf("role");
+      if(roleIdx >= 0){
+        // Group rows by Role column — import each role hierarchy separately
+        const byRole = {};
+        for(let r = 1; r < raw.length; r++){
+          const row = raw[r];
+          if(!row || !row.length) continue;
+          let role = String(row[roleIdx] || "IM").trim().toUpperCase() || "IM";
+          // Allow WbsCode like IM-1.1.1 to infer role if Role blank
+          if(!row[roleIdx]){
+            const wbsI = header.indexOf("wbscode");
+            if(wbsI >= 0 && row[wbsI]){
+              const m = String(row[wbsI]).match(/^([A-Z]{2,4})-/);
+              if(m) role = m[1];
+            }
+          }
+          if(!byRole[role]) byRole[role] = [raw[0]];
+          byRole[role].push(row);
+        }
+        const roles = Object.keys(byRole);
+        roles.forEach(function(role){
+          const hier = hierarchyFromTaskListRows(byRole[role]);
+          applyImportedTaskHierarchy(hier, role);
+        });
+        showToast("Imported roles: " + roles.join(", "));
+      } else {
+        const roleSel = document.getElementById("exportRoleSelect");
+        const role = (roleSel && roleSel.value && roleSel.value !== "ALL") ? roleSel.value : "IM";
+        const hier = hierarchyFromTaskListRows(raw);
+        applyImportedTaskHierarchy(hier, role);
+      }
     }catch(err){
       console.error(err);
       showToast("Import failed: " + (err.message || err));
