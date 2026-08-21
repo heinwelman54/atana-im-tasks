@@ -73,6 +73,10 @@
 
   /* ============ TOP BAR ============ */
   .topbar{
+    overflow:hidden;
+  }
+  .topbar #topbarTitle{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .topbar{
     position:sticky;top:0;z-index:20; /* chrome-safe */
     background:var(--header-top-bg);
     color:#fff;
@@ -98,12 +102,10 @@
     border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);
   }
   .app-version-badge{
-    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-    margin:0;padding:0;border:none;background:transparent;
+    position:static;margin:0 8px 0 4px;padding:0;border:none;background:transparent;flex-shrink:0;
     font-family:var(--mono);font-size:10px;font-weight:500;
-    color:rgba(255,255,255,0.42);letter-spacing:0.04em;white-space:nowrap;
-    -webkit-app-region: no-drag; app-region: no-drag; cursor:default;pointer-events:none;
-    z-index:0;
+    color:rgba(255,255,255,0.5);letter-spacing:0.04em;white-space:nowrap;
+    -webkit-app-region:no-drag;app-region:no-drag;
   }
   .app-version-badge:hover{color:rgba(255,255,255,0.55);}
   .topbar-role-switch{
@@ -118,8 +120,7 @@
     background:transparent !important;pointer-events:none;
   }
   .topbar-cluster{
-    position:absolute;left:50%;top:50%;transform:translate(-10%,-50%);
-    display:flex;align-items:center;gap:8px;z-index:5;
+    position:static;margin-left:auto;display:flex;align-items:center;gap:8px;z-index:5;flex-shrink:0;
     -webkit-app-region:no-drag;app-region:no-drag;
   }
   .topbar-cluster .acc-status-btn{position:static !important;left:auto !important;top:auto !important;transform:none !important;}
@@ -132,11 +133,10 @@
   .topbar-cluster .topbar-edit-btn{position:static;margin:0;display:none;}
   .topbar-cluster .topbar-edit-btn.show, .topbar-edit-btn.show{display:inline-flex !important;align-items:center;justify-content:center;}
   .app-version-badge{
-    position:absolute;left:50%;top:50%;transform:translate(-130%,-50%);
-    margin:0;padding:0;border:none;background:transparent;
+    position:static;margin:0 8px 0 4px;padding:0;border:none;background:transparent;flex-shrink:0;
     font-family:var(--mono);font-size:10px;font-weight:500;
-    color:rgba(255,255,255,0.45);letter-spacing:0.04em;white-space:nowrap;
-    pointer-events:none;z-index:2;
+    color:rgba(255,255,255,0.5);letter-spacing:0.04em;white-space:nowrap;
+    -webkit-app-region:no-drag;app-region:no-drag;
   }
   .whoami-bar{
     display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -167,7 +167,7 @@
   .palette-option input{flex-shrink:0;}
   .palette-label{font-size:12px;font-weight:600;color:var(--ink);min-width:120px;}
   .acc-status-btn{
-    position:absolute;left:calc(50% + 28px);top:50%;transform:translateY(-50%);
+    position:static;left:auto;top:auto;transform:none;
     display:inline-flex;align-items:center;gap:6px;
     border:1px solid transparent;padding:4px 10px;border-radius:999px;cursor:pointer;
     -webkit-app-region: no-drag; app-region: no-drag; z-index:2;
@@ -1503,8 +1503,8 @@
     <img src="./icons/icon-192.png" class="brand-icon" alt="" id="topbarIcon">
     <img id="topbarProjectImg" alt="" style="display:none;">
     <h1 id="topbarTitle">Projects</h1>
-    <span class="app-version-badge" id="appVersionBadge" title="App build">v…</span>
     <div class="topbar-cluster" id="topbarCluster">
+      <span class="app-version-badge" id="appVersionBadge" title="App build">v…</span>
       <button type="button" class="acc-status-btn" id="accStatusBtn" title="FORMA / Autodesk" aria-label="FORMA login status">
         <span class="acc-status-dot" id="accStatusDot"></span>
         <span class="acc-status-lbl">FORMA</span>
@@ -2295,8 +2295,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.6.6";
-const APP_BUILD = "2026-08-21-role-ghost-zz";
+const APP_VERSION = "3.6.7";
+const APP_BUILD = "2026-08-21-walkTaskTree-topbar";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -12963,6 +12963,95 @@ function getProjectHierarchy(project){
 
 /* ===================== HOUR ESTIMATES ===================== */
 const DEFAULT_EST = 1.0;
+
+
+function walkTaskTree(tasks, fn, depth, parent){
+  depth = depth || 0;
+  (tasks || []).forEach(function(t){
+    fn(t, depth, parent || null);
+    if(t.children && t.children.length) walkTaskTree(t.children, fn, depth + 1, t);
+  });
+}
+function flattenTaskTree(tasks){
+  const out = [];
+  walkTaskTree(tasks, function(t){ out.push(t); });
+  return out;
+}
+function leafTasks(tasks){
+  const out = [];
+  walkTaskTree(tasks, function(t){ if(!t.children || !t.children.length) out.push(t); });
+  return out;
+}
+function isParentTask(t){ return !!(t && t.children && t.children.length); }
+
+function findTaskNodeById(taskId, project){
+  let found = null;
+  let hier = [];
+  try {
+    if(project && typeof getProjectHierarchy === "function") hier = getProjectHierarchy(project);
+    else if(typeof getHierarchy === "function") hier = getHierarchy();
+  } catch(e){ try { hier = getHierarchy(); } catch(e2){ hier = []; } }
+  (hier || []).forEach(function(stage){
+    (stage.categories || []).forEach(function(cat){
+      (cat.subs || []).forEach(function(sub){
+        walkTaskTree(sub.tasks || [], function(t, depth, parent){
+          if(t.id === taskId) found = { task: t, parent: parent, stage: stage, cat: cat, sub: sub };
+        });
+      });
+    });
+  });
+  return found;
+}
+function leafChildrenOf(task){
+  return leafTasks(task.children || []);
+}
+function parentAllChildrenDone(project, parentTask){
+  const leaves = leafChildrenOf(parentTask);
+  if(!leaves.length) return false;
+  return leaves.every(function(ch){
+    if(typeof isTaskDisabled === "function" && isTaskDisabled(project, ch)) return true;
+    return !!(project.tasks[ch.id] && project.tasks[ch.id].done);
+  });
+}
+function syncParentCompletion(project, taskId){
+  let node = findTaskNodeById(taskId, project);
+  let guard = 0;
+  while(node && node.parent && guard++ < 20){
+    const parent = node.parent;
+    const st = ensureTaskState(project, parent.id);
+    const allDone = parentAllChildrenDone(project, parent);
+    if(st.done !== allDone) st.done = allDone;
+    node = findTaskNodeById(parent.id, project);
+  }
+}
+function isTaskComplete(project, task){
+  if(isParentTask(task)) return parentAllChildrenDone(project, task);
+  return !!(project.tasks[task.id] && project.tasks[task.id].done);
+}
+function getAllTaskIds(project){
+  const ids = [];
+  let hier = [];
+  try {
+    if(project && typeof getProjectHierarchy === "function") hier = getProjectHierarchy(project);
+    else if(typeof getHierarchy === "function") hier = getHierarchy();
+  } catch(e){ try { hier = getHierarchy(); } catch(e2){ hier = []; } }
+  (hier || []).forEach(function(stage){
+    (stage.categories || []).forEach(function(cat){
+      (cat.subs || []).forEach(function(sub){
+        walkTaskTree(sub.tasks || [], function(t){ ids.push(t.id); });
+      });
+    });
+  });
+  return ids;
+}
+const ALL_TASK_IDS = [];
+function refreshAllTaskIds(){
+  ALL_TASK_IDS.length = 0;
+  let proj = null;
+  try { if(typeof currentProjectId !== "undefined" && typeof projectById === "function") proj = projectById(currentProjectId); } catch(e){}
+  getAllTaskIds(proj).forEach(function(id){ ALL_TASK_IDS.push(id); });
+}
+try { refreshAllTaskIds(); } catch(e){}
 function taskEst(project, taskIdOrTask){
   const taskId = (taskIdOrTask && typeof taskIdOrTask === "object") ? taskIdOrTask.id : taskIdOrTask;
   const taskObj = (taskIdOrTask && typeof taskIdOrTask === "object") ? taskIdOrTask : null;
