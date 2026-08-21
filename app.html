@@ -2213,8 +2213,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.6.1";
-const APP_BUILD = "2026-08-21-syntax-fix";
+const APP_VERSION = "3.6.2";
+const APP_BUILD = "2026-08-21-assign-team";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -15562,7 +15562,7 @@ function renderTaskRow(project, task, taskSched, wbsCode){
       <div class="task-row-main">
         <button type="button" class="btn-star ${isMyDayTask(project, task.id) ? "on" : ""}" data-my-day="${task.id}" title="Add to my day" aria-label="Add to my day">${isMyDayTask(project, task.id) ? "★" : "☆"}</button>
         <button class="task-check ${showDone ? "checked" : ""}" data-toggle-task="${task.id}" aria-label="Toggle done" ${disabled || parent ? "disabled" : ""}>${showDone ? "&#10003;" : ""}</button>
-        <div class="task-name">${code ? `<span class="wbs-code small">${escapeHtml(code)}</span>` : ""}${escapeHtml(displayName)}${msDate?` <span class="ms-date-inline">${escapeHtml(fmtMilestoneDate(msDate))}</span>`:""}${isRepeating ? ` <span class="rep-badge">REPEATING</span>` : ""}${state.milestone ? ` <span class="iso-badge on" title="Milestone">⚑</span>` : ""}${isBlocker ? ` <span class="blocker-badge">BLOCKER</span>` : ""}${task.custom ? ` <span class="iso-badge">Custom</span>` : ""}${appTask ? ` <span class="iso-badge ${project.clientAppRequirements ? "on" : ""}" title="Depends on appointing party / client requirements">APP</span>` : ""}${late ? `<span class="late-badge">LATE</span>` : ""}${disabled ? ` <span class="iso-badge">Off</span>` : ""}</div>
+        <div class="task-name">${code ? `<span class="wbs-code small">${escapeHtml(code)}</span> ` : ""}${escapeHtml(displayName)}${msDate?` <span class="ms-date-inline">${escapeHtml(fmtMilestoneDate(msDate))}</span>`:""}${isRepeating ? ` <span class="rep-badge">REPEATING</span>` : ""}${state.milestone ? ` <span class="iso-badge on" title="Milestone">⚑</span>` : ""}${isBlocker ? ` <span class="blocker-badge">BLOCKER</span>` : ""}${task.custom ? ` <span class="iso-badge">Custom</span>` : ""}${appTask ? ` <span class="iso-badge ${project.clientAppRequirements ? "on" : ""}" title="Depends on appointing party / client requirements">APP</span>` : ""}${late ? ` <span class="late-badge">LATE</span>` : ""}${disabled ? ` <span class="iso-badge">Off</span>` : ""}</div>
         <div class="task-row-actions">
           <button type="button" class="btn-xxs ${state.milestone?"on":""}" data-toggle-milestone="${task.id}" title="Mark as milestone for roadmap">⚑</button>
           <button type="button" class="btn-xxs" data-toggle-disable-task="${task.id}" title="Disable or enable this task">${escapeHtml(disableLabel)}</button>
@@ -15753,7 +15753,7 @@ function renderWbsTree(project){
                       <div class="wbs-task-row ${st.done ? "done" : ""} ${late ? "late" : ""} ${disabled ? "disabled-task" : ""} ${isBlocker ? "blocker" : ""} ${isParentTask(t) ? "parent-task" : ""} depth-${Math.min(Number(t.depth)||0,3)}" data-goto-task="${escapeHtml(t.id)}" style="cursor:pointer;" title="Open in Tasks">
                         <span class="wbs-code small">${taskWbs}</span>
                         <span class="wbs-task-check">${disabled ? "—" : (st.done ? "&#10003;" : (isParentTask(t) ? "▸" : "&#9675;"))}</span>
-                        <span class="wbs-task-name">${escapeHtml(t.name)}${isBlocker ? ` <span class="blocker-badge">BLOCKER</span>` : ""}${st.milestone ? ` <span class="iso-badge on">⚑</span>` : ""}${t.custom ? ` <span class="iso-badge">Custom</span>` : ""}${appTask ? ` <span class="iso-badge ${project.clientAppRequirements ? "on" : ""}">APP</span>` : ""}${disabled ? ` <span class="iso-badge">Off</span>` : ""}${late ? `<span class="late-badge">LATE</span>` : ""}</span>
+                        <span class="wbs-task-name">${escapeHtml(t.name)}${isBlocker ? ` <span class="blocker-badge">BLOCKER</span>` : ""}${st.milestone ? ` <span class="iso-badge on">⚑</span>` : ""}${t.custom ? ` <span class="iso-badge">Custom</span>` : ""}${appTask ? ` <span class="iso-badge ${project.clientAppRequirements ? "on" : ""}">APP</span>` : ""}${disabled ? ` <span class="iso-badge">Off</span>` : ""}${late ? ` <span class="late-badge">LATE</span>` : ""}</span>
                         ${depLabel}
                         ${schedLabel}
                         ${assigneeLabel}
@@ -19657,6 +19657,14 @@ function openEditProjectSheet(project){
     </div>
   `);
   bindSheetTabs();
+  try {
+    const want = window.__editProjectTab;
+    if(want){
+      const btn = document.querySelector('#sheet [data-sptab="'+want+'"]');
+      if(btn) btn.click();
+      window.__editProjectTab = null;
+    }
+  } catch(e){}
   try{ bindScopeModeToggles(document.getElementById("sheet")); }catch(e){}
   bindStageSetupLiveSync();
   try { bindStageSetupExtras(project); } catch(e){ console.warn(e); }
@@ -20109,41 +20117,72 @@ function openEditMemberSheet(member){
 }
 
 function openAssignTaskSheet(project, taskId, taskName){
-  const assignable = project.teamIds.map(memberById).filter(Boolean);
-  const current = project.tasks[taskId]?.assignee || null;
+  // Prefer project organogram / projectTeam members; fall back to legacy teamIds
+  const team = (typeof ensureProjectTeam === "function") ? ensureProjectTeam(project) : (project.projectTeam || { members: [] });
+  let assignable = (team.members || []).filter(m => m && (m.name || m.email));
+  if(!assignable.length && Array.isArray(project.teamIds)){
+    assignable = project.teamIds.map(memberById).filter(Boolean);
+  }
+  const current = (project.tasks[taskId] && project.tasks[taskId].assignee) || null;
+  // Clean title: strip badge words if pasted from row textContent
+  const cleanName = String(taskName || "").replace(/\s+/g, " ")
+    .replace(/\b(BLOCKER|LATE|REPEATING|APP|Custom|Off)\b/g, " ")
+    .replace(/\s+/g, " ").trim();
   openSheet(`
-    <h2>Assign &mdash; ${escapeHtml(taskName)}</h2>
+    <h2>Assign &mdash; ${escapeHtml(cleanName)}</h2>
     ${assignable.length === 0
-      ? `<p style="color:var(--slate-500);font-size:13.5px;">No team members are assigned to this project yet. Go to the Team tab within this project to add some.</p>`
+      ? `<p style="color:var(--slate-500);font-size:13.5px;margin-bottom:12px;">
+           No team members on this project yet. Add people under
+           <strong>Edit project → Project team</strong> (organogram).
+         </p>
+         <button type="button" class="btn btn-primary btn-block" id="assign-open-team-settings">Open Project team settings</button>`
       : `<div class="card" style="padding:6px 10px;">
           <div class="assign-row" data-pick-assignee="">
             <div class="avatar" style="background:var(--slate-300)">&mdash;</div>
             <div class="a-body"><div class="a-name">Unassigned</div></div>
-            ${!current ? `<span style="color:var(--gold-700);font-weight:700;">&#10003;</span>` : ""}
+            ${!current ? `<span style="color:var(--purple-900)">&#10003;</span>` : ""}
           </div>
-          ${assignable.map(m => `
-            <div class="assign-row" data-pick-assignee="${m.id}">
-              <div class="avatar" style="background:${m.color}">${escapeHtml(initials(m.name))}</div>
-              <div class="a-body"><div class="a-name">${escapeHtml(m.name)}</div><div class="a-role">${escapeHtml(m.role||"")}${m.email ? " · " + escapeHtml(m.email) : ""}</div></div>
-              ${current === m.id ? `<span style="color:var(--gold-700);font-weight:700;">&#10003;</span>` : ""}
-            </div>`).join("")}
+          ${assignable.map(m => {
+            const id = m.id || m.email || m.name;
+            const label = escapeHtml(m.name || m.email || "Member");
+            const sub = escapeHtml([m.func, m.discipline, m.email].filter(Boolean).join(" · "));
+            const color = m.color || "var(--purple-900)";
+            const initials = String(m.name || "?").split(/\s+/).map(p => p[0]||"").join("").slice(0,2).toUpperCase();
+            const isCur = current && (current === id || current === m.id || current === m.email || current === m.name);
+            return `<div class="assign-row" data-pick-assignee="${escapeHtml(String(id))}">
+              <div class="avatar" style="background:${color}">${escapeHtml(initials)}</div>
+              <div class="a-body"><div class="a-name">${label}</div><div class="a-sub" style="font-size:12px;color:var(--slate-500)">${sub}</div></div>
+              ${isCur ? `<span style="color:var(--purple-900)">&#10003;</span>` : ""}
+            </div>`;
+          }).join("")}
         </div>`}
-    <div class="sheet-actions"><button class="btn btn-ghost btn-block" id="f-assign-close">Close</button></div>
+    <button class="btn btn-ghost btn-block" id="sheet-cancel" style="margin-top:12px;">Close</button>
   `);
-  document.getElementById("f-assign-close").onclick = closeSheet;
+  const cancel = document.getElementById("sheet-cancel");
+  if(cancel) cancel.onclick = () => closeSheet();
+  const openTeam = document.getElementById("assign-open-team-settings");
+  if(openTeam){
+    openTeam.onclick = () => {
+      try { closeSheet(); } catch(e){}
+      try {
+        window.__editProjectTab = "projectteam";
+        if(typeof openEditProjectSheet === "function") openEditProjectSheet(project);
+      } catch(e){ console.error(e); }
+    };
+  }
   document.querySelectorAll("[data-pick-assignee]").forEach(row => {
-    row.addEventListener("click", () => {
-      const id = row.dataset.pickAssignee || null;
-      if(!project.tasks[taskId]) project.tasks[taskId] = { done:false, assignee:null };
-      project.tasks[taskId].assignee = id || null;
-      saveData(DATA);
-      closeSheet();
-      renderWorkspace();
-    });
+    row.style.cursor = "pointer";
+    row.onclick = () => {
+      const val = row.getAttribute("data-pick-assignee");
+      if(!project.tasks[taskId]) project.tasks[taskId] = {};
+      project.tasks[taskId].assignee = val || null;
+      try { saveData(DATA); } catch(e){}
+      try { closeSheet(); } catch(e){}
+      try { renderWorkspace(); } catch(e){}
+    };
   });
 }
 
-/* ===================== EXPORT / IMPORT / MERGE ===================== */
 function exportData(){
   const payload = {
     exportedAt: new Date().toISOString(),
