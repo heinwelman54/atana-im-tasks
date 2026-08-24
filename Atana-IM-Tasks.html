@@ -1870,6 +1870,10 @@
       <div class="stage-picker-wrap">
         <div class="stage-picker-label" id="wsStagePickerLabel">CURRENT WORK STAGE</div>
         <div class="stage-picker" id="stagePicker"></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+          <button type="button" class="btn btn-ghost btn-xs" id="showAllRoleTasksBtn" title="Load other functional role tasks as read-only (slower)">Show other roles</button>
+          <span id="activeRoleBanner" style="font-size:11px;font-weight:600;color:var(--purple-900);"></span>
+        </div>
         <div class="ws-stage-meta">
           <div id="wsStageTimeline" class="ws-timeline" title="Work stage timeline"></div>
           <div class="ws-stage-progress-wrap">
@@ -2312,8 +2316,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.6.8";
-const APP_BUILD = "2026-08-21-category-subs-roles";
+const APP_VERSION = "3.6.9";
+const APP_BUILD = "2026-08-24-perf-role-title";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -2477,20 +2481,12 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function refreshRoleSwitcher(project){
-  const sels = [
-    document.getElementById("topbarRoleSwitcher"),
-    document.getElementById("workspaceRoleSwitcher")
-  ].filter(Boolean);
-  const bar = document.getElementById("whoamiBar");
-  if(!sels.length && !bar) return;
+  const sels = [document.getElementById("topbarRoleSwitcher")].filter(Boolean);
+  if(!sels.length) return;
   if(!project){
-    sels.forEach(function(s){
-      if(s.id === "topbarRoleSwitcher"){ s.classList.remove("show"); s.style.display = "none"; }
-    });
-    if(bar) bar.style.display = "none";
+    sels.forEach(function(s){ s.classList.remove("show"); s.style.display = "none"; });
     return;
   }
-  if(bar) bar.style.display = "flex";
   const team = (typeof ensureProjectTeam === "function") ? ensureProjectTeam(project) : (project.projectTeam || { members: [] });
   const members = (team.members || []).slice().sort(function(a,b){ return String(a.name||"").localeCompare(String(b.name||"")); });
   const cur = (typeof getCurrentUser === "function") ? getCurrentUser() : null;
@@ -2537,6 +2533,8 @@ function refreshRoleSwitcher(project){
       if(!v){
         if(typeof setCurrentUser === "function") setCurrentUser(null);
         if(proj){ proj.viewerRole = null; try{ saveData(DATA); }catch(e){} }
+        try{ invalidateHierarchyCache(proj && proj.id); }catch(e){}
+        try{ syncTopbarProjectTitle(proj); }catch(e){}
         try{ renderWorkspace(); }catch(e){}
         return;
       }
@@ -2544,6 +2542,8 @@ function refreshRoleSwitcher(project){
         setCurrentUser({ name: "Admin", func: "ADMIN", isAdmin: true });
         if(proj){ proj.viewerRole = { func: "IM", name: "Admin" }; try{ saveData(DATA); }catch(e){} }
         try{ showToast("Admin · IM task list"); }catch(e){}
+        try{ invalidateHierarchyCache(proj && proj.id); }catch(e){}
+        try{ syncTopbarProjectTitle(proj); }catch(e){}
         try{ renderWorkspace(); }catch(e){}
         return;
       }
@@ -2552,6 +2552,8 @@ function refreshRoleSwitcher(project){
         setCurrentUser({ name: code, func: code, isAdmin: (code === "IM" || code === "DTL") });
         if(proj){ proj.viewerRole = { func: code, name: code }; try{ saveData(DATA); }catch(e){} }
         try{ showToast("Task list: " + code); }catch(e){}
+        try{ invalidateHierarchyCache(proj && proj.id); }catch(e){}
+        try{ syncTopbarProjectTitle(proj); }catch(e){}
         try{ renderWorkspace(); }catch(e){}
         return;
       }
@@ -2566,7 +2568,9 @@ function refreshRoleSwitcher(project){
             try{ saveData(DATA); }catch(e){}
           }
           try{ showToast("Working as " + mem.name + " (" + mem.func + ")"); }catch(e){}
-          try{ renderWorkspace(); }catch(e){}
+          try{ invalidateHierarchyCache(proj && proj.id); }catch(e){}
+        try{ syncTopbarProjectTitle(proj); }catch(e){}
+        try{ renderWorkspace(); }catch(e){}
         }
       }
     });
@@ -12297,7 +12301,7 @@ function taskDepRank(name){
 /** Ordered task list for a stage: category → sub order preserved, tasks by dependency rank. Skips disabled; includes custom. */
 function stageTasksDependencyOrder(stage, project){
   const list = [];
-  const cats = stage.categories.slice().sort((a,b) => Number(a.num) - Number(b.num));
+  const cats = (stage.categories || []).slice().filter(function(c){ return !c.ghost; }).sort((a,b) => Number(a.num) - Number(b.num));
   cats.forEach(cat => {
     const subs = cat.subs.slice().sort((a,b) => {
       const an = String(a.num).split(".").map(Number);
@@ -12486,7 +12490,8 @@ function autoScheduleProject(project){
   // Per-stage capacity warnings: { stageId: { capacity, required, overflow } }
   out.stageWarnings = {};
 
-  getHierarchy().forEach(stage => {
+  const _schedHier = (typeof getProjectHierarchy === "function") ? getProjectHierarchy(project) : getHierarchy();
+  (_schedHier || []).forEach(stage => {
     const sched = scheduleById[stage.id];
     // Always start each work stage at its configured start date (not cascade from prior stage overflow)
     if(sched && sched.start){
@@ -12864,12 +12869,99 @@ function canRoleTask(mode, targetRole){
   return false;
 }
 
+
+function roleDisplayBanner(roleCode){
+  const r = String(roleCode || "IM").toUpperCase();
+  const MAP = {
+    IM: "INFORMATION MANAGEMENT",
+    ADMIN: "INFORMATION MANAGEMENT",
+    DTL: "DELIVERY TEAM LEAD",
+    PDM: "PROJECT DELIVERY MANAGER",
+    TTM: "TASK TEAM MANAGER",
+    TTIM: "TASK TEAM INFORMATION MANAGEMENT",
+    PEER: "PEER REVIEW",
+    IA: "INFORMATION AUTHOR",
+    DM: "DOCUMENT MANAGEMENT",
+    ZZ: "SHARED MILESTONES"
+  };
+  if(MAP[r]) return MAP[r];
+  try {
+    const fr = (typeof FUNCTIONAL_ROLES !== "undefined" ? FUNCTIONAL_ROLES : []).find(function(x){ return x.code === r; });
+    if(fr && fr.label) return String(fr.label).toUpperCase();
+  } catch(e){}
+  return r;
+}
+
+
+function wireShowAllRoleTasksBtn(project){
+  const btn = document.getElementById("showAllRoleTasksBtn");
+  if(!btn) return;
+  const on = !!(project && project.showAllRoleTasks) || !!window.__showAllRoleTasks;
+  btn.textContent = on ? "Hide other roles" : "Show other roles";
+  btn.onclick = function(){
+    const p = projectById(currentProjectId);
+    if(!p) return;
+    p.showAllRoleTasks = !p.showAllRoleTasks;
+    window.__showAllRoleTasks = !!p.showAllRoleTasks;
+    try { invalidateHierarchyCache(p.id); } catch(e){}
+    try { saveData(DATA); } catch(e){}
+    try { renderWorkspace(); } catch(e){}
+  };
+  const ban = document.getElementById("activeRoleBanner");
+  if(ban){
+    const vis = getVisibleTaskRoles(project);
+    ban.textContent = "Active: " + roleDisplayBanner(vis.primary || "IM") + (on ? " · + other roles (view)" : "");
+  }
+}
+
+function syncTopbarProjectTitle(project){
+  const el = document.getElementById("topbarTitle");
+  if(!el) return;
+  if(!project){
+    if(!currentProjectId) el.textContent = "Projects";
+    return;
+  }
+  const vis = (typeof getVisibleTaskRoles === "function") ? getVisibleTaskRoles(project) : { primary: "IM" };
+  const primary = String((vis && vis.primary) || "IM").toUpperCase();
+  const banner = roleDisplayBanner(primary);
+  const name = project.name || "Project";
+  el.textContent = banner ? (name + " - " + banner) : name;
+  el.title = el.textContent;
+}
+
+/** Cache key for merged hierarchy */
+function hierarchyCacheKey(project){
+  const vis = (typeof getVisibleTaskRoles === "function") ? getVisibleTaskRoles(project) : { edit:["IM"], view:["IM","ZZ"], primary:"IM" };
+  const showAll = !!(project && project.showAllRoleTasks) || !!window.__showAllRoleTasks;
+  return [
+    project && project.id || "x",
+    vis.primary || "IM",
+    (vis.edit || []).slice().sort().join(","),
+    showAll ? (vis.view || []).slice().sort().join(",") : (vis.primary || "IM") + ",ZZ",
+    showAll ? "1" : "0"
+  ].join("|");
+}
+
+function invalidateHierarchyCache(projectId){
+  if(!window.__hierCache) return;
+  if(projectId){
+    Object.keys(window.__hierCache).forEach(function(k){
+      if(k.indexOf(String(projectId)) === 0) delete window.__hierCache[k];
+    });
+  } else {
+    window.__hierCache = {};
+  }
+}
+
 function getVisibleTaskRoles(project){
   const all = ["IM","DTL","PDM","TTM","ZZ"];
   const user = (typeof getCurrentUser === "function") ? getCurrentUser() : null;
   const userRole = user && user.isAdmin ? "ADMIN" : (user && user.func ? String(user.func).toUpperCase() : "IM");
   const viewer = (typeof getProjectViewerRole === "function") ? getProjectViewerRole(project) : { func: "IM" };
-  const primary = String((viewer && viewer.func) || userRole || "IM").toUpperCase();
+  let primary = String((viewer && viewer.func) || userRole || "IM").toUpperCase();
+  if(primary === "ADMIN") primary = "IM";
+
+  const showAll = !!(project && project.showAllRoleTasks) || !!window.__showAllRoleTasks;
 
   let edit = [];
   let view = [];
@@ -12879,23 +12971,28 @@ function getVisibleTaskRoles(project){
       if(canRoleTask("view", r) || canRoleTask("edit", r)) view.push(r);
     }
   });
-  // Guarantees: own functional role is always editable; ZZ always visible
+  // Own role always editable
   if(["IM","DTL","PDM","TTM"].indexOf(primary) >= 0){
     if(edit.indexOf(primary) < 0) edit.push(primary);
     if(view.indexOf(primary) < 0) view.push(primary);
   }
-  // IM and ADMIN can always view every role pack (ghost others)
-  if(userRole === "ADMIN" || userRole === "IM" || primary === "IM" || primary === "ADMIN"){
-    all.forEach(function(r){ if(view.indexOf(r) < 0) view.push(r); });
+  // ZZ always visible (small shared list)
+  if(view.indexOf("ZZ") < 0) view.push("ZZ");
+  if(userRole === "ADMIN" || primary === "IM"){
     if(edit.indexOf("IM") < 0) edit.push("IM");
     if(edit.indexOf("ZZ") < 0) edit.push("ZZ");
   }
-  // DTL/PDM can view all packs by default (edit own)
-  if(userRole === "DTL" || userRole === "PDM" || primary === "DTL" || primary === "PDM"){
-    all.forEach(function(r){ if(view.indexOf(r) < 0) view.push(r); });
+  // Performance default: only primary + ZZ unless show-all is on
+  if(!showAll){
+    view = view.filter(function(r){ return r === primary || r === "ZZ" || edit.indexOf(r) >= 0; });
+  } else {
+    // IM/Admin/DTL/PDM may view every pack when show-all is enabled
+    if(userRole === "ADMIN" || userRole === "IM" || userRole === "DTL" || userRole === "PDM" ||
+       primary === "IM" || primary === "DTL" || primary === "PDM"){
+      all.forEach(function(r){ if(view.indexOf(r) < 0) view.push(r); });
+    }
   }
-  if(view.indexOf("ZZ") < 0) view.push("ZZ");
-  return { edit: edit, view: view, primary: primary };
+  return { edit: edit, view: view, primary: primary, showAll: showAll };
 }
 
 function cloneHierarchyDeep(hier){
@@ -12955,23 +13052,27 @@ function mergeRoleHierarchies(roleSpecs){
 }
 
 function getProjectHierarchy(project){
+  if(!window.__hierCache) window.__hierCache = {};
+  const key = hierarchyCacheKey(project);
+  if(window.__hierCache[key]) return window.__hierCache[key];
+
   const vis = (typeof getVisibleTaskRoles === "function") ? getVisibleTaskRoles(project) : { edit: ["IM"], view: ["IM","ZZ"], primary: "IM" };
   const specs = [];
   const ordered = [];
+  // Editables first (primary first)
+  const primary = vis.primary || "IM";
+  if((vis.edit || []).indexOf(primary) >= 0) ordered.push(primary);
   (vis.edit || []).forEach(function(r){ if(ordered.indexOf(r) < 0 && r !== "ZZ") ordered.push(r); });
   (vis.view || []).forEach(function(r){ if(ordered.indexOf(r) < 0 && r !== "ZZ") ordered.push(r); });
-  // Prefer primary role first among editables
-  if(vis.primary && ordered.indexOf(vis.primary) > 0){
-    ordered.splice(ordered.indexOf(vis.primary), 1);
-    ordered.unshift(vis.primary);
-  }
+
   ordered.forEach(function(r){
     let hier = [];
-    try { hier = (typeof getHierarchyForRole === "function") ? getHierarchyForRole(r) : []; } catch(e){}
+    try { hier = getHierarchyForRole(r); } catch(e){}
     if(!hier || !hier.length) return;
     const ghost = (vis.edit || []).indexOf(r) < 0;
     specs.push({ role: r, hier: hier, ghost: ghost });
   });
+  // ZZ shared milestones
   if((vis.view || []).indexOf("ZZ") >= 0 || (vis.edit || []).indexOf("ZZ") >= 0){
     let zzHier = [];
     try { zzHier = getHierarchyForRole("ZZ"); } catch(e){}
@@ -12979,6 +13080,7 @@ function getProjectHierarchy(project){
       specs.push({ role: "ZZ", hier: zzHier, ghost: (vis.edit || []).indexOf("ZZ") < 0 });
     }
   }
+
   let base;
   if(specs.length > 1){
     base = mergeRoleHierarchies(specs);
@@ -12994,10 +13096,10 @@ function getProjectHierarchy(project){
     if(base.some(function(s){ return s.id === ex.id; })) return;
     base.push({ id: String(ex.id), label: String(ex.label || ex.id), categories: Array.isArray(ex.categories) ? ex.categories : [] });
   });
+
+  window.__hierCache[key] = base;
   return base;
 }
-
-
 
 function getCategorySubs(project){
   const map = new Map();
@@ -13132,6 +13234,7 @@ function refreshAllTaskIds(){
   getAllTaskIds(proj).forEach(function(id){ ALL_TASK_IDS.push(id); });
 }
 try { refreshAllTaskIds(); } catch(e){}
+try { refreshCategorySubs(null); } catch(e){}
 function taskEst(project, taskIdOrTask){
   const taskId = (taskIdOrTask && typeof taskIdOrTask === "object") ? taskIdOrTask.id : taskIdOrTask;
   const taskObj = (taskIdOrTask && typeof taskIdOrTask === "object") ? taskIdOrTask : null;
@@ -15473,8 +15576,10 @@ function renderTeam(){
 function renderWorkspace(){
   const project = projectById(currentProjectId);
   if(!project){ switchTab("projects"); return; }
+  try { syncTopbarProjectTitle(project); } catch(e){}
   try { syncTopbarEditBtn(true); } catch(e){}
   try { refreshRoleSwitcher(project); } catch(e){ console.warn("whoami", e); }
+  try { wireShowAllRoleTasksBtn(project); } catch(e){}
   try { refreshCategorySubs(project); } catch(e){}
 
   const prog = projectProgress(project);
@@ -18104,7 +18209,7 @@ function openProject(id){
     if(project) openEditProjectSheet(project);
   };
   const _pOpen = projectById(id);
-  document.getElementById("topbarTitle").textContent = (_pOpen && _pOpen.name) ? _pOpen.name : "Project";
+  try { syncTopbarProjectTitle(_pOpen); } catch(e){ document.getElementById("topbarTitle").textContent = (_pOpen && _pOpen.name) ? _pOpen.name : "Project"; }
 
   renderWorkspace();
   document.getElementById("mainContent").scrollTop = 0;
@@ -18225,7 +18330,9 @@ function openEditTaskSheet(project, taskId){
 function refreshTaskViews(project){
   const p = projectById((project && project.id) || currentProjectId) || project;
   if(!p) return;
-  try{ renderWorkspace(); }catch(e){}
+  try{ invalidateHierarchyCache(proj && proj.id); }catch(e){}
+        try{ syncTopbarProjectTitle(proj); }catch(e){}
+        try{ renderWorkspace(); }catch(e){}
   try{ if(typeof renderWbsTree === "function") renderWbsTree(p); }catch(e){}
   try{ if(typeof renderWbsGantt === "function") renderWbsGantt(p); }catch(e){ console.error(e); }
   try{ if(typeof renderProgressPanel === "function") renderProgressPanel(p); }catch(e){}
@@ -20976,6 +21083,7 @@ function applyImportedTaskHierarchy(hier, role){
     DATA.settings.roleHierarchies[r] = hier;
   }
   try { refreshAllTaskIds(); } catch(e){}
+try { refreshCategorySubs(null); } catch(e){}
   saveData(DATA);
   try { renderAll(); } catch(e){}
   try { wireFabAndCollapse(); updateFabVisibility(); } catch(e){}
