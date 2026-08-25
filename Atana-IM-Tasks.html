@@ -2324,8 +2324,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.8.1";
-const APP_BUILD = "2026-08-25-collapse-scope-tabs";
+const APP_VERSION = "3.9.0";
+const APP_BUILD = "2026-08-25-phase3-tidp";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -7844,6 +7844,7 @@ function normalizeProductionState(src){
     version: 2,
     systemCodes: Array.isArray(s.systemCodes) ? s.systemCodes.map(String) : null,
     packages: Array.isArray(s.packages) ? s.packages.map(normalizeProductionPackage).filter(Boolean) : [],
+    tidpRows: Array.isArray(s.tidpRows) ? s.tidpRows.map(normalizeTidpRow).filter(Boolean) : [],
     lastSyncedAt: s.lastSyncedAt || null,
     autoSyncFromSettings: s.autoSyncFromSettings !== false,
     scope: {
@@ -7905,6 +7906,185 @@ function computeProductionMetrics(project){
     inProgress: inProg,
     notStarted: Math.max(0, total - approved - ready - inProg)
   };
+}
+
+
+/* ===================== PHASE 3 — TIDP FRAMEWORK =====================
+   TIDP Row = Persistent Production Requirement (not a task / deliverable / IP)
+   Production Package → many TIDP Rows
+   Same TR_ID across workstages; maturity targets change, identity does not.
+   ==================================================================== */
+
+const TIDP_CATEGORIES = {
+  PLN: { code: "PLN", name: "Planning", activities: ["Plan"] },
+  AUT: { code: "AUT", name: "Authoring", activities: ["Model", "Document", "Specify", "Schedule"] },
+  CRD: { code: "CRD", name: "Coordination", activities: ["Coordinate"] },
+  VFY: { code: "VFY", name: "Verification", activities: ["Verify"] },
+  APR: { code: "APR", name: "Approval", activities: ["Review", "Approve"] }
+};
+
+const TIDP_STATUS = {
+  CREATED: "created",
+  ASSIGNED: "assigned",
+  IN_PROGRESS: "in_progress",
+  SUBMITTED: "submitted",
+  VERIFIED: "verified",
+  REVIEWED: "reviewed",
+  APPROVED: "approved",
+  CLOSED: "closed"
+};
+
+const TIDP_STATUS_ORDER = ["created","assigned","in_progress","submitted","verified","reviewed","approved","closed"];
+
+/** Default rows generated per Production Package (from PAL pattern). */
+const DEFAULT_TIDP_SEED = [
+  { category: "PLN", activity: "Plan", air: "AIR_30" },
+  { category: "AUT", activity: "Model", air: "AIR_30" },
+  { category: "CRD", activity: "Coordinate", air: "AIR_40" },
+  { category: "VFY", activity: "Verify", air: "AIR_40" },
+  { category: "APR", activity: "Review", air: "AIR_60" },
+  { category: "APR", activity: "Approve", air: "AIR_60" }
+];
+
+function nextTidpId(project){
+  const rows = (project.production && project.production.tidpRows) || [];
+  let max = 0;
+  rows.forEach(function(r){
+    const m = String(r.id || "").match(/TR-(\d+)/i);
+    if(m) max = Math.max(max, parseInt(m[1], 10));
+  });
+  const n = max + 1;
+  return "TR-" + String(n).padStart(6, "0");
+}
+
+function normalizeTidpRow(row){
+  if(!row || typeof row !== "object") return null;
+  const id = String(row.id || "").trim() || null;
+  if(!id) return null;
+  const st = String(row.status || TIDP_STATUS.CREATED).toLowerCase();
+  return {
+    id: id,
+    ppId: String(row.ppId || row.PP_ID || ""),
+    fb: String(row.fb || "").toUpperCase(),
+    ss: String(row.ss || ""),
+    workstage: String(row.workstage || row.stageId || ""),
+    ro: String(row.ro || "").toUpperCase(),
+    ttm: String(row.ttm || ""),
+    ttim: String(row.ttim || ""),
+    category: String(row.category || "AUT").toUpperCase(),
+    activity: String(row.activity || "Model"),
+    targetLod: String(row.targetLod != null ? row.targetLod : (row.lod || "")),
+    targetLoi: String(row.targetLoi != null ? row.targetLoi : (row.loi || "")),
+    targetDocs: Array.isArray(row.targetDocs) ? row.targetDocs.map(String) : (row.docs || []),
+    status: TIDP_STATUS_ORDER.indexOf(st) >= 0 ? st : TIDP_STATUS.CREATED,
+    baselineStart: row.baselineStart || null,
+    baselineFinish: row.baselineFinish || null,
+    forecastStart: row.forecastStart || null,
+    forecastFinish: row.forecastFinish || null,
+    actualStart: row.actualStart || null,
+    actualFinish: row.actualFinish || null,
+    airRef: String(row.airRef || row.air || ""),
+    deliverableIds: Array.isArray(row.deliverableIds) ? row.deliverableIds.map(String) : [],
+    // readiness storage only (Phase 3 — no calc engine yet)
+    dependencyReadiness: row.dependencyReadiness != null ? Number(row.dependencyReadiness) : null,
+    loinReadiness: row.loinReadiness != null ? Number(row.loinReadiness) : null,
+    interfaceReadiness: row.interfaceReadiness != null ? Number(row.interfaceReadiness) : null,
+    informationReadiness: row.informationReadiness != null ? Number(row.informationReadiness) : null,
+    notes: String(row.notes || "")
+  };
+}
+
+function tidpProgressPercent(rows){
+  rows = rows || [];
+  if(!rows.length) return 0;
+  const done = rows.filter(function(r){
+    return r.status === TIDP_STATUS.APPROVED || r.status === TIDP_STATUS.CLOSED;
+  }).length;
+  return Math.round((done / rows.length) * 100);
+}
+
+/**
+ * Ensure every Production Package has default TIDP rows (seed).
+ * Does NOT recreate existing TR_IDs. Workstage targets update in place later.
+ */
+function ensureTidpRowsForProject(project, opts){
+  opts = opts || {};
+  if(!project) return [];
+  if(!project.production) project.production = normalizeProductionState(null);
+  if(!Array.isArray(project.production.tidpRows)) project.production.tidpRows = [];
+
+  const existing = {};
+  project.production.tidpRows.forEach(function(r){
+    const nr = normalizeTidpRow(r);
+    if(nr) existing[nr.id] = nr;
+  });
+
+  // Index by ppId+category+activity to avoid duplicates on re-seed
+  const byKey = {};
+  Object.keys(existing).forEach(function(id){
+    const r = existing[id];
+    byKey[r.ppId + "|" + r.category + "|" + r.activity] = r;
+  });
+
+  const packages = getProductionPackages(project);
+  const stageId = project.currentStageId || "S3";
+  const wmm = (typeof WORKSTAGE_MATURITY_DEFAULTS !== "undefined" && WORKSTAGE_MATURITY_DEFAULTS[stageId])
+    ? WORKSTAGE_MATURITY_DEFAULTS[stageId] : { lod: "3", loi: "3", docs: [] };
+
+  packages.forEach(function(pp){
+    DEFAULT_TIDP_SEED.forEach(function(seed){
+      const key = pp.id + "|" + seed.category + "|" + seed.activity;
+      if(byKey[key]){
+        // refresh workstage target LOIN only — keep status & identity
+        const row = byKey[key];
+        row.workstage = stageId;
+        if(!row.targetLod) row.targetLod = wmm.lod;
+        if(!row.targetLoi) row.targetLoi = wmm.loi;
+        return;
+      }
+      const id = nextTidpId(project);
+      // bump internal list so nextTidpId advances
+      const row = normalizeTidpRow({
+        id: id,
+        ppId: pp.id,
+        fb: pp.fb,
+        ss: pp.ss,
+        workstage: stageId,
+        ro: pp.ro,
+        category: seed.category,
+        activity: seed.activity,
+        targetLod: wmm.lod,
+        targetLoi: wmm.loi,
+        targetDocs: (wmm.docs || []).slice(),
+        status: TIDP_STATUS.CREATED,
+        airRef: seed.air
+      });
+      existing[id] = row;
+      byKey[key] = row;
+      project.production.tidpRows.push(row);
+    });
+  });
+
+  // Rebuild array from map unique
+  const out = [];
+  const seen = {};
+  project.production.tidpRows.forEach(function(r){
+    const nr = normalizeTidpRow(r);
+    if(!nr || seen[nr.id]) return;
+    seen[nr.id] = true;
+    out.push(nr);
+  });
+  // include any new from existing map not yet in out
+  Object.keys(existing).forEach(function(id){
+    if(!seen[id]){ out.push(existing[id]); seen[id] = true; }
+  });
+  project.production.tidpRows = out;
+  return out;
+}
+
+function getTidpRowsForPackage(project, ppId){
+  const rows = (project.production && project.production.tidpRows) || [];
+  return rows.filter(function(r){ return r.ppId === ppId; });
 }
 
 function packageArchetypeForRo(ro){
@@ -7990,14 +8170,45 @@ function normalizeTaskTeamCode(raw){
 
 /** Task teams that can own production packages (exclude process roles). */
 var PRODUCTION_TEAM_CODES = ["AR","ST","ME","MH","EE","CV","PD","FP","FD","YS","YC","PE","QS","HG","CW"];
+/** Enabling / functional roles — never production matrix columns */
+var ENABLING_ROLE_CODES = ["IM","PDM","DTL","DM","TTM","TTIM","PEER","PR","APP","AP","ADMIN","PM","ZZ"];
 function isProductionTeamCode(code){
   var c = String(code || "").toUpperCase();
   if(!c) return false;
+  if(typeof ENABLING_ROLE_CODES !== "undefined" && ENABLING_ROLE_CODES.indexOf(c) >= 0) return false;
   if(PRODUCTION_TEAM_CODES.indexOf(c) >= 0) return true;
-  // reject known process / management roles
-  if(/^(IM|PDM|DTL|DM|TTM|TTIM|PEER|PR|APP|AP|ADMIN|ZZ)$/.test(c)) return false;
-  return c.length <= 3;
+  if(/^(IM|PDM|DTL|DM|TTM|TTIM|PEER|PR|APP|AP|ADMIN|PM|ZZ)$/.test(c)) return false;
+  // unknown short codes: only allow if in catalog roles selected AND not enabling
+  return false;
 }
+
+function productionTeamsForProject(project){
+  var scope = (project && project.production && project.production.scope) ? project.production.scope : {};
+  var base = [];
+  var seen = {};
+  function add(c){
+    c = (typeof normalizeTaskTeamCode === "function") ? normalizeTaskTeamCode(c) : String(c||"").toUpperCase();
+    if(!c || !isProductionTeamCode(c) || seen[c]) return;
+    // respect teamsEnabled: default true unless explicitly false
+    if(scope.teamsEnabled && Object.prototype.hasOwnProperty.call(scope.teamsEnabled, c) && !scope.teamsEnabled[c]) return;
+    seen[c] = true;
+    base.push(c);
+  }
+  (typeof selectedTaskTeamCodes === "function" ? selectedTaskTeamCodes(project) : []).forEach(add);
+  // Also from catalog roles
+  try {
+    var roles = (project && project.midpCatalog && project.midpCatalog.roles) || [];
+    roles.forEach(function(r){ if(r && r.selected !== false) add(r.code); });
+  } catch(e){}
+  PRODUCTION_TEAM_CODES.forEach(function(c){
+    // include known production codes if enabled in teamsEnabled or not listed
+    if(scope.teamsEnabled && Object.prototype.hasOwnProperty.call(scope.teamsEnabled, c)){
+      if(scope.teamsEnabled[c]) add(c);
+    }
+  });
+  return base;
+}
+
 
 function selectedTaskTeamCodes(project){
   var out = [];
@@ -8134,8 +8345,9 @@ function ensureProductionFramework(project, opts){
     systemsAll: systemsAll.length,
     systemsUsed: systems.length,
     phase: defaultPhase,
-    framework: "Phase2"
+    framework: "Phase3"
   };
+  try { ensureTidpRowsForProject(project); } catch(e){ console.warn("TIDP seed", e); }
   return project.production;
 }
 
@@ -8155,19 +8367,28 @@ function getProductionPackages(project, filter){
 
 /** Group packages for WBS: FB → Ro → packages (Ro is attribute grouping only) */
 function productionWbsTree(project){
-  ensureProductionFramework(project);
-  const fbs = selectedFunctionalBreakdowns(project);
-  const packages = getProductionPackages(project);
+  if(!project.production) project.production = normalizeProductionState(null);
+  const scope = project.production.scope || {};
+  const fbsAll = selectedFunctionalBreakdowns(project);
+  const fbs = fbsAll.filter(function(fb){
+    const code = String(fb.code || "").toUpperCase();
+    if(code === "XX") return !!(scope.fbEnabled && scope.fbEnabled.XX);
+    if(scope.fbEnabled && Object.prototype.hasOwnProperty.call(scope.fbEnabled, code))
+      return !!scope.fbEnabled[code];
+    return fb.selected !== false;
+  });
+  const packages = getProductionPackages(project).filter(function(p){
+    return String(p.fb).toUpperCase() !== "XX" && String(p.phase||"").toUpperCase().indexOf("EXIST") < 0;
+  });
   const byFb = {};
   packages.forEach(function(pp){
-    const fb = pp.fb || "XX";
+    const fb = String(pp.fb || "").toUpperCase();
     if(!byFb[fb]) byFb[fb] = [];
     byFb[fb].push(pp);
   });
   return fbs.map(function(fb){
     const code = String(fb.code).toUpperCase();
     const list = byFb[code] || [];
-    // group by Ro attribute
     const byRo = {};
     list.forEach(function(pp){
       const ro = pp.ro || "ZZ";
@@ -8189,6 +8410,7 @@ function productionWbsTree(project){
     };
   });
 }
+
 
 
 function wirePlannerModeSeg(project){
@@ -8224,15 +8446,22 @@ function renderScopeMatrixEditors(project, mode){
   if(!project.production) project.production = normalizeProductionState(null);
   const scope = project.production.scope;
   const cat = normalizeMidpCatalog(project.midpCatalog);
-  const teams = selectedTaskTeamCodes(project);
+  // ONLY production discipline teams — never IM/PDM/DTL/DM/TTM/PM
+  let teams = productionTeamsForProject(project);
+  if(!teams.length){
+    teams = PRODUCTION_TEAM_CODES.filter(function(c){
+      return !(scope.teamsEnabled && scope.teamsEnabled[c] === false);
+    });
+  }
   const fbs = (cat.functionalList || []).filter(function(x){ return x && x.code; });
   const levels = (cat.levels || []).filter(function(x){ return x && x.code; });
+  mode = mode || "functional";
 
   function matrixTable(kind, rows, hostId){
     const host = document.getElementById(hostId);
     if(!host) return;
     let h = '<div style="font-size:12px;font-weight:700;margin:8px 0 6px;">' + (kind === "fb" ? "Functional breakdown × Task team" : "Spatial breakdown × Task team") + '</div>';
-    h += '<div style="overflow:auto;max-height:320px;border:1px solid #e5e7eb;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);">';
+    h += '<div style="overflow:auto;max-height:360px;border:1px solid #e5e7eb;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);">';
     h += '<table style="border-collapse:collapse;font-size:11px;min-width:100%;"><thead><tr>';
     h += '<th style="position:sticky;top:0;background:#f8f5f9;padding:6px;text-align:left;">Code</th>';
     h += '<th style="position:sticky;top:0;background:#f8f5f9;padding:6px;">In scope</th>';
@@ -8243,7 +8472,9 @@ function renderScopeMatrixEditors(project, mode){
     rows.forEach(function(row){
       const code = String(row.code).toUpperCase();
       const enabledMap = kind === "fb" ? scope.fbEnabled : scope.slEnabled;
-      const teamMap = kind === "fb" ? (scope.fbTeam[code] || {}) : (scope.slTeam[code] || {});
+      const teamMapRoot = kind === "fb" ? scope.fbTeam : scope.slTeam;
+      if(!teamMapRoot[code]) teamMapRoot[code] = {};
+      const teamMap = teamMapRoot[code];
       let enabled = true;
       if(Object.prototype.hasOwnProperty.call(enabledMap, code)) enabled = !!enabledMap[code];
       else if(code === "XX") enabled = false;
@@ -8254,7 +8485,7 @@ function renderScopeMatrixEditors(project, mode){
       teams.forEach(function(t){
         let on = true;
         if(Object.prototype.hasOwnProperty.call(teamMap, t)) on = !!teamMap[t];
-        else on = enabled; // default follow row scope
+        else on = enabled;
         h += '<td style="text-align:center;padding:4px;"><input type="checkbox" data-scope-cell="' + kind + '" data-code="' + escapeHtml(code) + '" data-team="' + escapeHtml(t) + '"' + (on && enabled ? " checked" : "") + (enabled ? "" : " disabled") + '></td>';
       });
       h += '</tr>';
@@ -8267,37 +8498,48 @@ function renderScopeMatrixEditors(project, mode){
         const code = cb.getAttribute("data-code");
         const on = cb.checked;
         if(k === "fb") scope.fbEnabled[code] = on; else scope.slEnabled[code] = on;
-        // enable/disable row team cells
         host.querySelectorAll('[data-scope-cell="'+k+'"][data-code="'+code+'"]').forEach(function(cell){
           cell.disabled = !on;
-          if(!on) cell.checked = false;
+          if(!on){ cell.checked = false; }
         });
       });
     });
   }
 
-  mode = mode || "functional";
+  // Team chips — production only; untick removes column from matrix
+  const th = document.getElementById("teamScopeHost");
+  if(th && (mode === "functional" || mode === "breakdown")){
+    const allProd = PRODUCTION_TEAM_CODES.slice();
+    let h = '<div style="font-size:12px;font-weight:700;margin:8px 0 6px;">Task teams in production scope</div>';
+    h += '<p class="section-sub" style="margin:0 0 8px;">Discipline teams only. Enabling roles (IM, PDM, DTL, DM, TTM…) are not listed — they stay active for delivery process work.</p>';
+    h += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+    allProd.forEach(function(t){
+      let on = true;
+      if(scope.teamsEnabled && Object.prototype.hasOwnProperty.call(scope.teamsEnabled, t)) on = !!scope.teamsEnabled[t];
+      h += '<label style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;cursor:pointer;">';
+      h += '<input type="checkbox" data-scope-team="' + escapeHtml(t) + '"' + (on ? " checked" : "") + '> <strong>' + escapeHtml(t) + '</strong></label>';
+    });
+    h += '</div>';
+    th.innerHTML = h;
+    th.querySelectorAll("[data-scope-team]").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        const t = cb.getAttribute("data-scope-team");
+        scope.teamsEnabled[t] = !!cb.checked;
+        // Rebuild matrix columns immediately
+        try { collectScopeMatrixFromForm(project); } catch(e){}
+        renderScopeMatrixEditors(project, mode);
+      });
+    });
+  }
+
   if(mode === "functional" || mode === "breakdown"){
     matrixTable("fb", fbs, "fbScopeMatrixHost");
   }
   if(mode === "spatial" || mode === "breakdown"){
     matrixTable("sl", levels, "slScopeMatrixHost");
   }
-
-  const th = document.getElementById("teamScopeHost");
-  if(th){
-    let h = '<div style="font-size:12px;font-weight:700;margin:8px 0 6px;">Task teams in production scope</div>';
-    h += '<div style="display:flex;flex-wrap:wrap;gap:10px;">';
-    teams.forEach(function(t){
-      let on = true;
-      if(Object.prototype.hasOwnProperty.call(scope.teamsEnabled, t)) on = !!scope.teamsEnabled[t];
-      h += '<label style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;">';
-      h += '<input type="checkbox" data-scope-team="' + escapeHtml(t) + '"' + (on ? " checked" : "") + '> <strong>' + escapeHtml(t) + '</strong></label>';
-    });
-    h += '</div>';
-    th.innerHTML = h;
-  }
 }
+
 
 function collectScopeMatrixFromForm(project){
   if(!project) return;
@@ -8337,21 +8579,9 @@ function renderProductionWbs(project){
     return String(p.fb).toUpperCase() !== "XX" && String(p.phase || "").toUpperCase().indexOf("EXIST") < 0;
   });
   const metrics = (typeof computeProductionMetrics === "function") ? computeProductionMetrics(project) : null;
-  const tree = productionWbsTree(project).map(function(fbNode){
-    // strip XX and filter packages
-    if(String(fbNode.fb).toUpperCase() === "XX") return null;
-    const roGroups = (fbNode.roGroups || []).map(function(rg){
-      return {
-        ro: rg.ro,
-        label: rg.label,
-        packages: (rg.packages || []).filter(function(p){
-          return String(p.phase || "").toUpperCase().indexOf("EXIST") < 0;
-        })
-      };
-    }).filter(function(rg){ return rg.packages.length; });
-    const count = roGroups.reduce(function(n, rg){ return n + rg.packages.length; }, 0);
-    return count ? { fb: fbNode.fb, label: fbNode.label, count: count, roGroups: roGroups } : null;
-  }).filter(Boolean);
+  const tree = productionWbsTree(project).filter(function(fbNode){
+    return String(fbNode.fb).toUpperCase() !== "XX";
+  });
 
   let htmlOut = "";
   htmlOut += '<div class="card" style="margin-bottom:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
@@ -8401,15 +8631,18 @@ function renderProductionWbs(project){
           inner += ' <span style="color:#888;font-weight:400;font-size:11px;">(' + rg.packages.length + ')</span></summary>';
           inner += '<div style="overflow:auto;max-height:240px;margin-top:6px;">';
           inner += '<table style="width:100%;font-size:11px;border-collapse:collapse;"><thead><tr>';
-          inner += '<th style="text-align:left;padding:4px;">Package</th><th style="text-align:left;padding:4px;">Ss</th><th style="text-align:left;padding:4px;">Name</th><th style="text-align:left;padding:4px;">Status</th><th style="text-align:left;padding:4px;">Phase</th>';
+          inner += '<th style="text-align:left;padding:4px;">Package</th><th style="text-align:left;padding:4px;">Ss</th><th style="text-align:left;padding:4px;">Name</th><th style="text-align:left;padding:4px;">Status</th><th style="text-align:left;padding:4px;">Phase</th><th style="text-align:left;padding:4px;">TIDP</th>';
           inner += '</tr></thead><tbody>';
           rg.packages.slice(0, 60).forEach(function(pp){
+            var trs = (typeof getTidpRowsForPackage === "function") ? getTidpRowsForPackage(project, pp.id) : [];
+            var tp = (typeof tidpProgressPercent === "function") ? tidpProgressPercent(trs) : 0;
             inner += '<tr>';
             inner += '<td style="padding:3px 4px;font-family:var(--mono);font-size:10px;">' + escapeHtml(pp.id) + '</td>';
             inner += '<td style="padding:3px 4px;font-family:var(--mono);">' + escapeHtml(pp.ss) + '</td>';
             inner += '<td style="padding:3px 4px;">' + escapeHtml(pp.name) + '</td>';
             inner += '<td style="padding:3px 4px;">' + escapeHtml(pp.status || "not_started") + '</td>';
             inner += '<td style="padding:3px 4px;">' + escapeHtml(pp.phase || "NEW") + '</td>';
+            inner += '<td style="padding:3px 4px;">' + (trs.length ? (tp + '% (' + trs.length + ' TR)') : '—') + '</td>';
             inner += '</tr>';
           });
           if(rg.packages.length > 60){
@@ -8435,7 +8668,8 @@ function renderProductionWbs(project){
         try { saveData(DATA); } catch(e){}
         var m = project.production._lastSyncMeta || {};
         try {
-          showToast("Synced " + (project.production.packages||[]).length + " packages | FB " + (m.fbCount||0) + " | Ss " + (m.systemsUsed||0));
+          var trn = (project.production.tidpRows || []).length;
+          showToast("Synced " + (project.production.packages||[]).length + " packages · " + trn + " TIDP rows | FB " + (m.fbCount||0) + " | Ss " + (m.systemsUsed||0));
         } catch(e){}
         renderProductionWbs(project);
       } catch(err){
