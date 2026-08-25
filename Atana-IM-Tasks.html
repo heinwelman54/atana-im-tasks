@@ -2324,8 +2324,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.18.0";
-const APP_BUILD = "2026-08-25-phase12-pds";
+const APP_VERSION = "3.19.0";
+const APP_BUILD = "2026-08-25-phase13-aia";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -10260,6 +10260,308 @@ try {
 } catch(e){}
 
 
+/* ===================== PHASE 13 — AIA =====================
+   API & Integration Architecture
+   External systems never touch tables — only Atana API.
+   Local facade implements the same contract against in-memory project data.
+   ========================================================== */
+
+const AIA_VERSION = "1.0";
+
+/** OpenAPI-style path catalogue (contract) */
+const AIA_ENDPOINTS = {
+  reference: [
+    "GET /api/v1/projects",
+    "GET /api/v1/projects/{projectId}",
+    "GET /api/v1/projects/{projectId}/fb",
+    "GET /api/v1/systems",
+    "GET /api/v1/projects/{projectId}/spatial",
+    "GET /api/v1/products",
+    "GET /api/v1/elements-functions",
+    "GET /api/v1/forms-of-information",
+    "GET /api/v1/projects/{projectId}/task-teams",
+    "GET /api/v1/functional-roles"
+  ],
+  production: [
+    "GET /api/v1/projects/{projectId}/production-packages",
+    "GET /api/v1/production-packages/{ppId}",
+    "GET /api/v1/production-packages/{ppId}/workstages",
+    "GET /api/v1/production-packages/{ppId}/readiness",
+    "POST /api/v1/projects/{projectId}/production-packages/resync"
+  ],
+  tidp: [
+    "GET /api/v1/projects/{projectId}/tidp",
+    "GET /api/v1/tidp/{trId}",
+    "PATCH /api/v1/tidp/{trId}/status"
+  ],
+  dependencies: [
+    "GET /api/v1/projects/{projectId}/dependencies",
+    "GET /api/v1/dependencies/{depId}",
+    "GET /api/v1/production-packages/{ppId}/dependencies/readiness"
+  ],
+  interfaces: [
+    "GET /api/v1/projects/{projectId}/interfaces",
+    "GET /api/v1/interfaces/{ifId}",
+    "GET /api/v1/interfaces/{ifId}/issues",
+    "GET /api/v1/interfaces/{ifId}/readiness"
+  ],
+  models: [
+    "GET /api/v1/projects/{projectId}/model-packages",
+    "GET /api/v1/model-packages/{mpId}",
+    "GET /api/v1/model-packages/{mpId}/objects",
+    "POST /api/v1/projects/{projectId}/model-sync"
+  ],
+  verification: [
+    "GET /api/v1/model-packages/{mpId}/verifications",
+    "POST /api/v1/model-packages/{mpId}/verifications/run"
+  ],
+  information: [
+    "GET /api/v1/projects/{projectId}/deliverables",
+    "GET /api/v1/projects/{projectId}/information-packages",
+    "GET /api/v1/information-packages/{ipId}",
+    "GET /api/v1/projects/{projectId}/exchange-events",
+    "POST /api/v1/information-packages/{ipId}/exchange-events"
+  ],
+  metrics: [
+    "GET /api/v1/projects/{projectId}/metrics",
+    "GET /api/v1/projects/{projectId}/readiness",
+    "GET /api/v1/projects/{projectId}/asset-readiness",
+    "GET /api/v1/projects/{projectId}/model-readiness",
+    "GET /api/v1/projects/{projectId}/information-readiness"
+  ],
+  events: [
+    "GET /api/v1/projects/{projectId}/events",
+    "POST /api/v1/webhooks",
+    "GET /api/v1/webhooks"
+  ]
+};
+
+/** Connector parameter contracts */
+const AIA_REVIT_PARAMS = {
+  mandatory: ["ATANA_FB", "ATANA_SS", "ATANA_PR", "ATANA_EF"],
+  optional: ["ATANA_PP", "ATANA_LOD", "ATANA_LOI"]
+};
+
+const AIA_IFC_MAPPING = {
+  classification: "IfcClassificationReference",
+  propertySets: ["Pset_AtanaClassification"],
+  fields: ["FB", "Ss", "Pr", "EF"]
+};
+
+const AIA_FORMA_MAPPING = {
+  minimum: ["FB", "Ss"],
+  future: ["Pr", "EF"]
+};
+
+/** Power BI semantic entities (star-ish facts + dims) */
+const AIA_PBI_SEMANTIC = {
+  dimensions: ["DimProject", "DimFB", "DimSystem", "DimTaskTeam", "DimWorkstage", "DimRole"],
+  facts: [
+    "FactProductionPackage",
+    "FactTidp",
+    "FactDependency",
+    "FactInterface",
+    "FactModelPackage",
+    "FactInformationPackage",
+    "FactReadiness"
+  ],
+  dashboards: [
+    "Executive — Project/Asset readiness",
+    "Production — Packages, LOIN, deps",
+    "Coordination — Interfaces, issues",
+    "Information — Shared/Published, suitability",
+    "Model — MRI, classification, sync"
+  ]
+};
+
+const AIA_EVENT_TYPES = [
+  "ProductionPackageCreated",
+  "ProductionPackageUpdated",
+  "TidpStatusChanged",
+  "ModelSynced",
+  "DependencyUpdated",
+  "InterfaceIssueClosed",
+  "InformationPackagePublished",
+  "ExchangeEventCreated"
+];
+
+/**
+ * Local API facade — same paths, in-memory project.
+ * Usage: atanaApi(project, "GET", "/api/v1/projects/{id}/production-packages")
+ * Auth: uses psmCan when mutating.
+ */
+function atanaApi(project, method, path, body){
+  method = String(method || "GET").toUpperCase();
+  path = String(path || "");
+  const pid = project && (project.id || project.code) || "";
+
+  function ok(data, status){
+    return { ok: true, status: status || 200, data: data };
+  }
+  function fail(status, message){
+    return { ok: false, status: status || 400, error: message || "error" };
+  }
+  function requireAuth(objectType, action, objectRo, infoState){
+    if(typeof psmCan !== "function") return null;
+    const r = psmCan(project, { objectType: objectType, action: action, objectRo: objectRo, infoState: infoState });
+    if(!r.allowed) return fail(403, "PSM denied: " + (r.reason || "") + " (" + (r.role||"") + ")");
+    return null;
+  }
+
+  // Normalize path params lightly
+  if(path.match(/\/api\/v1\/projects\/?$/) && method === "GET"){
+    return ok([{ id: pid, number: project.code || "", name: project.name || "" }]);
+  }
+  if(path.match(/\/production-packages\/?$/) && method === "GET"){
+    const list = (project.production && project.production.packages) || [];
+    return ok(list.map(function(pp){
+      return {
+        ppId: pp.id,
+        fb: pp.fb,
+        ss: pp.ss,
+        ro: pp.ro,
+        status: pp.status,
+        currentLod: (pp.currentLoin && pp.currentLoin.lod) || "",
+        currentLoi: (pp.currentLoin && pp.currentLoin.loi) || "",
+        targetLod: (pp.targetLoin && pp.targetLoin.lod) || "",
+        targetLoi: (pp.targetLoin && pp.targetLoin.loi) || ""
+      };
+    }));
+  }
+  if(path.match(/\/tidp\/?$/) && method === "GET"){
+    return ok((project.production && project.production.tidpRows) || []);
+  }
+  if(path.match(/\/dependencies\/?$/) && method === "GET"){
+    return ok((project.production && project.production.dependencies) || []);
+  }
+  if(path.match(/\/interfaces\/?$/) && method === "GET"){
+    return ok((project.production && project.production.interfaces) || []);
+  }
+  if(path.match(/\/model-packages\/?$/) && method === "GET"){
+    return ok((project.production && project.production.modelPackages) || []);
+  }
+  if(path.match(/\/information-packages\/?$/) && method === "GET"){
+    return ok((project.production && project.production.informationPackages) || []);
+  }
+  if(path.match(/\/exchange-events\/?$/) && method === "GET"){
+    return ok((project.production && project.production.exchangeEvents) || []);
+  }
+  if(path.match(/\/metrics\/?$/) && method === "GET"){
+    return ok({
+      production: (typeof productionModelMetrics === "function") ? productionModelMetrics(project) : null,
+      information: (typeof productionInformationMetrics === "function") ? productionInformationMetrics(project) : null,
+      interfaces: (typeof productionInterfaceMetrics === "function") ? productionInterfaceMetrics(project) : null,
+      acdm: (typeof productionAcdmMetrics === "function") ? productionAcdmMetrics(project) : null
+    });
+  }
+  if(path.match(/\/events\/?$/) && method === "GET"){
+    return ok((project.production && project.production.arcEventHistory) || []);
+  }
+  if(path.match(/\/production-packages\/resync/) && method === "POST"){
+    const denied = requireAuth("production_package", "plan");
+    if(denied) return denied;
+    if(typeof arcRunProjectResync === "function"){
+      const summary = arcRunProjectResync(project);
+      if(typeof arcPublish === "function"){
+        arcPublish(project, "ProductionPackageCreated", summary || {}, { source: "api" });
+      }
+      return ok(summary || {}, 200);
+    }
+    return fail(500, "ARC not available");
+  }
+  if(path.match(/\/model-sync/) && method === "POST"){
+    const denied = requireAuth("model_package", "sync");
+    if(denied) return denied;
+    // Accept model objects payload: { objects: [...] }
+    const objs = (body && body.objects) || [];
+    if(!project.production) project.production = normalizeProductionState(null);
+    if(!Array.isArray(project.production.modelObjects)) project.production.modelObjects = [];
+    objs.forEach(function(o){
+      const mo = (typeof normalizeModelObject === "function") ? normalizeModelObject(o) : o;
+      if(mo) project.production.modelObjects.push(mo);
+    });
+    if(typeof ensureModelPackages === "function") ensureModelPackages(project, { force: false });
+    if(typeof evaluateAllModelPackages === "function") evaluateAllModelPackages(project);
+    if(typeof arcPublish === "function") arcPublish(project, "ModelSynced", { count: objs.length }, { source: "api" });
+    return ok({ imported: objs.length, modelPackages: (project.production.modelPackages || []).length });
+  }
+
+  // Webhooks registry (in-memory on project)
+  if(path.match(/\/webhooks\/?$/) && method === "GET"){
+    return ok((project.production && project.production.webhooks) || []);
+  }
+  if(path.match(/\/webhooks\/?$/) && method === "POST"){
+    if(!project.production) project.production = normalizeProductionState(null);
+    if(!Array.isArray(project.production.webhooks)) project.production.webhooks = [];
+    const wh = {
+      id: "WH-" + Date.now(),
+      url: (body && body.url) || "",
+      events: (body && body.events) || AIA_EVENT_TYPES.slice(),
+      enabled: true,
+      createdAt: Date.now()
+    };
+    project.production.webhooks.push(wh);
+    return ok(wh, 201);
+  }
+
+  return fail(404, "No local handler for " + method + " " + path);
+}
+
+function aiaExportSpec(){
+  return {
+    version: AIA_VERSION,
+    principle: "External systems never access database tables — only Atana API",
+    endpoints: AIA_ENDPOINTS,
+    events: AIA_EVENT_TYPES,
+    connectors: {
+      revit: {
+        parameters: AIA_REVIT_PARAMS,
+        workflow: ["Extract parameters", "Create/Update Model Objects", "Update Model Package", "Run Verification", "Update Readiness"]
+      },
+      ifc: {
+        mapping: AIA_IFC_MAPPING,
+        workflow: ["IFC import", "Classification extraction", "Model Objects", "Model Package", "Verification"]
+      },
+      forma: {
+        mapping: AIA_FORMA_MAPPING,
+        useCases: ["Concept design", "Feasibility", "Early scope verification", "Asset readiness forecasting"]
+      }
+    },
+    powerBi: AIA_PBI_SEMANTIC,
+    security: "All mutating endpoints enforce Functional Role + Authority + Object + State (PSM)",
+    note: "Local facade: atanaApi(project, method, path, body). Server implementation should mirror this contract over PDS."
+  };
+}
+
+function productionAiaMetrics(){
+  let ep = 0;
+  Object.keys(AIA_ENDPOINTS).forEach(function(k){ ep += (AIA_ENDPOINTS[k] || []).length; });
+  return {
+    version: AIA_VERSION,
+    endpoints: ep,
+    events: AIA_EVENT_TYPES.length,
+    connectors: 3,
+    pbiFacts: (AIA_PBI_SEMANTIC.facts || []).length
+  };
+}
+
+try {
+  if(typeof window !== "undefined"){
+    window.AIA = {
+      version: AIA_VERSION,
+      endpoints: AIA_ENDPOINTS,
+      api: atanaApi,
+      exportSpec: aiaExportSpec,
+      revitParams: AIA_REVIT_PARAMS,
+      ifcMapping: AIA_IFC_MAPPING,
+      formaMapping: AIA_FORMA_MAPPING,
+      powerBi: AIA_PBI_SEMANTIC
+    };
+  }
+} catch(e){}
+
+
+
 
 /** Helper for UI: disable write controls when not allowed */
 function psmWriteAllowed(project, objectType, objectRo, infoState){
@@ -10583,7 +10885,7 @@ function ensureProductionFramework(project, opts){
     systemsAll: systemsAll.length,
     systemsUsed: systems.length,
     phase: defaultPhase,
-    framework: "Phase12",
+    framework: "Phase13",
     packageCount: next.length
   };
   try { ensureTidpRowsForProject(project, { force: true }); } catch(e){ console.warn("TIDP seed", e); }
@@ -10830,7 +11132,7 @@ function renderProductionWbs(project){
 
   let htmlOut = "";
   htmlOut += '<div class="card" style="margin-bottom:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
-  htmlOut += '<div style="font-size:12px;font-weight:700;color:var(--purple-900);margin-bottom:6px;">Production WBS — Phase 12 (PDS)</div>';
+  htmlOut += '<div style="font-size:12px;font-weight:700;color:var(--purple-900);margin-bottom:6px;">Production WBS — Phase 13 (AIA)</div>';
   if(metrics){
     htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;font-size:11px;">';
     htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f3f0f6;"><strong>Packages</strong> ' + packages.length + '</span>';
@@ -10911,6 +11213,15 @@ function renderProductionWbs(project){
       htmlOut += '</div>';
     }
   } catch(e){}
+  try {
+    var ai = (typeof productionAiaMetrics === "function") ? productionAiaMetrics() : null;
+    if(ai){
+      htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px;font-size:11px;">';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#cffafe;"><strong>AIA</strong> v' + escapeHtml(ai.version) + ' · ' + ai.endpoints + ' endpoints</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#ecfeff;">Events ' + ai.events + ' · Connectors ' + ai.connectors + ' · PBI facts ' + ai.pbiFacts + '</span>';
+      htmlOut += '</div>';
+    }
+  } catch(e){}
   htmlOut += '<div style="font-size:11px;color:#555;margin-bottom:8px;">FB groups are <strong>collapsed by default</strong>. Expand one FB, then one Ro. Scope is set under <strong>Settings → Functional</strong> and <strong>Spatial</strong> matrices. XX and EXISTING are excluded.</div>';
   if(typeof frrmMatrixSummaryHtml === "function"){
     htmlOut += '<details style="margin:8px 0;border:1px solid #e5e7eb;border-radius:8px;"><summary style="cursor:pointer;padding:8px 10px;font-size:12px;font-weight:600;">FRRM assignment map (Phase 4)</summary><div style="padding:0 8px 8px;">' + frrmMatrixSummaryHtml() + '</div></details>';
@@ -10919,6 +11230,7 @@ function renderProductionWbs(project){
   htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnSyncProductionFromSettings">Re-sync from settings</button>';
   htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnExportAcdm">Export ACDM schema</button>';
   htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnExportPds">Export PDS SQL</button>';
+  htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnExportAia">Export AIA API spec</button>';
   htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnCollapseAllFb">Collapse all</button>';
   htmlOut += '<span style="font-size:11px;color:#666;">' + packages.length + ' packages · ' + tree.length + ' FB</span>';
   htmlOut += '</div></div>';
@@ -11071,6 +11383,23 @@ function renderProductionWbs(project){
       } catch(err){
         console.error(err);
         try { showToast("PDS export failed"); } catch(e){}
+      }
+    };
+  }
+  const btnAia = document.getElementById("btnExportAia");
+  if(btnAia){
+    btnAia.onclick = function(){
+      try {
+        const spec = (typeof aiaExportSpec === "function") ? aiaExportSpec() : {};
+        const blob = new Blob([JSON.stringify(spec, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "Atana-AIA-API-v1.json";
+        a.click();
+        try { showToast("AIA API spec exported"); } catch(e){}
+      } catch(err){
+        console.error(err);
+        try { showToast("AIA export failed"); } catch(e){}
       }
     };
   }

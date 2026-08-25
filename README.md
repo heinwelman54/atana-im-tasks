@@ -1,5 +1,6 @@
-# Atana IM Tasks v3.18.0 — Phase 12 PDS
+# Atana IM Tasks v3.19.0 — Phase 13 AIA
 
-PostgreSQL physical schema: Atana-PDS-PostgreSQL-v1.sql
-UNIQUE (fb_id, ss_id) on production_packages
-Export PDS SQL from Production WBS.
+API contract + local facade window.AIA.api
+Connectors: Revit / IFC / Forma
+Power BI semantic layer spec
+Export AIA API spec from Production WBS
