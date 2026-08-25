@@ -1,6 +1,5 @@
-# Atana IM Tasks v3.19.0 — Phase 13 AIA
+# Atana IM Tasks v3.20.0 — Phase 14 ADIF
 
-API contract + local facade window.AIA.api
-Connectors: Revit / IFC / Forma
-Power BI semantic layer spec
-Export AIA API spec from Production WBS
+Analytics: ARI, MRI, IRI, risks, forecast
+window.ADIF.compute(project)
+Export ADIF snapshot from Production WBS

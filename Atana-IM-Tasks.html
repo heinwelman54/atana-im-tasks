@@ -2324,8 +2324,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.19.0";
-const APP_BUILD = "2026-08-25-phase13-aia";
+const APP_VERSION = "3.20.0";
+const APP_BUILD = "2026-08-25-phase14-adif";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -9711,13 +9711,13 @@ const PSM_ROLE_AUTHORITIES = {
  */
 const PSM_OBJECT_MATRIX = {
   production_package: {
-    TTM:  ["read", "plan", "approve", "close"],
-    TTIM: ["read", "verify", "coordinate", "validate"],
+    TTM:  ["read", "plan", "approve", "close", "resync"],
+    TTIM: ["read", "verify", "coordinate", "validate", "plan"],
     IA:   ["read", "create", "modify", "submit"],
     PR:   ["read", "review", "comment"],
-    IM:   ["read", "audit", "freeze", "escalate"],
-    PDM:  ["read", "monitor"],
-    DTL:  ["read", "override", "approve"]
+    IM:   ["read", "audit", "freeze", "escalate", "plan", "resync", "govern"],
+    PDM:  ["read", "monitor", "plan", "resync"],
+    DTL:  ["read", "override", "approve", "plan", "resync"]
   },
   tidp: {
     IA:   ["read", "create", "update", "submit"],
@@ -9856,7 +9856,10 @@ function psmCan(project, opts){
     const authOk =
       (action === "approve" && auth.indexOf("APR") >= 0) ||
       (action === "publish" && auth.indexOf("PUB") >= 0) ||
-      (action === "audit" && auth.indexOf("GOV") >= 0);
+      (action === "audit" && auth.indexOf("GOV") >= 0) ||
+      (action === "govern" && auth.indexOf("GOV") >= 0) ||
+      (action === "resync" && (auth.indexOf("GOV") >= 0 || auth.indexOf("OWN") >= 0 || auth.indexOf("APR") >= 0)) ||
+      (action === "plan" && (auth.indexOf("GOV") >= 0 || auth.indexOf("OWN") >= 0 || auth.indexOf("APR") >= 0));
     if(!authOk){
       return { allowed: false, reason: "role_matrix", role: role, action: action };
     }
@@ -10561,6 +10564,362 @@ try {
 } catch(e){}
 
 
+/* ===================== PHASE 14 — ADIF =====================
+   Analytics & Decision Intelligence Framework
+   Scope · Maturity · Readiness · Coordination · Information Quality
+   (not document/drawing/task counts)
+   ========================================================== */
+
+const ADIF_VERSION = "1.0";
+
+function _adifNum(v, d){
+  const n = Number(v);
+  return Number.isFinite(n) ? n : (d != null ? d : 0);
+}
+
+function _adifAvg(arr){
+  if(!arr || !arr.length) return null;
+  let s = 0, n = 0;
+  arr.forEach(function(x){
+    if(x != null && Number.isFinite(Number(x))){ s += Number(x); n++; }
+  });
+  return n ? Math.round(s / n) : null;
+}
+
+/** Production readiness from packages + TIDP status share */
+function adifProductionReadiness(project){
+  const pkgs = (project.production && project.production.packages) || [];
+  if(!pkgs.length) return { score: null, completed: 0, total: 0 };
+  const rows = (project.production.tidpRows || []);
+  let done = 0, total = rows.length;
+  rows.forEach(function(r){
+    const st = String(r.status || "").toLowerCase();
+    if(st === "approved" || st === "closed" || st === "complete") done++;
+  });
+  const tidpScore = total ? Math.round((done / total) * 100) : 0;
+  let pkgDone = 0;
+  pkgs.forEach(function(p){
+    const st = String(p.status || "").toLowerCase();
+    if(st === "approved" || st === "loin_ready" || st === "closed") pkgDone++;
+  });
+  const pkgScore = Math.round((pkgDone / pkgs.length) * 100);
+  return {
+    score: Math.round(pkgScore * 0.4 + tidpScore * 0.6),
+    completed: pkgDone,
+    total: pkgs.length,
+    tidpDone: done,
+    tidpTotal: total
+  };
+}
+
+/** Dependency readiness aggregate */
+function adifDependencyIntelligence(project){
+  const pkgs = (project.production && project.production.packages) || [];
+  const deps = (project.production && project.production.dependencies) || [];
+  let scores = [], blocked = 0, criticalOpen = 0;
+  pkgs.forEach(function(pp){
+    try {
+      if(typeof evaluatePackageDependencyReadiness === "function"){
+        const r = evaluatePackageDependencyReadiness(project, pp.id);
+        const map = { R0: 0, R1: 35, R2: 70, R3: 100 };
+        scores.push(map[r.readiness] != null ? map[r.readiness] : 0);
+        if(r.blocked) blocked++;
+        criticalOpen += (r.critical || 0);
+      }
+    } catch(e){}
+  });
+  return {
+    score: _adifAvg(scores),
+    blockedPackages: blocked,
+    criticalOpen: criticalOpen,
+    dependencyCount: deps.length,
+    riskIndex: Math.min(100, blocked * 15 + criticalOpen * 5)
+  };
+}
+
+/** Interface intelligence */
+function adifInterfaceIntelligence(project){
+  const ifs = (project.production && project.production.interfaces) || [];
+  const issues = (project.production && project.production.interfaceIssues) || [];
+  const openIssues = issues.filter(function(i){ return i.status === "open"; }).length;
+  let openIf = 0, ready = 0;
+  ifs.forEach(function(ifo){
+    const st = ifo.status || "IFS00";
+    if(st < "IFS30") openIf++;
+    if(st >= "IFS40") ready++;
+  });
+  const score = ifs.length ? Math.round((ready / ifs.length) * 100) : 100;
+  return {
+    score: score,
+    openInterfaces: openIf,
+    openIssues: openIssues,
+    total: ifs.length,
+    resolutionRate: issues.length ? Math.round(((issues.length - openIssues) / issues.length) * 100) : null
+  };
+}
+
+/** Model intelligence (MRI aggregate) */
+function adifModelIntelligence(project){
+  const mps = (project.production && project.production.modelPackages) || [];
+  if(typeof evaluateAllModelPackages === "function" && mps.length){
+    try { evaluateAllModelPackages(project); } catch(e){}
+  }
+  const mris = mps.map(function(m){ return m.mri; });
+  const classScores = mps.map(function(m){ return m.classificationReadiness; });
+  const loinScores = mps.map(function(m){ return m.loinReadiness; });
+  let fail = 0;
+  mps.forEach(function(m){
+    if(String(m.verificationStatus) === "fail") fail++;
+  });
+  return {
+    mri: _adifAvg(mris),
+    classificationCompliance: _adifAvg(classScores),
+    loinCompliance: _adifAvg(loinScores),
+    openFailures: fail,
+    modelPackages: mps.length
+  };
+}
+
+/** Information intelligence (IRI) */
+function adifInformationIntelligence(project){
+  const ips = (project.production && project.production.informationPackages) || [];
+  ips.forEach(function(ip){
+    try { if(typeof evaluateInformationPackageIri === "function") evaluateInformationPackageIri(project, ip); } catch(e){}
+  });
+  const iris = ips.map(function(ip){ return ip.iri; });
+  let shared = 0, published = 0;
+  ips.forEach(function(ip){
+    if(ip.status === "IPS30" || ip.informationState === "SHARED") shared++;
+    if(ip.status === "IPS40" || ip.informationState === "PUBLISHED") published++;
+  });
+  return {
+    iri: _adifAvg(iris),
+    packageCount: ips.length,
+    shared: shared,
+    published: published,
+    exchangeCompliance: ips.length ? Math.round(((shared + published) / ips.length) * 100) : null
+  };
+}
+
+/** Asset Readiness Index per FB */
+function adifAssetReadiness(project){
+  const pkgs = (project.production && project.production.packages) || [];
+  const byFb = {};
+  pkgs.forEach(function(pp){
+    const fb = String(pp.fb || "").toUpperCase();
+    if(!fb) return;
+    if(!byFb[fb]) byFb[fb] = [];
+    byFb[fb].push(pp);
+  });
+  const prod = adifProductionReadiness(project);
+  const dep = adifDependencyIntelligence(project);
+  const ifc = adifInterfaceIntelligence(project);
+  const mod = adifModelIntelligence(project);
+  const info = adifInformationIntelligence(project);
+
+  const assets = Object.keys(byFb).sort().map(function(fb){
+    // Weighted ARI
+    const parts = [
+      { s: prod.score, w: 0.25 },
+      { s: dep.score, w: 0.20 },
+      { s: ifc.score, w: 0.20 },
+      { s: mod.mri, w: 0.20 },
+      { s: info.iri, w: 0.15 }
+    ];
+    let sum = 0, wsum = 0;
+    parts.forEach(function(p){
+      if(p.s != null && Number.isFinite(Number(p.s))){ sum += Number(p.s) * p.w; wsum += p.w; }
+    });
+    return {
+      fb: fb,
+      packageCount: byFb[fb].length,
+      ari: wsum ? Math.round(sum / wsum) : null
+    };
+  });
+  return assets;
+}
+
+/** Project readiness = average ARI */
+function adifProjectReadiness(project){
+  const assets = adifAssetReadiness(project);
+  const aris = assets.map(function(a){ return a.ari; });
+  return {
+    score: _adifAvg(aris),
+    assets: assets
+  };
+}
+
+/** Risk engine — automated identification */
+function adifRiskEngine(project){
+  const risks = [];
+  const dep = adifDependencyIntelligence(project);
+  if(dep.blockedPackages > 0){
+    risks.push({
+      type: "dependency",
+      severity: dep.blockedPackages > 5 ? "high" : "medium",
+      message: dep.blockedPackages + " package(s) blocked by unmet dependency thresholds",
+      index: dep.riskIndex
+    });
+  }
+  if(dep.criticalOpen > 0){
+    risks.push({
+      type: "dependency",
+      severity: "high",
+      message: dep.criticalOpen + " critical dependency link(s) not at required LOIN",
+      index: dep.criticalOpen
+    });
+  }
+  const ifc = adifInterfaceIntelligence(project);
+  if(ifc.openIssues > 0){
+    risks.push({
+      type: "interface",
+      severity: ifc.openIssues > 10 ? "high" : "medium",
+      message: ifc.openIssues + " open interface issue(s)",
+      index: ifc.openIssues
+    });
+  }
+  if(ifc.openInterfaces > 0 && ifc.score != null && ifc.score < 50){
+    risks.push({
+      type: "interface",
+      severity: "medium",
+      message: "Interface readiness low (" + ifc.score + "%) — " + ifc.openInterfaces + " open",
+      index: ifc.score
+    });
+  }
+  const mod = adifModelIntelligence(project);
+  if(mod.openFailures > 0){
+    risks.push({
+      type: "model",
+      severity: "high",
+      message: mod.openFailures + " model package verification failure(s)",
+      index: mod.openFailures
+    });
+  }
+  if(mod.loinCompliance != null && mod.loinCompliance < 50){
+    risks.push({
+      type: "loin",
+      severity: "medium",
+      message: "LOIN compliance below target (" + mod.loinCompliance + "%)",
+      index: mod.loinCompliance
+    });
+  }
+  const info = adifInformationIntelligence(project);
+  if(info.iri != null && info.iri < 40 && info.packageCount > 0){
+    risks.push({
+      type: "information",
+      severity: "medium",
+      message: "Information readiness low (IRI " + info.iri + "%) — packages may not be shareable",
+      index: info.iri
+    });
+  }
+  // LOIN gap on packages
+  const pkgs = (project.production && project.production.packages) || [];
+  let loinGaps = 0;
+  pkgs.forEach(function(pp){
+    const tLod = _adifNum(String((pp.targetLoin && pp.targetLoin.lod) || "").replace(/[^\d.]/g, ""), 0);
+    const cLod = _adifNum(String((pp.currentLoin && pp.currentLoin.lod) || "").replace(/[^\d.]/g, ""), 0);
+    if(tLod && cLod < tLod) loinGaps++;
+  });
+  if(loinGaps > 0){
+    risks.push({
+      type: "loin",
+      severity: loinGaps > 20 ? "high" : "medium",
+      message: loinGaps + " package(s) below target LOD",
+      index: loinGaps
+    });
+  }
+  return risks;
+}
+
+/** Forecast — planned vs current maturity (simple) */
+function adifForecastEngine(project){
+  const pkgs = (project.production && project.production.packages) || [];
+  let onTrack = 0, delayed = 0, unknown = 0;
+  pkgs.forEach(function(pp){
+    const tLod = _adifNum(String((pp.targetLoin && pp.targetLoin.lod) || "").replace(/[^\d.]/g, ""), 0);
+    const cLod = _adifNum(String((pp.currentLoin && pp.currentLoin.lod) || "").replace(/[^\d.]/g, ""), 0);
+    const tLoi = _adifNum(String((pp.targetLoin && pp.targetLoin.loi) || "").replace(/[^\d.]/g, ""), 0);
+    const cLoi = _adifNum(String((pp.currentLoin && pp.currentLoin.loi) || "").replace(/[^\d.]/g, ""), 0);
+    if(!tLod && !tLoi){ unknown++; return; }
+    const lag = (tLod && cLod < tLod) || (tLoi && cLoi < tLoi);
+    if(lag) delayed++; else onTrack++;
+  });
+  return {
+    onTrack: onTrack,
+    delayed: delayed,
+    unknown: unknown,
+    total: pkgs.length,
+    delayRate: pkgs.length ? Math.round((delayed / pkgs.length) * 100) : null
+  };
+}
+
+/** Full ADIF snapshot for dashboards / export */
+function adifCompute(project){
+  const production = adifProductionReadiness(project);
+  const dependency = adifDependencyIntelligence(project);
+  const interfaces = adifInterfaceIntelligence(project);
+  const model = adifModelIntelligence(project);
+  const information = adifInformationIntelligence(project);
+  const projectR = adifProjectReadiness(project);
+  const risks = adifRiskEngine(project);
+  const forecast = adifForecastEngine(project);
+  return {
+    version: ADIF_VERSION,
+    projectId: project.id || "",
+    projectNumber: project.code || "",
+    production: production,
+    dependency: dependency,
+    interfaces: interfaces,
+    model: model,
+    information: information,
+    projectReadiness: projectR.score,
+    assetReadiness: projectR.assets,
+    risks: risks,
+    forecast: forecast,
+    topRisks: risks.slice().sort(function(a, b){
+      const sev = { high: 3, medium: 2, low: 1 };
+      return (sev[b.severity] || 0) - (sev[a.severity] || 0);
+    }).slice(0, 5)
+  };
+}
+
+function adifExport(project){
+  return adifCompute(project);
+}
+
+function productionAdifMetrics(project){
+  try {
+    const s = adifCompute(project);
+    return {
+      version: ADIF_VERSION,
+      projectReadiness: s.projectReadiness,
+      production: s.production && s.production.score,
+      dependency: s.dependency && s.dependency.score,
+      interfaces: s.interfaces && s.interfaces.score,
+      mri: s.model && s.model.mri,
+      iri: s.information && s.information.iri,
+      risks: (s.risks || []).length,
+      delayed: s.forecast && s.forecast.delayed
+    };
+  } catch(e){
+    return { version: ADIF_VERSION, error: String(e) };
+  }
+}
+
+try {
+  if(typeof window !== "undefined"){
+    window.ADIF = {
+      version: ADIF_VERSION,
+      compute: adifCompute,
+      export: adifExport,
+      risks: adifRiskEngine,
+      forecast: adifForecastEngine
+    };
+  }
+} catch(e){}
+
+
+
 
 
 /** Helper for UI: disable write controls when not allowed */
@@ -10885,7 +11244,7 @@ function ensureProductionFramework(project, opts){
     systemsAll: systemsAll.length,
     systemsUsed: systems.length,
     phase: defaultPhase,
-    framework: "Phase13",
+    framework: "Phase14",
     packageCount: next.length
   };
   try { ensureTidpRowsForProject(project, { force: true }); } catch(e){ console.warn("TIDP seed", e); }
@@ -11132,7 +11491,7 @@ function renderProductionWbs(project){
 
   let htmlOut = "";
   htmlOut += '<div class="card" style="margin-bottom:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
-  htmlOut += '<div style="font-size:12px;font-weight:700;color:var(--purple-900);margin-bottom:6px;">Production WBS — Phase 13 (AIA)</div>';
+  htmlOut += '<div style="font-size:12px;font-weight:700;color:var(--purple-900);margin-bottom:6px;">Production WBS — Phase 14 (ADIF)</div>';
   if(metrics){
     htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;font-size:11px;">';
     htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f3f0f6;"><strong>Packages</strong> ' + packages.length + '</span>';
@@ -11222,6 +11581,20 @@ function renderProductionWbs(project){
       htmlOut += '</div>';
     }
   } catch(e){}
+  try {
+    var ad = (typeof productionAdifMetrics === "function") ? productionAdifMetrics(project) : null;
+    if(ad && !ad.error){
+      htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px;font-size:11px;">';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#fef3c7;"><strong>ADIF</strong> Project ' + (ad.projectReadiness != null ? ad.projectReadiness + "%" : "—") + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#ecfdf5;">Prod ' + (ad.production != null ? ad.production + "%" : "—") + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#eff6ff;">Dep ' + (ad.dependency != null ? ad.dependency + "%" : "—") + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f5f3ff;">IF ' + (ad.interfaces != null ? ad.interfaces + "%" : "—") + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#ecfeff;">MRI ' + (ad.mri != null ? ad.mri : "—") + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#fce7f3;">IRI ' + (ad.iri != null ? ad.iri + "%" : "—") + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#fee2e2;"><strong>Risks</strong> ' + (ad.risks||0) + ' · Delayed pkgs ' + (ad.delayed||0) + '</span>';
+      htmlOut += '</div>';
+    }
+  } catch(e){}
   htmlOut += '<div style="font-size:11px;color:#555;margin-bottom:8px;">FB groups are <strong>collapsed by default</strong>. Expand one FB, then one Ro. Scope is set under <strong>Settings → Functional</strong> and <strong>Spatial</strong> matrices. XX and EXISTING are excluded.</div>';
   if(typeof frrmMatrixSummaryHtml === "function"){
     htmlOut += '<details style="margin:8px 0;border:1px solid #e5e7eb;border-radius:8px;"><summary style="cursor:pointer;padding:8px 10px;font-size:12px;font-weight:600;">FRRM assignment map (Phase 4)</summary><div style="padding:0 8px 8px;">' + frrmMatrixSummaryHtml() + '</div></details>';
@@ -11231,6 +11604,7 @@ function renderProductionWbs(project){
   htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnExportAcdm">Export ACDM schema</button>';
   htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnExportPds">Export PDS SQL</button>';
   htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnExportAia">Export AIA API spec</button>';
+  htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnExportAdif">Export ADIF snapshot</button>';
   htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnCollapseAllFb">Collapse all</button>';
   htmlOut += '<span style="font-size:11px;color:#666;">' + packages.length + ' packages · ' + tree.length + ' FB</span>';
   htmlOut += '</div></div>';
@@ -11320,11 +11694,16 @@ function renderProductionWbs(project){
     btn.onclick = function(){
       try {
         if(typeof psmCan === "function"){
-          var gate = psmCan(project, { objectType: "production_package", action: "plan" });
+          var gate = psmCan(project, { objectType: "production_package", action: "resync" });
+          if(!gate.allowed) gate = psmCan(project, { objectType: "production_package", action: "plan" });
           if(!gate.allowed){
-            try { showToast("PSM denied: " + (gate.reason || "no permission") + " (" + (gate.role||"") + ")"); } catch(e){}
-            try { psmAudit(project, { action: "plan", objectType: "production_package", result: "denied", reason: gate.reason }); } catch(e){}
-            return;
+            var role = (typeof psmCurrentFunctionalRole === "function") ? psmCurrentFunctionalRole(project) : "";
+            // Enabling roles always allowed to rebuild production structure
+            if(["IM","DTL","PDM","DM"].indexOf(String(role).toUpperCase()) < 0){
+              try { showToast("PSM denied: " + (gate.reason || "no permission") + " (" + (gate.role||role||"") + ")"); } catch(e){}
+              try { psmAudit(project, { action: "resync", objectType: "production_package", result: "denied", reason: gate.reason }); } catch(e){}
+              return;
+            }
           }
         }
         var summary = (typeof arcRunProjectResync === "function")
@@ -11400,6 +11779,23 @@ function renderProductionWbs(project){
       } catch(err){
         console.error(err);
         try { showToast("AIA export failed"); } catch(e){}
+      }
+    };
+  }
+  const btnAdif = document.getElementById("btnExportAdif");
+  if(btnAdif){
+    btnAdif.onclick = function(){
+      try {
+        const snap = (typeof adifExport === "function") ? adifExport(project) : {};
+        const blob = new Blob([JSON.stringify(snap, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "Atana-ADIF-" + (project.code || project.id || "snapshot") + ".json";
+        a.click();
+        try { showToast("ADIF snapshot exported"); } catch(e){}
+      } catch(err){
+        console.error(err);
+        try { showToast("ADIF export failed"); } catch(e){}
       }
     };
   }
