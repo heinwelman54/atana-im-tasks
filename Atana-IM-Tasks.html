@@ -2324,8 +2324,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.7.0";
-const APP_BUILD = "2026-08-25-phase1-production";
+const APP_VERSION = "3.7.1";
+const APP_BUILD = "2026-08-25-uniclass-delivery-wbs";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -8184,35 +8184,54 @@ function wbsCodeForTask(stage, cat, sub, taskIdx){
   return s + "." + (cIdx < 0 ? 1 : cIdx + 1) + "." + (subIdx < 0 ? 1 : subIdx + 1) + "." + (taskIdx + 1);
 }
 function wbsCodeLookup(project){
-  // Hierarchical codes: stage.cat.sub.task[.child[.grandchild]]
-  // Parent "Setup project CDE" = 1.1.1.1 ; child = 1.1.1.1.1 (not another 4-segment peer)
+  /**
+   * Delivery WBS — Uniclass 2015 PM (Project management) classification.
+   * Format: {StageId}/{PM_code}.{sub}.{task}[.child…]
+   * Example: S5/PM_40_60.01.02.01
+   * Stage keeps process activities unique across work stages; PM is the classification spine.
+   * Production scope uses PP-{FB}-{Ss} (separate track).
+   */
   const map = {};
-  getHierarchy().forEach((stage, sIdx) => {
-    const s = sIdx + 1;
-    milestoneTaskDefs(stage.id).forEach((t, ti) => { map[t.id] = s + ".MS.1." + (ti + 1); });
-    stage.categories.forEach((cat, cIdx) => {
-      cat.subs.forEach((sub, subIdx) => {
-        const base = s + "." + (cIdx + 1) + "." + (subIdx + 1);
-        const assign = (tasks, prefix) => {
-          (tasks || []).forEach((t, i) => {
-            const code = prefix + "." + (i + 1);
-            map[t.id] = code;
-            if(t.children && t.children.length) assign(t.children, code);
+  let hier = [];
+  try {
+    if(project && typeof getProjectHierarchy === "function") hier = getProjectHierarchy(project);
+    else if(typeof getHierarchy === "function") hier = getHierarchy();
+  } catch(e){
+    try { hier = getHierarchy(); } catch(e2){ hier = []; }
+  }
+  (hier || []).forEach(function(stage){
+    const ws = String(stage.id || "S1").toUpperCase();
+    try {
+      (typeof milestoneTaskDefs === "function" ? milestoneTaskDefs(stage.id) : []).forEach(function(t, ti){
+        map[t.id] = ws + "/MS." + pad2(ti + 1);
+      });
+    } catch(e){}
+    (stage.categories || []).forEach(function(cat){
+      const pm = (typeof uniclassPmForCategory === "function") ? uniclassPmForCategory(cat) : ("PM_" + String(cat.num || "10"));
+      (cat.subs || []).forEach(function(sub, subIdx){
+        const subPath = pm + "." + pad2(subIdx + 1);
+        // Optional: expose subsection node code for UI headers
+        if(sub && sub.id) map[sub.id] = ws + "/" + subPath;
+        function assign(tasks, pathPrefix){
+          (tasks || []).forEach(function(t, i){
+            const path = pathPrefix + "." + pad2(i + 1);
+            map[t.id] = ws + "/" + path;
+            if(t.children && t.children.length) assign(t.children, path);
           });
-        };
-        // Use hierarchy tree (not flattened list) so depth is correct
-        assign(sub.tasks || [], base);
-        const custom = (project.customTasks || []).filter(c =>
-          c.stageId === stage.id && String(c.subNum) === String(sub.num)
-        );
-        custom.forEach((c, i) => {
-          map[c.id] = base + "." + ((sub.tasks || []).length + i + 1);
+        }
+        assign(sub.tasks || [], subPath);
+        const custom = ((project && project.customTasks) || []).filter(function(c){
+          return c.stageId === stage.id && String(c.subNum) === String(sub.num);
+        });
+        custom.forEach(function(c, i){
+          map[c.id] = ws + "/" + subPath + "." + pad2((sub.tasks || []).length + i + 1);
         });
       });
     });
   });
   return map;
 }
+
 /** Built-in + custom tasks for a subsection. */
 function projectSubTasks(project, stage, cat, sub){
   /** Flat list of all nodes (parents + leaves) with depth for rendering */
@@ -13659,8 +13678,41 @@ const UNICLASS_PM_MAP = {
   "3": { code: "PM_40", label: "Design and approvals information" },
   "4": { code: "PM_40", label: "Design and approvals information" },
   "5": { code: "PM_70", label: "Testing, commissioning and completion information" },
-  "6": { code: "PM_60", label: "Construction management information" }
+  "6": { code: "PM_60", label: "Construction management information" },
+  "7": { code: "PM_40_60", label: "Project information management information" },
+  "8": { code: "PM_40_60", label: "Design management" },
+  "9": { code: "PM_10", label: "Coordination" },
+  "10": { code: "PM_40", label: "Assurance" },
+  "11": { code: "PM_40_60", label: "Delivery" },
+  "12": { code: "PM_70", label: "Handover / completion information" }
 };
+
+/** Resolve Uniclass 2015 PM code for a delivery category. */
+function uniclassPmForCategory(cat){
+  if(!cat) return "PM_10";
+  if(cat.pmCode) return String(cat.pmCode).trim();
+  if(cat.uniclassPm) return String(cat.uniclassPm).trim();
+  const num = String(cat.num != null ? cat.num : "").trim();
+  if(typeof UNICLASS_PM_MAP !== "undefined" && UNICLASS_PM_MAP[num]) return UNICLASS_PM_MAP[num].code;
+  // Title heuristics (role packs / custom)
+  const title = String(cat.title || cat.name || "").toLowerCase();
+  if(/cde|common data/.test(title)) return "PM_40_60";
+  if(/delivery planning|information delivery|midp|tidp/.test(title)) return "PM_10";
+  if(/dpow|loin|plan of work/.test(title)) return "PM_40";
+  if(/iqa|quality assurance|qa\b/.test(title)) return "PM_70";
+  if(/vdc|coordination|clash/.test(title)) return "PM_60";
+  if(/leadership|assurance/.test(title)) return "PM_40_60";
+  if(/design management/.test(title)) return "PM_40_60";
+  if(/handover|close/.test(title)) return "PM_70";
+  if(num) return "PM_" + num.replace(/\D/g, "") || "PM_10";
+  return "PM_10";
+}
+
+function pad2(n){
+  n = Number(n) || 0;
+  return (n < 10 ? "0" : "") + n;
+}
+
 
 /* ===================== HOUR ESTIMATES ===================== */
 const DEFAULT_EST = 1.0;
