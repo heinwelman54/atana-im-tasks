@@ -2324,8 +2324,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.15.0";
-const APP_BUILD = "2026-08-25-phase9-arc";
+const APP_VERSION = "3.18.0";
+const APP_BUILD = "2026-08-25-phase12-pds";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -7863,6 +7863,7 @@ function normalizeProductionState(src, opts){
     arcRules: soft ? (Array.isArray(s.arcRules) ? s.arcRules : null) : (Array.isArray(s.arcRules) ? s.arcRules.map(normalizeAutomationRule).filter(Boolean) : null),
     arcEventHistory: soft ? (Array.isArray(s.arcEventHistory) ? s.arcEventHistory : []) : (Array.isArray(s.arcEventHistory) ? s.arcEventHistory.map(normalizeArcEvent).filter(Boolean) : []),
     arcAuditLog: soft ? (Array.isArray(s.arcAuditLog) ? s.arcAuditLog : []) : (Array.isArray(s.arcAuditLog) ? s.arcAuditLog.map(normalizeArcAudit).filter(Boolean) : []),
+    psmAuditLog: soft ? (Array.isArray(s.psmAuditLog) ? s.psmAuditLog : []) : (Array.isArray(s.psmAuditLog) ? s.psmAuditLog.slice() : []),
     lastSyncedAt: s.lastSyncedAt || null,
     autoSyncFromSettings: s.autoSyncFromSettings !== false,
     scope: {
@@ -9676,6 +9677,602 @@ function productionArcMetrics(project){
 }
 
 
+/* ===================== PHASE 10 — PSM =====================
+   Permissions, Security & Governance Engine
+   User → Task Team → Functional Role → Authority → Object → State
+   Users never get permissions directly.
+   ========================================================== */
+
+const PSM_AUTHORITIES = {
+  OWN: { code: "OWN", name: "Own", actions: ["plan", "close", "accountable"] },
+  AUT: { code: "AUT", name: "Author", actions: ["create", "modify", "submit"] },
+  VFY: { code: "VFY", name: "Verify", actions: ["verify", "validate", "coordinate"] },
+  RVW: { code: "RVW", name: "Review", actions: ["review", "comment", "recommend"] },
+  APR: { code: "APR", name: "Approve", actions: ["approve", "authorise", "accept"] },
+  PUB: { code: "PUB", name: "Publish", actions: ["publish"] },
+  TRN: { code: "TRN", name: "Transmit", actions: ["transmit", "exchange"] },
+  GOV: { code: "GOV", name: "Govern", actions: ["audit", "freeze", "escalate", "override"] }
+};
+
+/** Role → default authorities */
+const PSM_ROLE_AUTHORITIES = {
+  DTL:  ["GOV", "APR", "OWN"],
+  PDM:  ["GOV", "RVW"],
+  IM:   ["GOV", "VFY", "TRN"],
+  TTM:  ["OWN", "APR"],
+  TTIM: ["VFY", "TRN", "AUT"],
+  IA:   ["AUT"],
+  PR:   ["RVW"]
+};
+
+/**
+ * Object-type permission matrix: role → allowed actions (base, before state filter).
+ * objectType: production_package | tidp | model_package | interface | deliverable | information_package | exchange_event
+ */
+const PSM_OBJECT_MATRIX = {
+  production_package: {
+    TTM:  ["read", "plan", "approve", "close"],
+    TTIM: ["read", "verify", "coordinate", "validate"],
+    IA:   ["read", "create", "modify", "submit"],
+    PR:   ["read", "review", "comment"],
+    IM:   ["read", "audit", "freeze", "escalate"],
+    PDM:  ["read", "monitor"],
+    DTL:  ["read", "override", "approve"]
+  },
+  tidp: {
+    IA:   ["read", "create", "update", "submit"],
+    TTIM: ["read", "verify"],
+    PR:   ["read", "review"],
+    TTM:  ["read", "approve", "close"],
+    IM:   ["read", "audit"]
+  },
+  model_package: {
+    IA:   ["read", "sync", "update", "author"],
+    TTIM: ["read", "validate", "verify", "coordinate"],
+    PR:   ["read", "review"],
+    TTM:  ["read", "accept", "approve"],
+    IM:   ["read", "audit", "govern"]
+  },
+  interface: {
+    TTM:  ["read", "own"],
+    TTIM: ["read", "coordinate", "verify"],
+    IA:   ["read", "resolve"],
+    PR:   ["read", "review"],
+    IM:   ["read", "audit"]
+  },
+  deliverable: {
+    IA:   ["read", "create", "modify", "submit"],
+    TTIM: ["read", "verify"],
+    PR:   ["read", "review"],
+    TTM:  ["read", "approve"]
+  },
+  information_package: {
+    TTIM: ["read", "create", "assemble", "validate", "share"],
+    TTM:  ["read", "approve"],
+    IM:   ["read", "govern", "audit"],
+    PDM:  ["read", "monitor"],
+    IA:   ["read"]
+  },
+  exchange_event: {
+    TTIM: ["read", "create", "transmit"],
+    IM:   ["read", "audit"],
+    PDM:  ["read", "monitor"]
+  }
+};
+
+/**
+ * State-based filter: WIP / SHARED / PUBLISHED
+ * Returns true if action is allowed in this information state for the role.
+ */
+function psmStateAllows(role, action, infoState){
+  const st = String(infoState || "WIP").toUpperCase();
+  const act = String(action || "").toLowerCase();
+  const r = String(role || "").toUpperCase();
+
+  if(st === "PUBLISHED" || st === "PUBLISHED (CONTRACTUAL)"){
+    // Immutable — read only; changes need new revision
+    if(act === "read" || act === "audit" || act === "monitor") return true;
+    if(act === "override" && (r === "DTL" || r === "IM")) return true;
+    return false;
+  }
+  if(st === "SHARED"){
+    if(r === "IA"){
+      // Read only unless recall (not implemented as write)
+      return act === "read" || act === "comment";
+    }
+    if(r === "TTIM") return ["read", "validate", "share", "assemble", "create", "transmit", "verify", "coordinate"].indexOf(act) >= 0;
+    if(r === "TTM") return ["read", "approve", "close", "own"].indexOf(act) >= 0;
+    if(r === "IM") return true;
+    if(r === "PR") return act === "read" || act === "review" || act === "comment";
+    return act === "read";
+  }
+  // WIP default
+  if(r === "IA") return ["read", "create", "modify", "update", "submit", "sync", "author", "resolve"].indexOf(act) >= 0 || act === "read";
+  if(r === "TTIM") return true;
+  if(r === "TTM") return true;
+  if(r === "PR") return ["read", "review", "comment"].indexOf(act) >= 0;
+  if(r === "IM" || r === "DTL" || r === "PDM") return true;
+  return act === "read";
+}
+
+function psmCurrentFunctionalRole(project){
+  try {
+    if(typeof window !== "undefined" && window.__activeFuncRole) return String(window.__activeFuncRole).toUpperCase();
+  } catch(e){}
+  try {
+    if(project && project.activeFunctionalRole) return String(project.activeFunctionalRole).toUpperCase();
+  } catch(e){}
+  // From who-am-i / organogram if present
+  try {
+    if(project && project.currentUserRole) return String(project.currentUserRole).toUpperCase();
+  } catch(e){}
+  return "IM"; // default governance view for IM-centric app
+}
+
+function psmCurrentTaskTeam(project){
+  try {
+    if(project && project.activeTaskTeam) return String(project.activeTaskTeam).toUpperCase();
+  } catch(e){}
+  try {
+    if(typeof window !== "undefined" && window.__activeTaskTeam) return String(window.__activeTaskTeam).toUpperCase();
+  } catch(e){}
+  return "";
+}
+
+/**
+ * Core permission check.
+ * psmCan(project, { objectType, action, objectRo, infoState })
+ */
+function psmCan(project, opts){
+  opts = opts || {};
+  const role = String(opts.role || psmCurrentFunctionalRole(project)).toUpperCase();
+  const objectType = String(opts.objectType || "").toLowerCase();
+  const action = String(opts.action || "read").toLowerCase();
+  const objectRo = String(opts.objectRo || "").toUpperCase();
+  const infoState = opts.infoState || "WIP";
+  const userTeam = psmCurrentTaskTeam(project);
+
+  // Object-based: if object has Ro and user has a task team, must match (unless enabling role)
+  const enabling = ["IM", "PDM", "DTL", "DM"].indexOf(role) >= 0;
+  if(objectRo && userTeam && !enabling && objectRo !== userTeam){
+    // Cross-discipline write denied; read may still be allowed for coordination roles
+    if(action !== "read" && action !== "monitor" && action !== "audit"){
+      return { allowed: false, reason: "object_team_mismatch", role: role, action: action };
+    }
+  }
+
+  const matrix = PSM_OBJECT_MATRIX[objectType];
+  if(!matrix){
+    // Unknown object — read-only for everyone, full for GOV roles
+    if(action === "read") return { allowed: true, reason: "default_read", role: role };
+    if(enabling) return { allowed: true, reason: "governance", role: role };
+    return { allowed: false, reason: "unknown_object", role: role };
+  }
+
+  const allowedActs = matrix[role] || (enabling ? ["read", "audit"] : ["read"]);
+  if(allowedActs.indexOf(action) < 0 && allowedActs.indexOf("*") < 0){
+    // map authority aliases
+    const auth = PSM_ROLE_AUTHORITIES[role] || [];
+    const authOk =
+      (action === "approve" && auth.indexOf("APR") >= 0) ||
+      (action === "publish" && auth.indexOf("PUB") >= 0) ||
+      (action === "audit" && auth.indexOf("GOV") >= 0);
+    if(!authOk){
+      return { allowed: false, reason: "role_matrix", role: role, action: action };
+    }
+  }
+
+  if(!psmStateAllows(role, action, infoState)){
+    return { allowed: false, reason: "state_policy", role: role, action: action, state: infoState };
+  }
+
+  return { allowed: true, reason: "ok", role: role, action: action };
+}
+
+function psmAssert(project, opts){
+  const result = psmCan(project, opts);
+  if(!result.allowed){
+    try {
+      psmAudit(project, {
+        action: opts.action || "unknown",
+        objectType: opts.objectType || "",
+        result: "denied",
+        reason: result.reason || "",
+        role: result.role || ""
+      });
+    } catch(e){}
+  }
+  return result;
+}
+
+function psmAudit(project, entry){
+  if(!project) return;
+  if(!project.production) project.production = normalizeProductionState(null);
+  if(!Array.isArray(project.production.psmAuditLog)) project.production.psmAuditLog = [];
+  const role = psmCurrentFunctionalRole(project);
+  project.production.psmAuditLog.push({
+    id: "PSM-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
+    at: Date.now(),
+    projectId: project.id || "",
+    user: String(entry.user || project.currentUserName || "session"),
+    role: String(entry.role || role),
+    objectType: String(entry.objectType || ""),
+    objectId: String(entry.objectId || ""),
+    action: String(entry.action || ""),
+    previousState: String(entry.previousState || ""),
+    newState: String(entry.newState || ""),
+    result: String(entry.result || "ok"),
+    reason: String(entry.reason || "")
+  });
+  if(project.production.psmAuditLog.length > 400){
+    project.production.psmAuditLog = project.production.psmAuditLog.slice(-400);
+  }
+}
+
+/** Governance actions reserved for IM / DTL */
+function psmCanGovern(project, action){
+  const role = psmCurrentFunctionalRole(project);
+  if(role === "IM" && ["audit", "freeze", "escalate", "flag"].indexOf(action) >= 0) return true;
+  if(role === "DTL" && ["override", "exception", "stage_gate"].indexOf(action) >= 0) return true;
+  if(role === "IM" && action === "audit") return true;
+  return psmCan(project, { objectType: "information_package", action: action === "freeze" ? "govern" : "audit" }).allowed;
+}
+
+function productionPsmMetrics(project){
+  const role = psmCurrentFunctionalRole(project);
+  const auths = PSM_ROLE_AUTHORITIES[role] || [];
+  const log = (project.production && project.production.psmAuditLog) || [];
+  const denied = log.filter(function(x){ return x.result === "denied"; }).length;
+  return {
+    activeRole: role,
+    authorities: auths.slice(),
+    audit: log.length,
+    denied: denied,
+    taskTeam: psmCurrentTaskTeam(project) || "—"
+  };
+}
+
+
+/* ===================== PHASE 11 — ACDM =====================
+   Atana Canonical Data Model
+   Logical blueprint: PK, natural key, lifecycle, owner, relationships.
+   Source of truth chain: FB + Ss → PP → TR → MP → MO → DEL → IP → EX
+   ========================================================== */
+
+const ACDM_VERSION = "1.0";
+
+/**
+ * Canonical entity definitions (logical schema — not physical tables yet).
+ * Each entity: pk, naturalKey, fks, attributes, owner, lifecycle, tier
+ */
+const ACDM_ENTITIES = {
+  /* Tier 1 — Reference */
+  Project: {
+    tier: 1, pk: "Project_ID", naturalKey: ["Project_Number"],
+    attributes: ["Project_Name", "Status", "Originator", "Client"],
+    owner: "Organisation", lifecycle: ["active", "closed"]
+  },
+  FunctionalBreakdown: {
+    tier: 1, pk: "FB_ID", naturalKey: ["Project_ID", "FB_Code"],
+    fks: ["Project_ID"], attributes: ["FB_Code", "FB_Name", "FB_Type"],
+    owner: "Project", lifecycle: ["active"]
+  },
+  System: {
+    tier: 1, pk: "SS_ID", naturalKey: ["Ss_Code"],
+    attributes: ["Ss_Code", "Ss_Name", "Description"],
+    owner: "Reference", lifecycle: ["active"]
+  },
+  SpatialBreakdown: {
+    tier: 1, pk: "SL_ID", naturalKey: ["Project_ID", "SL_Code"],
+    fks: ["Project_ID"], attributes: ["SL_Code", "SL_Name"],
+    owner: "Project", lifecycle: ["active"]
+  },
+  Product: {
+    tier: 1, pk: "PR_ID", naturalKey: ["Pr_Code"],
+    attributes: ["Pr_Code", "Pr_Name"], owner: "Reference", lifecycle: ["active"]
+  },
+  ElementFunction: {
+    tier: 1, pk: "EF_ID", naturalKey: ["EF_Code"],
+    attributes: ["EF_Code", "EF_Name"], owner: "Reference", lifecycle: ["active"]
+  },
+  FormOfInformation: {
+    tier: 1, pk: "FI_ID", naturalKey: ["FI_Code"],
+    attributes: ["FI_Code", "FI_Name"], owner: "Reference", lifecycle: ["active"]
+  },
+  /* Tier 2 — Governance */
+  TaskTeam: {
+    tier: 2, pk: "RO_ID", naturalKey: ["RO_Code"],
+    attributes: ["RO_Code", "RO_Name"], owner: "Project", lifecycle: ["active"]
+  },
+  FunctionalRole: {
+    tier: 2, pk: "FR_ID", naturalKey: ["Role_Code"],
+    attributes: ["Role_Code", "Role_Name"], owner: "Reference", lifecycle: ["active"]
+  },
+  Authority: {
+    tier: 2, pk: "AUTH_ID", naturalKey: ["Authority_Code"],
+    attributes: ["Authority_Code", "Authority_Name"], owner: "Reference", lifecycle: ["active"]
+  },
+  /* Tier 3 — Production */
+  ProductionPackage: {
+    tier: 3, pk: "PP_ID", naturalKey: ["FB_Code", "Ss_Code"],
+    fks: ["FB_ID", "SS_ID", "RO_ID"],
+    attributes: ["Status", "Current_LOD", "Current_LOI", "Target_LOD", "Target_LOI"],
+    owner: "TTM", lifecycle: ["not_started", "in_progress", "loin_ready", "approved"]
+  },
+  ProductionPackageWorkstage: {
+    tier: 3, pk: "PPWS_ID", naturalKey: ["PP_ID", "Workstage"],
+    fks: ["PP_ID"], attributes: ["Target_LOD", "Target_LOI", "Documentation_Need"],
+    owner: "TTM", lifecycle: ["planned", "active", "closed"]
+  },
+  TidpRow: {
+    tier: 3, pk: "TR_ID", naturalKey: ["TR_ID"],
+    fks: ["PP_ID", "AIR_ID"], attributes: ["Workstage", "Activity", "Status", "FuncRole", "Authority"],
+    owner: "FunctionalRole", lifecycle: ["created", "assigned", "in_progress", "submitted", "verified", "reviewed", "approved", "closed"]
+  },
+  Activity: {
+    tier: 3, pk: "ACT_ID", naturalKey: ["Activity_Code"],
+    attributes: ["Activity_Code", "Activity_Name", "Activity_Category"],
+    owner: "Reference", lifecycle: ["active"]
+  },
+  /* Tier 4 — Dependency & Interface */
+  Dependency: {
+    tier: 4, pk: "DEP_ID", naturalKey: ["Source_PP", "Target_PP", "Dependency_Type"],
+    fks: ["Source_PP", "Target_PP"], attributes: ["Required_LOD", "Required_LOI", "Dependency_Strength", "Status"],
+    owner: "System", lifecycle: ["active", "satisfied", "waived"]
+  },
+  InterfaceObject: {
+    tier: 4, pk: "IF_ID", naturalKey: ["Source_PP", "Target_PP", "Interface_Type"],
+    fks: ["Source_PP", "Target_PP", "Owner_PP"], attributes: ["Status", "Readiness", "Required_LOD", "Required_LOI"],
+    owner: "Consumer_TTM", lifecycle: ["IFS00", "IFS10", "IFS20", "IFS30", "IFS40", "IFS50", "IFS60"]
+  },
+  InterfaceIssue: {
+    tier: 4, pk: "ISS_ID", naturalKey: ["ISS_ID"],
+    fks: ["IF_ID"], attributes: ["Issue_Type", "Status", "Priority"],
+    owner: "InterfaceOwner", lifecycle: ["open", "resolved", "closed"]
+  },
+  /* Tier 5 — Model */
+  ModelPackage: {
+    tier: 5, pk: "MP_ID", naturalKey: ["PP_ID"],
+    fks: ["PP_ID"], attributes: ["Current_LOD", "Current_LOI", "MRI", "Verification_Status"],
+    owner: "Ro", lifecycle: ["pending", "pass", "warning", "fail"]
+  },
+  ModelObject: {
+    tier: 5, pk: "MO_ID", naturalKey: ["Source_System", "External_ID"],
+    fks: ["MP_ID", "FB_ID", "SS_ID", "PR_ID", "EF_ID"],
+    attributes: ["Source_System", "External_ID", "Workstage", "Revision"],
+    owner: "IA", lifecycle: ["active", "superseded"]
+  },
+  VerificationRecord: {
+    tier: 5, pk: "VR_ID", naturalKey: ["VR_ID"],
+    fks: ["MP_ID"], attributes: ["Verification_Type", "Result", "Verifier", "Date"],
+    owner: "TTIM", lifecycle: ["pending", "pass", "fail"]
+  },
+  /* Tier 6 — Information */
+  Deliverable: {
+    tier: 6, pk: "DEL_ID", naturalKey: ["Container_Name", "Revision"],
+    fks: ["FI_ID", "SL_ID"], attributes: ["Suitability", "State", "Revision"],
+    owner: "IA", lifecycle: ["WIP", "SHARED", "PUBLISHED", "ARCHIVED"]
+  },
+  DeliverableProductionLink: {
+    tier: 6, pk: "DPL_ID", naturalKey: ["DEL_ID", "PP_ID"],
+    fks: ["DEL_ID", "PP_ID"], attributes: [],
+    owner: "System", lifecycle: ["active"]
+  },
+  InformationPackage: {
+    tier: 6, pk: "IP_ID", naturalKey: ["Workstage", "FB_Code", "RO_Code"],
+    fks: ["FB_ID", "RO_ID"], attributes: ["State", "Suitability", "Revision", "IRI"],
+    owner: "TTIM", lifecycle: ["IPS00", "IPS10", "IPS20", "IPS30", "IPS40", "IPS50"]
+  },
+  InformationPackageMembership: {
+    tier: 6, pk: "IPM_ID", naturalKey: ["IP_ID", "DEL_ID"],
+    fks: ["IP_ID", "DEL_ID"], attributes: [],
+    owner: "System", lifecycle: ["active"]
+  },
+  ExchangeEvent: {
+    tier: 6, pk: "EX_ID", naturalKey: ["EX_ID"],
+    fks: ["IP_ID"], attributes: ["Sender", "Recipient", "Date", "Purpose"],
+    owner: "TTIM", lifecycle: ["recorded"]
+  },
+  /* Tier 7 — AIR & LOIN */
+  AirRequirement: {
+    tier: 7, pk: "AIR_ID", naturalKey: ["AIR_Type"],
+    attributes: ["AIR_Type", "Description"], owner: "IM", lifecycle: ["active"]
+  },
+  LoinRequirement: {
+    tier: 7, pk: "LOIN_ID", naturalKey: ["Workstage", "Target_LOD", "Target_LOI"],
+    attributes: ["Workstage", "Target_LOD", "Target_LOI", "Documentation_Need"],
+    owner: "IM", lifecycle: ["active"]
+  },
+  /* Tier 8 — Automation */
+  ArcEvent: {
+    tier: 8, pk: "EV_ID", naturalKey: ["EV_ID"],
+    attributes: ["Event_Type", "Object_Type", "Object_ID", "Timestamp"],
+    owner: "System", lifecycle: ["recorded"]
+  },
+  AutomationRule: {
+    tier: 8, pk: "RULE_ID", naturalKey: ["RULE_ID"],
+    attributes: ["Trigger", "Condition", "Action", "Enabled"],
+    owner: "System", lifecycle: ["active", "disabled"]
+  },
+  /* Tier 9 — Security */
+  UserAssignment: {
+    tier: 9, pk: "UA_ID", naturalKey: ["USER_ID", "RO_ID", "FR_ID"],
+    fks: ["USER_ID", "RO_ID", "FR_ID"], attributes: [],
+    owner: "IM", lifecycle: ["active"]
+  },
+  ObjectPermission: {
+    tier: 9, pk: "PERM_ID", naturalKey: ["Object_Type", "Authority", "Role"],
+    attributes: ["Object_Type", "Authority", "Role"],
+    owner: "System", lifecycle: ["active"]
+  },
+  /* Tier 10 — Metrics */
+  ReadinessRecord: {
+    tier: 10, pk: "READY_ID", naturalKey: ["PP_ID"],
+    fks: ["PP_ID"], attributes: ["Production_Readiness", "Dependency_Readiness", "Interface_Readiness", "LOIN_Readiness"],
+    owner: "System", lifecycle: ["current"]
+  }
+};
+
+/** Backbone relationship edges for documentation / export */
+const ACDM_BACKBONE = [
+  ["Project", "FunctionalBreakdown"],
+  ["FunctionalBreakdown", "ProductionPackage"],
+  ["System", "ProductionPackage"],
+  ["ProductionPackage", "TidpRow"],
+  ["ProductionPackage", "ModelPackage"],
+  ["ModelPackage", "ModelObject"],
+  ["ProductionPackage", "Dependency"],
+  ["ProductionPackage", "InterfaceObject"],
+  ["Deliverable", "DeliverableProductionLink"],
+  ["ProductionPackage", "DeliverableProductionLink"],
+  ["Deliverable", "InformationPackageMembership"],
+  ["InformationPackage", "InformationPackageMembership"],
+  ["InformationPackage", "ExchangeEvent"]
+];
+
+function acdmEntityList(){
+  return Object.keys(ACDM_ENTITIES).map(function(name){
+    return Object.assign({ name: name }, ACDM_ENTITIES[name]);
+  });
+}
+
+/** Map runtime project.production into ACDM instance counts (snapshot). */
+function acdmProjectSnapshot(project){
+  const p = project || {};
+  const prod = p.production || {};
+  const cat = p.midpCatalog || {};
+  return {
+    acdmVersion: ACDM_VERSION,
+    projectId: p.id || "",
+    projectNumber: p.code || p.projectNumber || "",
+    counts: {
+      Project: 1,
+      FunctionalBreakdown: ((cat.functionalList) || []).length,
+      System: (typeof flattenSsThirdGroup === "function" ? flattenSsThirdGroup().length : 0),
+      SpatialBreakdown: ((cat.levels) || []).length,
+      TaskTeam: ((cat.roles) || []).length,
+      ProductionPackage: (prod.packages || []).length,
+      TidpRow: (prod.tidpRows || []).length,
+      Dependency: (prod.dependencies || []).length,
+      InterfaceObject: (prod.interfaces || []).length,
+      InterfaceIssue: (prod.interfaceIssues || []).length,
+      ModelPackage: (prod.modelPackages || []).length,
+      ModelObject: (prod.modelObjects || []).length,
+      InformationPackage: (prod.informationPackages || []).length,
+      ExchangeEvent: (prod.exchangeEvents || []).length,
+      AutomationRule: (prod.arcRules || []).length,
+      ArcEvent: (prod.arcEventHistory || []).length,
+      SearchSet: (prod.searchSets || []).length,
+      ClashRule: (prod.clashRules || []).length
+    },
+    backbone: ACDM_BACKBONE.slice(),
+    naturalKeys: {
+      ProductionPackage: "FB + Ss",
+      ModelPackage: "PP_ID",
+      InformationPackage: "Workstage + FB + Ro",
+      TidpRow: "TR_ID (persistent)"
+    }
+  };
+}
+
+function acdmExportSchema(){
+  return {
+    version: ACDM_VERSION,
+    entities: ACDM_ENTITIES,
+    backbone: ACDM_BACKBONE,
+    principles: [
+      "Every object has PK, natural key, lifecycle, owner, relationships",
+      "No object duplicates another object's responsibility",
+      "Everything traces back to FB + Ss"
+    ],
+    responsibilities: {
+      ProductionPackage: "Scope",
+      TidpRow: "Requirement",
+      ModelPackage: "Model Scope",
+      Deliverable: "Information Object",
+      InformationPackage: "Exchange Container",
+      ExchangeEvent: "Transmission record (not a state)"
+    }
+  };
+}
+
+function productionAcdmMetrics(project){
+  const snap = acdmProjectSnapshot(project);
+  const c = snap.counts || {};
+  return {
+    entitiesDefined: Object.keys(ACDM_ENTITIES).length,
+    packages: c.ProductionPackage || 0,
+    tidp: c.TidpRow || 0,
+    modelPackages: c.ModelPackage || 0,
+    infoPackages: c.InformationPackage || 0,
+    deps: c.Dependency || 0,
+    interfaces: c.InterfaceObject || 0,
+    version: ACDM_VERSION
+  };
+}
+
+/** Attach ACDM export to window for tooling / future API */
+try {
+  if(typeof window !== "undefined"){
+    window.ACDM = {
+      version: ACDM_VERSION,
+      entities: ACDM_ENTITIES,
+      backbone: ACDM_BACKBONE,
+      snapshot: acdmProjectSnapshot,
+      exportSchema: acdmExportSchema
+    };
+  }
+} catch(e){}
+
+
+/* ===================== PHASE 12 — PDS =====================
+   Physical Database Schema (PostgreSQL)
+   Logical ACDM → tables, FKs, unique (FB+Ss), indexes
+   ========================================================== */
+
+const PDS_VERSION = "1.0";
+const PDS_POSTGRES_DDL = "\n-- Atana Physical Database Schema (PDS) v1.0\n-- Target: PostgreSQL 14+\n-- Source: ACDM Phase 11 \u2192 PDS Phase 12\n-- Principle: Production Package = FB + Ss (unique). Workstages are maturity rows, not new packages.\n\nCREATE EXTENSION IF NOT EXISTS \"pgcrypto\";\n\n-- ========== ENUMERATIONS ==========\nDO $$ BEGIN\n  CREATE TYPE atana_info_state AS ENUM ('WIP','SHARED','PUBLISHED','ARCHIVED');\nEXCEPTION WHEN duplicate_object THEN NULL; END $$;\n\nDO $$ BEGIN\n  CREATE TYPE atana_dep_strength AS ENUM ('C','M','m');\nEXCEPTION WHEN duplicate_object THEN NULL; END $$;\n\nDO $$ BEGIN\n  CREATE TYPE atana_verification_result AS ENUM ('pending','pass','warning','fail');\nEXCEPTION WHEN duplicate_object THEN NULL; END $$;\n\n-- ========== DOMAIN 1: REFERENCE ==========\nCREATE TABLE IF NOT EXISTS projects (\n  project_id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  project_number    TEXT NOT NULL,\n  project_name      TEXT NOT NULL,\n  status            TEXT NOT NULL DEFAULT 'active',\n  originator        TEXT,\n  client_name       TEXT,\n  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),\n  UNIQUE (project_number)\n);\n\nCREATE TABLE IF NOT EXISTS functional_breakdowns (\n  fb_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  project_id        UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,\n  fb_code           TEXT NOT NULL,\n  fb_name           TEXT NOT NULL,\n  fb_type           TEXT,\n  UNIQUE (project_id, fb_code)\n);\nCREATE INDEX IF NOT EXISTS ix_fb_project ON functional_breakdowns(project_id);\n\nCREATE TABLE IF NOT EXISTS systems (\n  ss_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  ss_code           TEXT NOT NULL UNIQUE,\n  ss_name           TEXT NOT NULL,\n  description       TEXT\n);\n\nCREATE TABLE IF NOT EXISTS spatial_breakdowns (\n  sl_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  project_id        UUID REFERENCES projects(project_id) ON DELETE CASCADE,\n  sl_code           TEXT NOT NULL,\n  sl_name           TEXT NOT NULL,\n  UNIQUE (project_id, sl_code)\n);\n\nCREATE TABLE IF NOT EXISTS products (\n  pr_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  pr_code           TEXT NOT NULL UNIQUE,\n  pr_name           TEXT NOT NULL\n);\n\nCREATE TABLE IF NOT EXISTS elements_functions (\n  ef_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  ef_code           TEXT NOT NULL UNIQUE,\n  ef_name           TEXT NOT NULL\n);\n\nCREATE TABLE IF NOT EXISTS forms_of_information (\n  fi_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  fi_code           TEXT NOT NULL UNIQUE,\n  fi_name           TEXT NOT NULL\n);\n\n-- ========== DOMAIN 2: GOVERNANCE ==========\nCREATE TABLE IF NOT EXISTS task_teams (\n  ro_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  project_id        UUID REFERENCES projects(project_id) ON DELETE CASCADE,\n  ro_code           TEXT NOT NULL,\n  ro_name           TEXT NOT NULL,\n  UNIQUE (project_id, ro_code)\n);\n\nCREATE TABLE IF NOT EXISTS functional_roles (\n  fr_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  role_code         TEXT NOT NULL UNIQUE,\n  role_name         TEXT NOT NULL\n);\n\nCREATE TABLE IF NOT EXISTS authorities (\n  auth_id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  authority_code    TEXT NOT NULL UNIQUE,\n  authority_name    TEXT NOT NULL\n);\n\n-- ========== DOMAIN 3: PRODUCTION ==========\nCREATE TABLE IF NOT EXISTS production_packages (\n  pp_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  project_id        UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,\n  fb_id             UUID NOT NULL REFERENCES functional_breakdowns(fb_id),\n  ss_id             UUID NOT NULL REFERENCES systems(ss_id),\n  ro_id             UUID REFERENCES task_teams(ro_id),\n  status            TEXT NOT NULL DEFAULT 'not_started',\n  current_lod       TEXT,\n  current_loi       TEXT,\n  target_lod        TEXT,\n  target_loi        TEXT,\n  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),\n  closed_at         TIMESTAMPTZ,\n  UNIQUE (fb_id, ss_id)\n);\nCREATE INDEX IF NOT EXISTS ix_pp_fb ON production_packages(fb_id);\nCREATE INDEX IF NOT EXISTS ix_pp_ss ON production_packages(ss_id);\nCREATE INDEX IF NOT EXISTS ix_pp_project ON production_packages(project_id);\n\nCREATE TABLE IF NOT EXISTS production_package_workstages (\n  ppws_id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  pp_id             UUID NOT NULL REFERENCES production_packages(pp_id) ON DELETE CASCADE,\n  workstage         TEXT NOT NULL,\n  target_lod        TEXT,\n  target_loi        TEXT,\n  documentation_need TEXT,\n  status            TEXT NOT NULL DEFAULT 'planned',\n  UNIQUE (pp_id, workstage)\n);\n\n-- ========== DOMAIN 4: TIDP ==========\nCREATE TABLE IF NOT EXISTS activities (\n  act_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  activity_code     TEXT NOT NULL UNIQUE,\n  activity_name     TEXT NOT NULL,\n  activity_category TEXT\n);\n\nCREATE TABLE IF NOT EXISTS air_requirements (\n  air_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  air_code          TEXT,\n  air_type          TEXT NOT NULL,\n  description       TEXT\n);\n\nCREATE TABLE IF NOT EXISTS tidp_rows (\n  tr_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  pp_id             UUID NOT NULL REFERENCES production_packages(pp_id) ON DELETE CASCADE,\n  ppws_id           UUID REFERENCES production_package_workstages(ppws_id),\n  act_id            UUID REFERENCES activities(act_id),\n  air_id            UUID REFERENCES air_requirements(air_id),\n  workstage         TEXT,\n  status            TEXT NOT NULL DEFAULT 'created',\n  func_role         TEXT,\n  authority         TEXT,\n  baseline_start    DATE,\n  baseline_finish   DATE,\n  forecast_start    DATE,\n  forecast_finish   DATE,\n  actual_start      DATE,\n  actual_finish     DATE\n);\nCREATE INDEX IF NOT EXISTS ix_tr_pp ON tidp_rows(pp_id);\n\n-- ========== DOMAIN 5: DEPENDENCIES ==========\nCREATE TABLE IF NOT EXISTS dependencies (\n  dep_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  source_pp_id      UUID NOT NULL REFERENCES production_packages(pp_id) ON DELETE CASCADE,\n  target_pp_id      UUID NOT NULL REFERENCES production_packages(pp_id) ON DELETE CASCADE,\n  dependency_type   TEXT NOT NULL,\n  dependency_strength TEXT NOT NULL DEFAULT 'C',\n  required_lod      TEXT,\n  required_loi      TEXT,\n  status            TEXT NOT NULL DEFAULT 'active',\n  UNIQUE (source_pp_id, target_pp_id, dependency_type)\n);\nCREATE INDEX IF NOT EXISTS ix_dep_pair ON dependencies(source_pp_id, target_pp_id);\n\nCREATE TABLE IF NOT EXISTS dependency_readiness (\n  dep_ready_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  dep_id            UUID NOT NULL REFERENCES dependencies(dep_id) ON DELETE CASCADE,\n  readiness         TEXT NOT NULL,\n  calculated_at     TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\n-- ========== DOMAIN 6: INTERFACES ==========\nCREATE TABLE IF NOT EXISTS interface_objects (\n  if_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  source_pp_id      UUID NOT NULL REFERENCES production_packages(pp_id) ON DELETE CASCADE,\n  target_pp_id      UUID NOT NULL REFERENCES production_packages(pp_id) ON DELETE CASCADE,\n  interface_type    TEXT NOT NULL,\n  owner_pp_id       UUID REFERENCES production_packages(pp_id),\n  status            TEXT NOT NULL DEFAULT 'IFS00',\n  readiness         TEXT NOT NULL DEFAULT 'IR0',\n  required_lod      TEXT,\n  required_loi      TEXT\n);\nCREATE INDEX IF NOT EXISTS ix_if_pair ON interface_objects(source_pp_id, target_pp_id);\n\nCREATE TABLE IF NOT EXISTS interface_issues (\n  iss_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  if_id             UUID NOT NULL REFERENCES interface_objects(if_id) ON DELETE CASCADE,\n  title             TEXT NOT NULL,\n  description       TEXT,\n  priority          TEXT,\n  status            TEXT NOT NULL DEFAULT 'open'\n);\nCREATE INDEX IF NOT EXISTS ix_iss_if ON interface_issues(if_id);\n\nCREATE TABLE IF NOT EXISTS interface_packages (\n  ifp_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  name              TEXT NOT NULL,\n  description       TEXT\n);\n\nCREATE TABLE IF NOT EXISTS interface_package_members (\n  ifpm_id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  ifp_id            UUID NOT NULL REFERENCES interface_packages(ifp_id) ON DELETE CASCADE,\n  if_id             UUID NOT NULL REFERENCES interface_objects(if_id) ON DELETE CASCADE,\n  UNIQUE (ifp_id, if_id)\n);\n\n-- ========== DOMAIN 7: MODELS ==========\nCREATE TABLE IF NOT EXISTS model_packages (\n  mp_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  pp_id             UUID NOT NULL UNIQUE REFERENCES production_packages(pp_id) ON DELETE CASCADE,\n  current_lod       TEXT,\n  current_loi       TEXT,\n  mri               NUMERIC(5,2),\n  verification_status TEXT DEFAULT 'pending'\n);\n\nCREATE TABLE IF NOT EXISTS model_objects (\n  mo_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  mp_id             UUID NOT NULL REFERENCES model_packages(mp_id) ON DELETE CASCADE,\n  external_id       TEXT NOT NULL,\n  source_system     TEXT NOT NULL,\n  fb_id             UUID REFERENCES functional_breakdowns(fb_id),\n  ss_id             UUID REFERENCES systems(ss_id),\n  pr_id             UUID REFERENCES products(pr_id),\n  ef_id             UUID REFERENCES elements_functions(ef_id),\n  last_sync         TIMESTAMPTZ,\n  UNIQUE (source_system, external_id)\n);\nCREATE INDEX IF NOT EXISTS ix_mo_mp ON model_objects(mp_id);\n\nCREATE TABLE IF NOT EXISTS verification_records (\n  vr_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  mp_id             UUID NOT NULL REFERENCES model_packages(mp_id) ON DELETE CASCADE,\n  verification_type TEXT NOT NULL,\n  result            TEXT NOT NULL DEFAULT 'pending',\n  verifier          TEXT,\n  checked_at        TIMESTAMPTZ DEFAULT now()\n);\n\nCREATE TABLE IF NOT EXISTS search_sets (\n  search_set_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  mp_id             UUID REFERENCES model_packages(mp_id) ON DELETE CASCADE,\n  name              TEXT NOT NULL,\n  fb_code           TEXT,\n  ss_code           TEXT,\n  filter_expr       TEXT\n);\n\nCREATE TABLE IF NOT EXISTS clash_rules (\n  clash_rule_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  if_id             UUID REFERENCES interface_objects(if_id) ON DELETE SET NULL,\n  name              TEXT NOT NULL,\n  search_set_a      UUID REFERENCES search_sets(search_set_id),\n  search_set_b      UUID REFERENCES search_sets(search_set_id),\n  status            TEXT DEFAULT 'defined'\n);\n\n-- ========== DOMAIN 8: INFORMATION ==========\nCREATE TABLE IF NOT EXISTS deliverables (\n  del_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  project_id        UUID REFERENCES projects(project_id) ON DELETE CASCADE,\n  container_name    TEXT NOT NULL,\n  fi_id             UUID REFERENCES forms_of_information(fi_id),\n  sl_id             UUID REFERENCES spatial_breakdowns(sl_id),\n  suitability       TEXT,\n  revision          TEXT,\n  state             TEXT NOT NULL DEFAULT 'WIP'\n);\nCREATE INDEX IF NOT EXISTS ix_del_project ON deliverables(project_id);\n\nCREATE TABLE IF NOT EXISTS deliverable_production_links (\n  dpl_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  del_id            UUID NOT NULL REFERENCES deliverables(del_id) ON DELETE CASCADE,\n  pp_id             UUID NOT NULL REFERENCES production_packages(pp_id) ON DELETE CASCADE,\n  UNIQUE (del_id, pp_id)\n);\n\nCREATE TABLE IF NOT EXISTS information_packages (\n  ip_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  project_id        UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,\n  workstage         TEXT NOT NULL,\n  fb_id             UUID REFERENCES functional_breakdowns(fb_id),\n  ro_id             UUID REFERENCES task_teams(ro_id),\n  state             TEXT NOT NULL DEFAULT 'IPS00',\n  suitability       TEXT,\n  revision          TEXT,\n  iri               NUMERIC(5,2)\n);\nCREATE INDEX IF NOT EXISTS ix_ip_ws_fb ON information_packages(workstage, fb_id);\n\nCREATE TABLE IF NOT EXISTS information_package_members (\n  ipm_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  ip_id             UUID NOT NULL REFERENCES information_packages(ip_id) ON DELETE CASCADE,\n  del_id            UUID NOT NULL REFERENCES deliverables(del_id) ON DELETE CASCADE,\n  UNIQUE (ip_id, del_id)\n);\nCREATE INDEX IF NOT EXISTS ix_ipm_ip_del ON information_package_members(ip_id, del_id);\n\nCREATE TABLE IF NOT EXISTS exchange_events (\n  ex_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  ip_id             UUID NOT NULL REFERENCES information_packages(ip_id) ON DELETE CASCADE,\n  sender            TEXT,\n  recipient         TEXT,\n  purpose           TEXT,\n  event_date        TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\n-- ========== DOMAIN 9: LOIN ==========\nCREATE TABLE IF NOT EXISTS loin_requirements (\n  loin_id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  workstage         TEXT NOT NULL,\n  target_lod        TEXT,\n  target_loi        TEXT\n);\n\nCREATE TABLE IF NOT EXISTS documentation_needs (\n  dn_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  loin_id           UUID NOT NULL REFERENCES loin_requirements(loin_id) ON DELETE CASCADE,\n  fi_id             UUID NOT NULL REFERENCES forms_of_information(fi_id),\n  required          BOOLEAN NOT NULL DEFAULT true\n);\n\n-- ========== DOMAIN 10: AUTOMATION ==========\nCREATE TABLE IF NOT EXISTS events (\n  ev_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  event_type        TEXT NOT NULL,\n  object_type       TEXT,\n  object_id         TEXT,\n  project_id        UUID REFERENCES projects(project_id) ON DELETE SET NULL,\n  ts                TIMESTAMPTZ NOT NULL DEFAULT now()\n);\nCREATE INDEX IF NOT EXISTS ix_events_type ON events(event_type);\n\nCREATE TABLE IF NOT EXISTS automation_rules (\n  rule_id           TEXT PRIMARY KEY,\n  trigger_event     TEXT NOT NULL,\n  condition_expr    TEXT,\n  action_code       TEXT NOT NULL,\n  enabled           BOOLEAN NOT NULL DEFAULT true\n);\n\nCREATE TABLE IF NOT EXISTS rule_execution_history (\n  reh_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  rule_id           TEXT REFERENCES automation_rules(rule_id),\n  ev_id             UUID REFERENCES events(ev_id),\n  result            TEXT,\n  ts                TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\n-- ========== DOMAIN 11: SECURITY ==========\nCREATE TABLE IF NOT EXISTS users (\n  user_id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  name              TEXT NOT NULL,\n  email             TEXT UNIQUE\n);\n\nCREATE TABLE IF NOT EXISTS user_assignments (\n  ua_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  user_id           UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,\n  ro_id             UUID REFERENCES task_teams(ro_id),\n  fr_id             UUID REFERENCES functional_roles(fr_id),\n  project_id        UUID REFERENCES projects(project_id) ON DELETE CASCADE\n);\n\nCREATE TABLE IF NOT EXISTS permissions (\n  perm_id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  authority         TEXT NOT NULL,\n  object_type       TEXT NOT NULL,\n  role_code         TEXT NOT NULL\n);\n\nCREATE TABLE IF NOT EXISTS audit_logs (\n  audit_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  user_id           UUID REFERENCES users(user_id),\n  object_type       TEXT,\n  object_id         TEXT,\n  old_value         JSONB,\n  new_value         JSONB,\n  ts                TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\n-- ========== DOMAIN 12: METRICS ==========\nCREATE TABLE IF NOT EXISTS readiness_records (\n  ready_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  pp_id             UUID NOT NULL REFERENCES production_packages(pp_id) ON DELETE CASCADE,\n  production_readiness NUMERIC(5,2),\n  dependency_readiness NUMERIC(5,2),\n  interface_readiness  NUMERIC(5,2),\n  loin_readiness       NUMERIC(5,2),\n  calculated_at     TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\nCREATE TABLE IF NOT EXISTS asset_readiness (\n  ari_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  fb_id             UUID NOT NULL REFERENCES functional_breakdowns(fb_id) ON DELETE CASCADE,\n  ari_score         NUMERIC(5,2),\n  calculated_at     TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\nCREATE TABLE IF NOT EXISTS information_readiness (\n  iri_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  ip_id             UUID NOT NULL REFERENCES information_packages(ip_id) ON DELETE CASCADE,\n  iri_score         NUMERIC(5,2),\n  calculated_at     TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\nCREATE TABLE IF NOT EXISTS model_readiness (\n  mri_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  mp_id             UUID NOT NULL REFERENCES model_packages(mp_id) ON DELETE CASCADE,\n  mri_score         NUMERIC(5,2),\n  calculated_at     TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\n-- Seed functional roles & authorities\nINSERT INTO functional_roles (role_code, role_name) VALUES\n  ('DTL','Delivery Team Lead'),('PDM','Project Delivery Manager'),('IM','Information Manager'),\n  ('TTM','Task Team Manager'),('TTIM','Task Team Information Manager'),('IA','Information Author'),('PR','Peer Reviewer')\nON CONFLICT (role_code) DO NOTHING;\n\nINSERT INTO authorities (authority_code, authority_name) VALUES\n  ('OWN','Own'),('AUT','Author'),('VFY','Verify'),('RVW','Review'),\n  ('APR','Approve'),('PUB','Publish'),('TRN','Transmit'),('GOV','Govern')\nON CONFLICT (authority_code) DO NOTHING;\n\nINSERT INTO activities (activity_code, activity_name, activity_category) VALUES\n  ('Plan','Plan','PLN'),('Model','Model','AUT'),('Document','Document','AUT'),\n  ('Coordinate','Coordinate','CRD'),('Verify','Verify','VFY'),('Review','Review','APR'),('Approve','Approve','APR')\nON CONFLICT (activity_code) DO NOTHING;\n";
+
+function pdsExportSql(){
+  return "-- Atana PDS v" + PDS_VERSION + "\n" + PDS_POSTGRES_DDL;
+}
+
+function productionPdsMetrics(){
+  // Count CREATE TABLE statements as proxy for physical entities
+  const m = PDS_POSTGRES_DDL.match(/CREATE TABLE/gi);
+  const ix = PDS_POSTGRES_DDL.match(/CREATE INDEX/gi);
+  return {
+    version: PDS_VERSION,
+    tables: m ? m.length : 0,
+    indexes: ix ? ix.length : 0,
+    target: "PostgreSQL 14+"
+  };
+}
+
+try {
+  if(typeof window !== "undefined"){
+    window.PDS = {
+      version: PDS_VERSION,
+      ddl: PDS_POSTGRES_DDL,
+      exportSql: pdsExportSql
+    };
+  }
+} catch(e){}
+
+
+
+/** Helper for UI: disable write controls when not allowed */
+function psmWriteAllowed(project, objectType, objectRo, infoState){
+  return psmCan(project, {
+    objectType: objectType,
+    action: "modify",
+    objectRo: objectRo,
+    infoState: infoState || "WIP"
+  }).allowed;
+}
+
+
+
 
 
 
@@ -9986,7 +10583,7 @@ function ensureProductionFramework(project, opts){
     systemsAll: systemsAll.length,
     systemsUsed: systems.length,
     phase: defaultPhase,
-    framework: "Phase9",
+    framework: "Phase12",
     packageCount: next.length
   };
   try { ensureTidpRowsForProject(project, { force: true }); } catch(e){ console.warn("TIDP seed", e); }
@@ -10233,7 +10830,7 @@ function renderProductionWbs(project){
 
   let htmlOut = "";
   htmlOut += '<div class="card" style="margin-bottom:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
-  htmlOut += '<div style="font-size:12px;font-weight:700;color:var(--purple-900);margin-bottom:6px;">Production WBS — Phase 9 (ARC)</div>';
+  htmlOut += '<div style="font-size:12px;font-weight:700;color:var(--purple-900);margin-bottom:6px;">Production WBS — Phase 12 (PDS)</div>';
   if(metrics){
     htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;font-size:11px;">';
     htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f3f0f6;"><strong>Packages</strong> ' + packages.length + '</span>';
@@ -10284,12 +10881,44 @@ function renderProductionWbs(project){
       htmlOut += '</div>';
     }
   } catch(e){}
+  try {
+    var sm = (typeof productionPsmMetrics === "function") ? productionPsmMetrics(project) : null;
+    if(sm){
+      htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px;font-size:11px;">';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#ede9fe;"><strong>PSM role</strong> ' + escapeHtml(sm.activeRole) + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f5f3ff;">' + escapeHtml((sm.authorities||[]).join(" · ") || "—") + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f8fafc;"><strong>Team</strong> ' + escapeHtml(sm.taskTeam) + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#fef2f2;"><strong>Denied</strong> ' + sm.denied + '</span>';
+      htmlOut += '</div>';
+    }
+  } catch(e){}
+  try {
+    var ac = (typeof productionAcdmMetrics === "function") ? productionAcdmMetrics(project) : null;
+    if(ac){
+      htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px;font-size:11px;">';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#e0e7ff;"><strong>ACDM</strong> v' + escapeHtml(ac.version) + ' · ' + ac.entitiesDefined + ' entities</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f8fafc;">PP ' + ac.packages + ' · TR ' + ac.tidp + ' · MP ' + ac.modelPackages + ' · IP ' + ac.infoPackages + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f1f5f9;">DEP ' + ac.deps + ' · IF ' + ac.interfaces + '</span>';
+      htmlOut += '</div>';
+    }
+  } catch(e){}
+  try {
+    var pd = (typeof productionPdsMetrics === "function") ? productionPdsMetrics() : null;
+    if(pd){
+      htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px;font-size:11px;">';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#dcfce7;"><strong>PDS</strong> v' + escapeHtml(pd.version) + ' · ' + pd.tables + ' tables · ' + pd.indexes + ' indexes</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f0fdf4;">' + escapeHtml(pd.target) + '</span>';
+      htmlOut += '</div>';
+    }
+  } catch(e){}
   htmlOut += '<div style="font-size:11px;color:#555;margin-bottom:8px;">FB groups are <strong>collapsed by default</strong>. Expand one FB, then one Ro. Scope is set under <strong>Settings → Functional</strong> and <strong>Spatial</strong> matrices. XX and EXISTING are excluded.</div>';
   if(typeof frrmMatrixSummaryHtml === "function"){
     htmlOut += '<details style="margin:8px 0;border:1px solid #e5e7eb;border-radius:8px;"><summary style="cursor:pointer;padding:8px 10px;font-size:12px;font-weight:600;">FRRM assignment map (Phase 4)</summary><div style="padding:0 8px 8px;">' + frrmMatrixSummaryHtml() + '</div></details>';
   }
   htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">';
   htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnSyncProductionFromSettings">Re-sync from settings</button>';
+  htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnExportAcdm">Export ACDM schema</button>';
+  htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnExportPds">Export PDS SQL</button>';
   htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnCollapseAllFb">Collapse all</button>';
   htmlOut += '<span style="font-size:11px;color:#666;">' + packages.length + ' packages · ' + tree.length + ' FB</span>';
   htmlOut += '</div></div>';
@@ -10378,6 +11007,14 @@ function renderProductionWbs(project){
   if(btn){
     btn.onclick = function(){
       try {
+        if(typeof psmCan === "function"){
+          var gate = psmCan(project, { objectType: "production_package", action: "plan" });
+          if(!gate.allowed){
+            try { showToast("PSM denied: " + (gate.reason || "no permission") + " (" + (gate.role||"") + ")"); } catch(e){}
+            try { psmAudit(project, { action: "plan", objectType: "production_package", result: "denied", reason: gate.reason }); } catch(e){}
+            return;
+          }
+        }
         var summary = (typeof arcRunProjectResync === "function")
           ? arcRunProjectResync(project)
           : null;
@@ -10400,6 +11037,41 @@ function renderProductionWbs(project){
   if(col){
     col.onclick = function(){
       el.querySelectorAll("details.prod-fb, details.prod-ro").forEach(function(d){ d.open = false; });
+    };
+  }
+  const btnAcdm = document.getElementById("btnExportAcdm");
+  if(btnAcdm){
+    btnAcdm.onclick = function(){
+      try {
+        const schema = (typeof acdmExportSchema === "function") ? acdmExportSchema() : {};
+        const snap = (typeof acdmProjectSnapshot === "function") ? acdmProjectSnapshot(project) : {};
+        const blob = new Blob([JSON.stringify({ schema: schema, snapshot: snap }, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "Atana-ACDM-" + (project.code || project.id || "schema") + ".json";
+        a.click();
+        try { showToast("ACDM schema exported"); } catch(e){}
+      } catch(err){
+        console.error(err);
+        try { showToast("ACDM export failed"); } catch(e){}
+      }
+    };
+  }
+  const btnPds = document.getElementById("btnExportPds");
+  if(btnPds){
+    btnPds.onclick = function(){
+      try {
+        const sql = (typeof pdsExportSql === "function") ? pdsExportSql() : "";
+        const blob = new Blob([sql], { type: "application/sql" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "Atana-PDS-PostgreSQL-v1.sql";
+        a.click();
+        try { showToast("PDS SQL exported"); } catch(e){}
+      } catch(err){
+        console.error(err);
+        try { showToast("PDS export failed"); } catch(e){}
+      }
     };
   }
 }
