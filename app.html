@@ -2324,8 +2324,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.10.1";
-const APP_BUILD = "2026-08-25-perf-open";
+const APP_VERSION = "3.11.1";
+const APP_BUILD = "2026-08-25-fix-ss-walk";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -7848,6 +7848,7 @@ function normalizeProductionState(src, opts){
     systemCodes: Array.isArray(s.systemCodes) ? s.systemCodes.map(String) : null,
     packages: soft ? s.packages : (Array.isArray(s.packages) ? s.packages.map(normalizeProductionPackage).filter(Boolean) : []),
     tidpRows: soft ? (Array.isArray(s.tidpRows) ? s.tidpRows : []) : (Array.isArray(s.tidpRows) ? s.tidpRows.map(normalizeTidpRow).filter(Boolean) : []),
+    dependencies: soft ? (Array.isArray(s.dependencies) ? s.dependencies : []) : (Array.isArray(s.dependencies) ? s.dependencies.map(normalizeDependency).filter(Boolean) : []),
     lastSyncedAt: s.lastSyncedAt || null,
     autoSyncFromSettings: s.autoSyncFromSettings !== false,
     scope: {
@@ -7998,7 +7999,11 @@ function normalizeTidpRow(row){
     funcRole: String(row.funcRole || row.role || "").toUpperCase(),
     funcRoleName: String(row.funcRoleName || ""),
     authority: String(row.authority || "").toUpperCase(),
-    authorityName: String(row.authorityName || "")
+    authorityName: String(row.authorityName || ""),
+    /** Phase 5 — dependency refs (fields only; calc on demand) */
+    dependencyStatus: String(row.dependencyStatus || ""),
+    dependencyReadiness: String(row.dependencyReadiness || ""),
+    blockingDependencies: Array.isArray(row.blockingDependencies) ? row.blockingDependencies.map(String) : []
   };
 }
 
@@ -8260,6 +8265,260 @@ function frrmMatrixSummaryHtml(){
 }
 
 
+/* ===================== PHASE 5 — PPDM =====================
+   Production Package Dependency Framework
+   Rule: Dependencies require MINIMUM MATURITY (LOD+LOI), NOT package completion.
+   Concurrent engineering: target may start when source meets threshold.
+   ========================================================== */
+
+const DEP_TYPES = {
+  D01: { code: "D01", name: "Geometric",   description: "Physical hosting relationship" },
+  D02: { code: "D02", name: "Spatial",     description: "Space reservation relationship" },
+  D03: { code: "D03", name: "Information", description: "Information requirement relationship" },
+  D04: { code: "D04", name: "Performance", description: "Engineering relationship" },
+  D05: { code: "D05", name: "Approval",    description: "Progression relationship" }
+};
+
+const DEP_STRENGTH = {
+  C: { code: "C", name: "Critical", description: "Cannot proceed" },
+  M: { code: "M", name: "Major",    description: "Can start; cannot fully mature" },
+  m: { code: "m", name: "Minor",    description: "Reference only" }
+};
+
+const DEP_READINESS = {
+  R0: { code: "R0", name: "Not Ready",       description: "Required dependency maturity not achieved" },
+  R1: { code: "R1", name: "Partially Ready", description: "Some dependencies passed" },
+  R2: { code: "R2", name: "Ready",           description: "All critical dependencies satisfied" },
+  R3: { code: "R3", name: "Fully Ready",     description: "All dependencies satisfied" }
+};
+
+/**
+ * Seed rules (Ss prefix patterns) — geometric hosting examples.
+ * Source must reach requiredLod/Loi before target may proceed.
+ * Evaluated against package.ss codes; not waterfall completion.
+ */
+const DEP_SEED_RULES = [
+  { sourceSsPrefix: "Ss_25_10", targetSsPrefix: "Ss_25_30", type: "D01", strength: "C", requiredLod: "2", requiredLoi: "2", note: "Walls → Windows" },
+  { sourceSsPrefix: "Ss_25_10", targetSsPrefix: "Ss_25_30_20", type: "D01", strength: "C", requiredLod: "2", requiredLoi: "2", note: "Walls → Doors" },
+  { sourceSsPrefix: "Ss_20_10", targetSsPrefix: "Ss_25_10", type: "D01", strength: "C", requiredLod: "2", requiredLoi: "2", note: "Structure → Walls" },
+  { sourceSsPrefix: "Ss_20_10", targetSsPrefix: "Ss_40", type: "D02", strength: "M", requiredLod: "2", requiredLoi: "2", note: "Structure → Services" },
+  { sourceSsPrefix: "Ss_25_30_20", targetSsPrefix: "Ss_75", type: "D03", strength: "M", requiredLod: "3", requiredLoi: "3", note: "Doors → Access control" }
+];
+
+function nextDepId(project){
+  const deps = (project.production && project.production.dependencies) || [];
+  let max = 0;
+  deps.forEach(function(d){
+    const m = String(d.id || "").match(/DEP-(\d+)/i);
+    if(m) max = Math.max(max, parseInt(m[1], 10));
+  });
+  return "DEP-" + String(max + 1).padStart(6, "0");
+}
+
+function normalizeDependency(dep){
+  if(!dep || typeof dep !== "object") return null;
+  const id = String(dep.id || "").trim();
+  if(!id) return null;
+  const type = String(dep.type || "D01").toUpperCase();
+  const strength = String(dep.strength || "C");
+  return {
+    id: id,
+    sourcePpId: String(dep.sourcePpId || dep.source || ""),
+    targetPpId: String(dep.targetPpId || dep.target || ""),
+    type: DEP_TYPES[type] ? type : "D01",
+    strength: DEP_STRENGTH[strength] ? strength : (strength === "m" ? "m" : "C"),
+    requiredLod: String(dep.requiredLod != null ? dep.requiredLod : "2"),
+    requiredLoi: String(dep.requiredLoi != null ? dep.requiredLoi : "2"),
+    status: String(dep.status || "active").toLowerCase(),
+    note: String(dep.note || "")
+  };
+}
+
+/** Achieved LOD for a package at current stage (from stageMaturity or targetLoin). */
+function packageAchievedLod(pp, stageId){
+  if(!pp) return "";
+  stageId = stageId || "S3";
+  const cell = pp.stageMaturity && pp.stageMaturity[stageId];
+  if(cell && cell.achieved && cell.achieved.lod) return String(cell.achieved.lod);
+  if(cell && cell.target && cell.target.lod) return String(cell.target.lod); // fallback display target if no achieved yet
+  if(pp.targetLoin && pp.targetLoin.lod) return String(pp.targetLoin.lod).replace(/^LOD\s*/i, "");
+  return "";
+}
+
+function packageAchievedLoi(pp, stageId){
+  if(!pp) return "";
+  stageId = stageId || "S3";
+  const cell = pp.stageMaturity && pp.stageMaturity[stageId];
+  if(cell && cell.achieved && cell.achieved.loi) return String(cell.achieved.loi);
+  if(cell && cell.target && cell.target.loi) return String(cell.target.loi);
+  if(pp.targetLoin && pp.targetLoin.loi) return String(pp.targetLoin.loi);
+  return "";
+}
+
+function loinMeetsThreshold(achieved, required){
+  const a = Number(String(achieved || "").replace(/[^\d.]/g, ""));
+  const r = Number(String(required || "").replace(/[^\d.]/g, ""));
+  if(!Number.isFinite(r) || r <= 0) return true;
+  if(!Number.isFinite(a)) return false;
+  return a >= r;
+}
+
+/** Evaluate one dependency: does source meet threshold for target to proceed? */
+function evaluateDependency(dep, packagesById, stageId){
+  const d = normalizeDependency(dep);
+  if(!d) return null;
+  const source = packagesById[d.sourcePpId];
+  const target = packagesById[d.targetPpId];
+  const lodOk = loinMeetsThreshold(packageAchievedLod(source, stageId), d.requiredLod);
+  const loiOk = loinMeetsThreshold(packageAchievedLoi(source, stageId), d.requiredLoi);
+  const passed = !!(lodOk && loiOk);
+  return {
+    dep: d,
+    source: source,
+    target: target,
+    lodOk: lodOk,
+    loiOk: loiOk,
+    passed: passed,
+    blocked: !passed && d.strength === "C"
+  };
+}
+
+/**
+ * Dependency readiness for a target package.
+ * R2 when all Critical passed; R3 when all passed; R1 partial; R0 none of critical.
+ */
+function evaluatePackageDependencyReadiness(project, ppId){
+  const deps = ((project.production && project.production.dependencies) || []).filter(function(d){
+    return String(d.targetPpId) === String(ppId) && String(d.status || "active") === "active";
+  });
+  const packages = getProductionPackages(project);
+  const byId = {};
+  packages.forEach(function(p){ byId[p.id] = p; });
+  const stageId = project.currentStageId || "S3";
+
+  let critical = 0, major = 0, minor = 0;
+  let critPass = 0, majorPass = 0, minorPass = 0;
+  let blocked = 0;
+  const evaluations = [];
+
+  deps.forEach(function(raw){
+    const ev = evaluateDependency(raw, byId, stageId);
+    if(!ev) return;
+    evaluations.push(ev);
+    const s = ev.dep.strength;
+    if(s === "C"){ critical++; if(ev.passed) critPass++; else blocked++; }
+    else if(s === "M"){ major++; if(ev.passed) majorPass++; }
+    else { minor++; if(ev.passed) minorPass++; }
+  });
+
+  let readiness = "R3";
+  if(!deps.length) readiness = "R3"; // no deps = unrestricted
+  else if(critical > 0 && critPass < critical){
+    readiness = (critPass > 0 || majorPass > 0) ? "R1" : "R0";
+  } else if(major > majorPass || minor > minorPass){
+    readiness = "R2"; // critical ok, others outstanding
+  } else {
+    readiness = "R3";
+  }
+
+  return {
+    ppId: ppId,
+    readiness: readiness,
+    readinessLabel: (DEP_READINESS[readiness] && DEP_READINESS[readiness].name) || readiness,
+    critical: critical,
+    major: major,
+    minor: minor,
+    blocked: blocked,
+    critPass: critPass,
+    majorPass: majorPass,
+    minorPass: minorPass,
+    evaluations: evaluations
+  };
+}
+
+function packagesByIdMap(project){
+  const byId = {};
+  getProductionPackages(project).forEach(function(p){ byId[p.id] = p; });
+  return byId;
+}
+
+/**
+ * Seed dependencies from DEP_SEED_RULES within the same FB.
+ * Lightweight: only matches packages already in project. Does not run on open unless force.
+ */
+function ensureProductionDependencies(project, opts){
+  opts = opts || {};
+  if(!project) return [];
+  if(!project.production) project.production = normalizeProductionState(null);
+  if(!Array.isArray(project.production.dependencies)) project.production.dependencies = [];
+
+  if(!opts.force && project.production.dependencies.length > 0){
+    return project.production.dependencies;
+  }
+
+  const packages = getProductionPackages(project);
+  if(!packages.length) return project.production.dependencies;
+
+  // Index by FB + ss
+  const byFb = {};
+  packages.forEach(function(p){
+    const fb = String(p.fb || "").toUpperCase();
+    if(!byFb[fb]) byFb[fb] = [];
+    byFb[fb].push(p);
+  });
+
+  const existingKeys = {};
+  project.production.dependencies.forEach(function(d){
+    existingKeys[d.sourcePpId + "→" + d.targetPpId + ":" + d.type] = true;
+  });
+
+  const MAX_NEW = 400;
+  let added = 0;
+  Object.keys(byFb).forEach(function(fb){
+    const list = byFb[fb];
+    DEP_SEED_RULES.forEach(function(rule){
+      if(added >= MAX_NEW) return;
+      const sources = list.filter(function(p){ return String(p.ss).indexOf(rule.sourceSsPrefix) === 0; });
+      const targets = list.filter(function(p){ return String(p.ss).indexOf(rule.targetSsPrefix) === 0; });
+      sources.forEach(function(src){
+        targets.forEach(function(tgt){
+          if(added >= MAX_NEW) return;
+          if(src.id === tgt.id) return;
+          const key = src.id + "→" + tgt.id + ":" + rule.type;
+          if(existingKeys[key]) return;
+          existingKeys[key] = true;
+          const dep = normalizeDependency({
+            id: nextDepId(project),
+            sourcePpId: src.id,
+            targetPpId: tgt.id,
+            type: rule.type,
+            strength: rule.strength,
+            requiredLod: rule.requiredLod,
+            requiredLoi: rule.requiredLoi,
+            status: "active",
+            note: rule.note || ""
+          });
+          if(dep){
+            project.production.dependencies.push(dep);
+            added++;
+          }
+        });
+      });
+    });
+  });
+  return project.production.dependencies;
+}
+
+function readinessBadgeHtml(code){
+  const meta = DEP_READINESS[code] || { name: code };
+  const colors = { R0: "#fee2e2", R1: "#ffedd5", R2: "#dcfce7", R3: "#dbeafe" };
+  const fg = { R0: "#991b1b", R1: "#9a3412", R2: "#166534", R3: "#1e40af" };
+  return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:' +
+    (colors[code]||"#eee") + ';color:' + (fg[code]||"#333") + ';">' + code + " " + escapeHtml(meta.name) + "</span>";
+}
+
+
+
 function packageArchetypeForRo(ro){
   const c = String(ro || "ZZ").toUpperCase();
   return PACKAGE_ARCHETYPE_LIBRARY[c] || PACKAGE_ARCHETYPE_LIBRARY.ZZ;
@@ -8276,27 +8535,33 @@ function flattenSsThirdGroup(tree){
   const out = [];
   function walk(nodes){
     (nodes || []).forEach(function(n){
-      if(!n || !n.c) return;
-      const tokens = String(n.c).split("_");
-      // 3rd group ONLY: Ss_10_20_30 (exactly 4 tokens)
+      if(!n) return;
+      const code = String(n.c || n.code || "").trim();
+      if(!code) return;
+      const tokens = code.split("_");
+      // 3rd group ONLY: Ss_10_20_30 (exactly 4 tokens). Children key is "k" in SS_TREE_COMPACT.
       if(tokens.length === 4 && tokens[0] === "Ss"){
         out.push({
-          code: n.c,
-          name: n.n || n.c,
-          ro: n.r || "",
-          discipline: n.d || n.r || "",
-          lod: n.lod || ""
+          code: code,
+          name: n.n || n.name || code,
+          ro: n.r || n.ro || "",
+          discipline: n.d || n.discipline || n.r || "",
+          lod: n.l || n.lod || ""
         });
       }
-      if(n.ch && n.ch.length) walk(n.ch);
+      // SS_TREE_COMPACT uses "k" for children; also accept "ch" / "children"
+      const kids = n.k || n.ch || n.children || null;
+      if(kids && kids.length) walk(kids);
     });
   }
   try {
-    walk(tree || ((typeof SS_TREE_COMPACT !== "undefined") ? SS_TREE_COMPACT : []));
-  } catch(e){}
+    const root = tree || ((typeof SS_TREE_COMPACT !== "undefined") ? SS_TREE_COMPACT : []);
+    walk(root);
+  } catch(e){ console.warn("flattenSsThirdGroup", e); }
   if(!tree) _ssThirdGroupCache = out;
   return out;
 }
+
 
 
 function selectedFunctionalBreakdowns(project){
@@ -8455,10 +8720,19 @@ function ensureProductionFramework(project, opts){
 
   let systems = systemsAll.filter(function(s){
     const ro = (typeof normalizeTaskTeamCode === "function") ? normalizeTaskTeamCode(s.ro) : String(s.ro || "").toUpperCase();
-    if(!ro) return false;
+    if(!ro) return true; // keep unassigned-ro systems if no team filter match path
     if(typeof isProductionTeamCode === "function" && !isProductionTeamCode(ro)) return false;
+    if(!Object.keys(teamSet).length) return true;
     return !!teamSet[ro];
   });
+  // Fallback: if team filter wiped everything but Ss tree has data, use all production systems
+  if(!systems.length && systemsAll.length){
+    systems = systemsAll.filter(function(s){
+      const ro = (typeof normalizeTaskTeamCode === "function") ? normalizeTaskTeamCode(s.ro) : String(s.ro || "").toUpperCase();
+      if(!ro) return true;
+      return (typeof isProductionTeamCode !== "function") || isProductionTeamCode(ro);
+    });
+  }
 
   const defaultPhase = "NEW";
   const existingById = {};
@@ -8516,13 +8790,16 @@ function ensureProductionFramework(project, opts){
   project.production.lastSyncedAt = Date.now();
   project.production._lastSyncMeta = {
     fbCount: fbs.length,
+    fbCodes: fbs.map(function(f){ return f.code; }),
     teamCodes: teamCodes.slice(),
     systemsAll: systemsAll.length,
     systemsUsed: systems.length,
     phase: defaultPhase,
-    framework: "Phase4"
+    framework: "Phase5",
+    packageCount: next.length
   };
   try { ensureTidpRowsForProject(project, { force: true }); } catch(e){ console.warn("TIDP seed", e); }
+  try { ensureProductionDependencies(project, { force: true }); } catch(e){ console.warn("DEP seed", e); }
   return project.production;
 }
 
@@ -8811,11 +9088,13 @@ function renderProductionWbs(project){
           inner += ' <span style="color:#888;font-weight:400;font-size:11px;">(' + rg.packages.length + ')</span></summary>';
           inner += '<div style="overflow:auto;max-height:240px;margin-top:6px;">';
           inner += '<table style="width:100%;font-size:11px;border-collapse:collapse;"><thead><tr>';
-          inner += '<th style="text-align:left;padding:4px;">Package</th><th style="text-align:left;padding:4px;">Ss</th><th style="text-align:left;padding:4px;">Name</th><th style="text-align:left;padding:4px;">Status</th><th style="text-align:left;padding:4px;">Phase</th><th style="text-align:left;padding:4px;">TIDP / FRRM</th>';
+          inner += '<th style="text-align:left;padding:4px;">Package</th><th style="text-align:left;padding:4px;">Ss</th><th style="text-align:left;padding:4px;">Name</th><th style="text-align:left;padding:4px;">Status</th><th style="text-align:left;padding:4px;">Phase</th><th style="text-align:left;padding:4px;">TIDP / FRRM</th><th style="text-align:left;padding:4px;">Dep readiness</th>';
           inner += '</tr></thead><tbody>';
           rg.packages.slice(0, 60).forEach(function(pp){
             var trs = (typeof getTidpRowsForPackage === "function") ? getTidpRowsForPackage(project, pp.id) : [];
             var tp = (typeof tidpProgressPercent === "function") ? tidpProgressPercent(trs) : 0;
+            var depR = null;
+            try { if(typeof evaluatePackageDependencyReadiness === "function") depR = evaluatePackageDependencyReadiness(project, pp.id); } catch(e){}
             inner += '<tr>';
             inner += '<td style="padding:3px 4px;font-family:var(--mono);font-size:10px;">' + escapeHtml(pp.id) + '</td>';
             inner += '<td style="padding:3px 4px;font-family:var(--mono);">' + escapeHtml(pp.ss) + '</td>';
@@ -8824,6 +9103,14 @@ function renderProductionWbs(project){
             inner += '<td style="padding:3px 4px;">' + escapeHtml(pp.phase || "NEW") + '</td>';
             var frrmBits = trs.slice(0, 3).map(function(r){ return (r.activity||"") + ":" + (r.funcRole||"?"); }).join(" · ");
             inner += '<td style="padding:3px 4px;font-size:10px;">' + (trs.length ? (tp + '% · ' + escapeHtml(frrmBits) + (trs.length > 3 ? "…" : "")) : '—') + '</td>';
+            if(depR){
+              inner += '<td style="padding:3px 4px;font-size:10px;">' + (typeof readinessBadgeHtml === "function" ? readinessBadgeHtml(depR.readiness) : depR.readiness);
+              inner += ' <span style="color:#888;">C' + depR.critical + '/M' + depR.major + '/m' + depR.minor;
+              if(depR.blocked) inner += ' · blocked ' + depR.blocked;
+              inner += '</span></td>';
+            } else {
+              inner += '<td style="padding:3px 4px;">—</td>';
+            }
             inner += '</tr>';
           });
           if(rg.packages.length > 60){
@@ -8843,14 +9130,20 @@ function renderProductionWbs(project){
   if(btn){
     btn.onclick = function(){
       try {
+        try { _ssThirdGroupCache = null; } catch(e){}
+        if(!project.production) project.production = normalizeProductionState(null);
         project.production.systemCodes = null;
         project.production.packages = [];
+        project.production.tidpRows = [];
+        project.production.dependencies = [];
         ensureProductionFramework(project, { force: true });
         try { saveData(DATA); } catch(e){}
         var m = project.production._lastSyncMeta || {};
         try {
           var trn = (project.production.tidpRows || []).length;
-          showToast("Synced " + (project.production.packages||[]).length + " packages · " + trn + " TIDP rows | FB " + (m.fbCount||0) + " | Ss " + (m.systemsUsed||0));
+          var dn = (project.production.dependencies || []).length;
+          var n = (project.production.packages || []).length;
+          showToast("Synced " + n + " packages · " + trn + " TIDP · " + dn + " deps | Ss " + (m.systemsAll||0) + "→" + (m.systemsUsed||0) + " | FB " + (m.fbCount||0));
         } catch(e){}
         renderProductionWbs(project);
       } catch(err){
