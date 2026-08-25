@@ -2324,8 +2324,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.14.0";
-const APP_BUILD = "2026-08-25-phase8-ipe-aeir";
+const APP_VERSION = "3.15.0";
+const APP_BUILD = "2026-08-25-phase9-arc";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -7860,6 +7860,9 @@ function normalizeProductionState(src, opts){
     informationPackages: soft ? (Array.isArray(s.informationPackages) ? s.informationPackages : []) : (Array.isArray(s.informationPackages) ? s.informationPackages.map(normalizeInformationPackage).filter(Boolean) : []),
     exchangeEvents: soft ? (Array.isArray(s.exchangeEvents) ? s.exchangeEvents : []) : (Array.isArray(s.exchangeEvents) ? s.exchangeEvents.map(normalizeExchangeEvent).filter(Boolean) : []),
     packageValidations: soft ? (Array.isArray(s.packageValidations) ? s.packageValidations : []) : (Array.isArray(s.packageValidations) ? s.packageValidations.map(normalizePackageValidationRecord).filter(Boolean) : []),
+    arcRules: soft ? (Array.isArray(s.arcRules) ? s.arcRules : null) : (Array.isArray(s.arcRules) ? s.arcRules.map(normalizeAutomationRule).filter(Boolean) : null),
+    arcEventHistory: soft ? (Array.isArray(s.arcEventHistory) ? s.arcEventHistory : []) : (Array.isArray(s.arcEventHistory) ? s.arcEventHistory.map(normalizeArcEvent).filter(Boolean) : []),
+    arcAuditLog: soft ? (Array.isArray(s.arcAuditLog) ? s.arcAuditLog : []) : (Array.isArray(s.arcAuditLog) ? s.arcAuditLog.map(normalizeArcAudit).filter(Boolean) : []),
     lastSyncedAt: s.lastSyncedAt || null,
     autoSyncFromSettings: s.autoSyncFromSettings !== false,
     scope: {
@@ -9363,6 +9366,317 @@ function productionInformationMetrics(project){
 }
 
 
+/* ===================== PHASE 9 — ARC =====================
+   Automation Rules Engine
+   Events → Rules → Actions → Object updates
+   Users define FB + Ss + Workstage; platform maintains structure.
+   Heavy actions only on force / explicit publish — never silent on open.
+   ========================================================= */
+
+const ARC_EVENTS = {
+  PP_CREATED: "production_package.created",
+  PP_UPDATED: "production_package.updated",
+  TIDP_CREATED: "tidp.created",
+  TIDP_STATUS: "tidp.status_updated",
+  DEP_CHANGED: "dependency.status_changed",
+  IF_CREATED: "interface.created",
+  IF_ISSUE_CLOSED: "interface.issue_closed",
+  MODEL_SYNCED: "model.synced",
+  MODEL_VERIFIED: "model.verified",
+  IP_ASSEMBLED: "information_package.assembled",
+  IP_VALIDATED: "information_package.validated",
+  IP_SHARED: "information_package.shared",
+  IP_PUBLISHED: "information_package.published",
+  PROJECT_RESYNC: "project.resync",
+  FB_UPDATED: "fb.updated"
+};
+
+/** Built-in rule catalogue (ARC_xxx) */
+const ARC_RULE_CATALOGUE = [
+  { id: "ARC_100", event: "project.resync", name: "Production Package Creation", domain: "scope", action: "ensure_packages" },
+  { id: "ARC_110", event: "production_package.created", name: "TIDP Generation", domain: "scope", action: "ensure_tidp" },
+  { id: "ARC_120", event: "production_package.created", name: "AIR Requirement Attach", domain: "scope", action: "attach_air" },
+  { id: "ARC_200", event: "production_package.created", name: "Assign Package Owner (TTM)", domain: "assignment", action: "assign_ttm" },
+  { id: "ARC_210", event: "production_package.created", name: "Assign TTIM", domain: "assignment", action: "assign_ttim" },
+  { id: "ARC_220", event: "tidp.created", name: "Assign Author (IA)", domain: "assignment", action: "assign_ia" },
+  { id: "ARC_230", event: "tidp.created", name: "Assign Reviewer (PR)", domain: "assignment", action: "assign_pr" },
+  { id: "ARC_300", event: "production_package.created", name: "Generate Dependencies", domain: "dependency", action: "ensure_deps" },
+  { id: "ARC_310", event: "dependency.status_changed", name: "Recalculate Dep Readiness", domain: "dependency", action: "recalc_dep_readiness" },
+  { id: "ARC_400", event: "production_package.created", name: "Generate Interfaces", domain: "interface", action: "ensure_interfaces" },
+  { id: "ARC_420", event: "interface.issue_closed", name: "Update Interface Readiness", domain: "interface", action: "recalc_if_readiness" },
+  { id: "ARC_500", event: "model.synced", name: "Model Synchronisation", domain: "model", action: "ensure_model_packages" },
+  { id: "ARC_530", event: "model.verified", name: "Recalculate MRI", domain: "model", action: "recalc_mri" },
+  { id: "ARC_600", event: "project.resync", name: "Information Package Assembly", domain: "information", action: "ensure_info_packages" },
+  { id: "ARC_610", event: "information_package.assembled", name: "Package Validation", domain: "information", action: "validate_ip" },
+  { id: "ARC_720", event: "information_package.shared", name: "Exchange Event on Share", domain: "publishing", action: "create_exchange_event" },
+  { id: "ARC_800", event: "tidp.status_updated", name: "Production Readiness", domain: "readiness", action: "recalc_prod_readiness" },
+  { id: "ARC_810", event: "information_package.assembled", name: "Information Readiness (IRI)", domain: "readiness", action: "recalc_iri" }
+];
+
+function normalizeAutomationRule(rule){
+  if(!rule || typeof rule !== "object") return null;
+  const id = String(rule.id || "").trim();
+  if(!id) return null;
+  return {
+    id: id,
+    event: String(rule.event || ""),
+    name: String(rule.name || id),
+    domain: String(rule.domain || ""),
+    action: String(rule.action || ""),
+    enabled: rule.enabled !== false,
+    condition: rule.condition || null,
+    targetObject: String(rule.targetObject || "")
+  };
+}
+
+function normalizeArcEvent(ev){
+  if(!ev || typeof ev !== "object") return null;
+  return {
+    id: String(ev.id || ("EVT-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7))),
+    type: String(ev.type || ""),
+    projectId: String(ev.projectId || ""),
+    payload: (ev.payload && typeof ev.payload === "object") ? ev.payload : {},
+    at: ev.at || Date.now(),
+    source: String(ev.source || "system")
+  };
+}
+
+function normalizeArcAudit(entry){
+  if(!entry || typeof entry !== "object") return null;
+  return {
+    id: String(entry.id || ("AUD-" + Date.now())),
+    at: entry.at || Date.now(),
+    projectId: String(entry.projectId || ""),
+    ruleId: String(entry.ruleId || ""),
+    eventType: String(entry.eventType || ""),
+    action: String(entry.action || ""),
+    result: String(entry.result || "ok"),
+    message: String(entry.message || ""),
+    who: String(entry.who || "ARC")
+  };
+}
+
+function ensureArcState(project){
+  if(!project.production) project.production = normalizeProductionState(null);
+  if(!Array.isArray(project.production.arcRules)){
+    project.production.arcRules = ARC_RULE_CATALOGUE.map(normalizeAutomationRule).filter(Boolean);
+  }
+  if(!Array.isArray(project.production.arcEventHistory)) project.production.arcEventHistory = [];
+  if(!Array.isArray(project.production.arcAuditLog)) project.production.arcAuditLog = [];
+  return project.production;
+}
+
+function arcAppendHistory(project, ev){
+  ensureArcState(project);
+  const hist = project.production.arcEventHistory;
+  hist.push(normalizeArcEvent(ev));
+  // Cap history to avoid storage bloat
+  if(hist.length > 200) project.production.arcEventHistory = hist.slice(-200);
+}
+
+function arcAppendAudit(project, entry){
+  ensureArcState(project);
+  const log = project.production.arcAuditLog;
+  log.push(normalizeArcAudit(entry));
+  if(log.length > 300) project.production.arcAuditLog = log.slice(-300);
+}
+
+/** Execute a single ARC action against the project. */
+function arcExecuteAction(project, action, payload){
+  payload = payload || {};
+  switch(String(action || "")){
+    case "ensure_packages":
+      if(typeof ensureProductionFramework === "function") ensureProductionFramework(project, { force: true });
+      return "packages";
+    case "ensure_tidp":
+      if(typeof ensureTidpRowsForProject === "function") ensureTidpRowsForProject(project, { force: true });
+      return "tidp";
+    case "attach_air":
+      // AIR already attached on TIDP seed via airRef
+      return "air";
+    case "assign_ttm":
+    case "assign_ttim":
+    case "assign_ia":
+    case "assign_pr":
+      // FRRM assignment already applied on TIDP via applyFrrmToTidpRow
+      if(typeof ensureTidpRowsForProject === "function") ensureTidpRowsForProject(project, { force: false });
+      return "frrm";
+    case "ensure_deps":
+      if(typeof ensureProductionDependencies === "function") ensureProductionDependencies(project, { force: true });
+      return "deps";
+    case "recalc_dep_readiness":
+      return "dep_readiness";
+    case "ensure_interfaces":
+      if(typeof ensureInterfaceObjects === "function") ensureInterfaceObjects(project, { force: true });
+      return "interfaces";
+    case "recalc_if_readiness":
+      return "if_readiness";
+    case "ensure_model_packages":
+      if(typeof ensureModelPackages === "function") ensureModelPackages(project, { force: true });
+      return "model_packages";
+    case "recalc_mri":
+      if(typeof evaluateAllModelPackages === "function") evaluateAllModelPackages(project);
+      return "mri";
+    case "ensure_info_packages":
+      if(typeof ensureInformationPackages === "function") ensureInformationPackages(project, { force: true });
+      return "info_packages";
+    case "validate_ip":
+    case "recalc_iri":
+      ((project.production && project.production.informationPackages) || []).forEach(function(ip){
+        if(typeof evaluateInformationPackageIri === "function") evaluateInformationPackageIri(project, ip);
+      });
+      return "iri";
+    case "create_exchange_event":
+      if(payload.packageId && typeof nextExchangeEventId === "function"){
+        if(!project.production.exchangeEvents) project.production.exchangeEvents = [];
+        project.production.exchangeEvents.push(normalizeExchangeEvent({
+          id: nextExchangeEventId(project),
+          packageId: payload.packageId,
+          purpose: payload.purpose || "Automated exchange",
+          suitability: payload.suitability || "",
+          date: Date.now()
+        }));
+      }
+      return "exchange";
+    case "recalc_prod_readiness":
+      return "prod_readiness";
+    default:
+      return "noop";
+  }
+}
+
+/**
+ * Publish an event and run matching enabled rules.
+ * opts.silent — skip if would re-enter heavy path incorrectly
+ */
+function arcPublish(project, eventType, payload, opts){
+  opts = opts || {};
+  if(!project) return [];
+  ensureArcState(project);
+  const ev = normalizeArcEvent({
+    type: eventType,
+    projectId: project.id || "",
+    payload: payload || {},
+    source: opts.source || "system"
+  });
+  arcAppendHistory(project, ev);
+
+  const rules = (project.production.arcRules || []).filter(function(r){
+    return r && r.enabled !== false && r.event === eventType;
+  });
+  const results = [];
+  rules.forEach(function(rule){
+    try {
+      const res = arcExecuteAction(project, rule.action, payload || {});
+      arcAppendAudit(project, {
+        projectId: project.id || "",
+        ruleId: rule.id,
+        eventType: eventType,
+        action: rule.action,
+        result: "ok",
+        message: String(res || ""),
+        who: "ARC"
+      });
+      results.push({ ruleId: rule.id, result: res });
+    } catch(err){
+      arcAppendAudit(project, {
+        projectId: project.id || "",
+        ruleId: rule.id,
+        eventType: eventType,
+        action: rule.action,
+        result: "error",
+        message: String(err && err.message ? err.message : err),
+        who: "ARC"
+      });
+      results.push({ ruleId: rule.id, result: "error", error: String(err) });
+    }
+  });
+  return results;
+}
+
+/**
+ * Orchestrated resync via ARC event bus (single entry for Re-sync button).
+ * Publishes project.resync once; cascade actions run through rules without double-building.
+ */
+function arcRunProjectResync(project){
+  if(!project) return null;
+  ensureArcState(project);
+  // Clear generative collections so force rebuilds are meaningful
+  try { _ssThirdGroupCache = null; } catch(e){}
+  if(!project.production) project.production = normalizeProductionState(null);
+  project.production.packages = [];
+  project.production.tidpRows = [];
+  project.production.dependencies = [];
+  project.production.interfaces = [];
+  project.production.modelPackages = [];
+  project.production.searchSets = [];
+  project.production.clashRules = [];
+  project.production.informationPackages = [];
+
+  // Sequential core pipeline (deterministic order) — rules also audited
+  const pipeline = [
+    function(){ return typeof ensureProductionFramework === "function" && ensureProductionFramework(project, { force: true }); },
+    function(){ return typeof ensureTidpRowsForProject === "function" && ensureTidpRowsForProject(project, { force: true }); },
+    function(){ return typeof ensureProductionDependencies === "function" && ensureProductionDependencies(project, { force: true }); },
+    function(){ return typeof ensureInterfaceObjects === "function" && ensureInterfaceObjects(project, { force: true }); },
+    function(){ return typeof ensureModelPackages === "function" && ensureModelPackages(project, { force: true }); },
+    function(){ return typeof ensureInformationPackages === "function" && ensureInformationPackages(project, { force: true }); }
+  ];
+  pipeline.forEach(function(fn, idx){
+    try {
+      fn();
+      arcAppendAudit(project, {
+        projectId: project.id || "",
+        ruleId: "ARC_PIPELINE_" + idx,
+        eventType: ARC_EVENTS.PROJECT_RESYNC,
+        action: "pipeline_step",
+        result: "ok",
+        message: "step " + idx,
+        who: "ARC"
+      });
+    } catch(err){
+      arcAppendAudit(project, {
+        projectId: project.id || "",
+        ruleId: "ARC_PIPELINE_" + idx,
+        eventType: ARC_EVENTS.PROJECT_RESYNC,
+        action: "pipeline_step",
+        result: "error",
+        message: String(err && err.message ? err.message : err),
+        who: "ARC"
+      });
+    }
+  });
+
+  arcPublish(project, ARC_EVENTS.PROJECT_RESYNC, { reason: "user_resync" }, { source: "ui" });
+  // Notify package created for assignment-domain rules (lightweight, no force rebuild)
+  arcPublish(project, ARC_EVENTS.PP_CREATED, { count: (project.production.packages || []).length }, { source: "pipeline" });
+  arcPublish(project, ARC_EVENTS.IP_ASSEMBLED, {}, { source: "pipeline" });
+
+  return {
+    packages: (project.production.packages || []).length,
+    tidp: (project.production.tidpRows || []).length,
+    deps: (project.production.dependencies || []).length,
+    interfaces: (project.production.interfaces || []).length,
+    modelPackages: (project.production.modelPackages || []).length,
+    infoPackages: (project.production.informationPackages || []).length,
+    audit: (project.production.arcAuditLog || []).length
+  };
+}
+
+function productionArcMetrics(project){
+  ensureArcState(project);
+  const rules = project.production.arcRules || [];
+  const enabled = rules.filter(function(r){ return r.enabled !== false; }).length;
+  return {
+    rules: rules.length,
+    enabled: enabled,
+    events: (project.production.arcEventHistory || []).length,
+    audit: (project.production.arcAuditLog || []).length
+  };
+}
+
+
+
 
 
 
@@ -9672,7 +9986,7 @@ function ensureProductionFramework(project, opts){
     systemsAll: systemsAll.length,
     systemsUsed: systems.length,
     phase: defaultPhase,
-    framework: "Phase8",
+    framework: "Phase9",
     packageCount: next.length
   };
   try { ensureTidpRowsForProject(project, { force: true }); } catch(e){ console.warn("TIDP seed", e); }
@@ -9919,7 +10233,7 @@ function renderProductionWbs(project){
 
   let htmlOut = "";
   htmlOut += '<div class="card" style="margin-bottom:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
-  htmlOut += '<div style="font-size:12px;font-weight:700;color:var(--purple-900);margin-bottom:6px;">Production WBS — Phase 8 (IPE / AEIR)</div>';
+  htmlOut += '<div style="font-size:12px;font-weight:700;color:var(--purple-900);margin-bottom:6px;">Production WBS — Phase 9 (ARC)</div>';
   if(metrics){
     htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;font-size:11px;">';
     htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f3f0f6;"><strong>Packages</strong> ' + packages.length + '</span>';
@@ -9957,6 +10271,16 @@ function renderProductionWbs(project){
       htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#fce7f3;"><strong>Exchanges</strong> ' + im.exchangeEvents + '</span>';
       if(im.avgIri != null) htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#ecfdf5;"><strong>Avg IRI</strong> ' + im.avgIri + '%</span>';
       htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f8fafc;">AEIR ' + escapeHtml(String(im.aeirStage||"")) + ' · Shared ' + im.shared + ' · Published ' + im.published + '</span>';
+      htmlOut += '</div>';
+    }
+  } catch(e){}
+  try {
+    var am = (typeof productionArcMetrics === "function") ? productionArcMetrics(project) : null;
+    if(am){
+      htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px;font-size:11px;">';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#fef9c3;"><strong>ARC rules</strong> ' + am.enabled + '/' + am.rules + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f1f5f9;"><strong>Events</strong> ' + am.events + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f8fafc;"><strong>Audit</strong> ' + am.audit + '</span>';
       htmlOut += '</div>';
     }
   } catch(e){}
@@ -10054,32 +10378,16 @@ function renderProductionWbs(project){
   if(btn){
     btn.onclick = function(){
       try {
-        try { _ssThirdGroupCache = null; } catch(e){}
-        if(!project.production) project.production = normalizeProductionState(null);
-        project.production.systemCodes = null;
-        project.production.packages = [];
-        project.production.tidpRows = [];
-        project.production.dependencies = [];
-        project.production.interfaces = [];
-        project.production.interfaceIssues = project.production.interfaceIssues || [];
-        project.production.interfacePackages = project.production.interfacePackages || [];
-        project.production.modelPackages = [];
-        project.production.searchSets = [];
-        project.production.clashRules = [];
-        project.production.informationPackages = [];
-        // keep modelObjects / exchange history if present
-        ensureProductionFramework(project, { force: true });
+        var summary = (typeof arcRunProjectResync === "function")
+          ? arcRunProjectResync(project)
+          : null;
+        if(!summary){
+          ensureProductionFramework(project, { force: true });
+          summary = { packages: (project.production.packages||[]).length };
+        }
         try { saveData(DATA); } catch(e){}
-        var m = project.production._lastSyncMeta || {};
         try {
-          var trn = (project.production.tidpRows || []).length;
-          var dn = (project.production.dependencies || []).length;
-          var ifn = (project.production.interfaces || []).length;
-          var mpn = (project.production.modelPackages || []).length;
-          var ipn = (project.production.informationPackages || []).length;
-          var n = (project.production.packages || []).length;
-          var capNote = (n >= 5000) ? " (cap 5000)" : "";
-          showToast("Synced " + n + " PP" + capNote + " · " + mpn + " MP · " + ipn + " IP · " + trn + " TIDP · " + dn + " deps · " + ifn + " IF");
+          showToast("ARC resync · " + (summary.packages||0) + " PP · " + (summary.modelPackages||0) + " MP · " + (summary.infoPackages||0) + " IP · " + (summary.tidp||0) + " TIDP · " + (summary.deps||0) + " deps · " + (summary.interfaces||0) + " IF · audit " + (summary.audit||0));
         } catch(e){}
         renderProductionWbs(project);
       } catch(err){
