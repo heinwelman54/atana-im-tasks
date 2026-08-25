@@ -2324,8 +2324,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.7.1";
-const APP_BUILD = "2026-08-25-uniclass-delivery-wbs";
+const APP_VERSION = "3.7.2";
+const APP_BUILD = "2026-08-25-production-resync-fix";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -7785,15 +7785,51 @@ function selectedFunctionalBreakdowns(project){
   return selected;
 }
 
-function selectedTaskTeamCodes(project){
-  const teams = Array.isArray(project && project.taskTeams) ? project.taskTeams.map(function(t){ return String(t).toUpperCase(); }).filter(Boolean) : [];
-  if(teams.length) return teams;
-  // Fall back to selected roles in catalog that look like discipline teams
-  const cat = project && project.midpCatalog;
-  const roles = (cat && cat.roles) || [];
-  const fromRoles = roles.filter(function(r){ return r.selected !== false; }).map(function(r){ return String(r.code).toUpperCase(); });
-  return fromRoles.length ? fromRoles : ["AR","ST","ME","EE"];
+function normalizeTaskTeamCode(raw){
+  var s = String(raw || "").toUpperCase().trim();
+  if(!s) return "";
+  var KNOWN = ["AR","ST","ME","EE","CV","PD","FP","YS","YC","PE","FD","IM","ZZ","MH","HG","CW","QS","DB"];
+  if(KNOWN.indexOf(s) >= 0) return s;
+  var m = s.match(/^([A-Z]{2,3})(?:\s*[-–:|_]\s*|\s+)/);
+  if(m && KNOWN.indexOf(m[1]) >= 0) return m[1];
+  if(/ARCHITECT/.test(s)) return "AR";
+  if(/STRUCTUR/.test(s)) return "ST";
+  if(/MECHANICAL|HVAC/.test(s)) return "ME";
+  if(/ELECTRICAL/.test(s)) return "EE";
+  if(/CIVIL/.test(s)) return "CV";
+  if(/PUBLIC HEALTH|PLUMB/.test(s)) return "PD";
+  if(/FIRE PROTECT/.test(s)) return "FP";
+  if(/SECURITY/.test(s)) return "YS";
+  if(/CONTROL/.test(s)) return "YC";
+  if(/PROCESS ENG/.test(s)) return "PE";
+  if(/QUANTITY|SURVEY/.test(s)) return "QS";
+  if(/INFORMATION MANAG/.test(s)) return "IM";
+  if(s.length <= 3) return s;
+  return "";
 }
+
+function selectedTaskTeamCodes(project){
+  var out = [];
+  var seen = {};
+  function add(raw){
+    var c = normalizeTaskTeamCode(raw);
+    if(c && !seen[c]){ seen[c] = true; out.push(c); }
+  }
+  (Array.isArray(project && project.taskTeams) ? project.taskTeams : []).forEach(add);
+  try {
+    var roles = (project && project.midpCatalog && project.midpCatalog.roles) || [];
+    roles.forEach(function(r){
+      if(r && r.selected !== false) add(r.code || r.label);
+    });
+  } catch(e){}
+  try {
+    var members = (project && project.projectTeam && project.projectTeam.members) || [];
+    members.forEach(function(m){ add(m.discipline); add(m.func); });
+  } catch(e){}
+  if(!out.length) ["AR","ST","ME","EE","CV","PD"].forEach(add);
+  return out;
+}
+
 
 function selectedPhases(project){
   const cat = project && project.midpCatalog;
@@ -7815,22 +7851,59 @@ function ensureProductionFramework(project, opts){
   const teamSet = {};
   teamCodes.forEach(function(c){ teamSet[c] = true; });
 
-  let systems = flattenSsThirdGroup();
-  // Filter systems by task team if project has task teams defined
-  if(teamCodes.length){
-    systems = systems.filter(function(s){
-      if(!s.ro) return true;
-      return !!teamSet[s.ro];
-    });
+  let systemsAll = [];
+  try { systemsAll = flattenSsThirdGroup(); } catch(e){ systemsAll = []; }
+  if(!systemsAll.length){
+    // Emergency fallback: walk SS tree for any Ss_x_y_z
+    try {
+      const tree = (typeof SS_TREE_COMPACT !== "undefined") ? SS_TREE_COMPACT : [];
+      const acc = [];
+      (function walk(nodes){
+        (nodes || []).forEach(function(n){
+          if(!n || !n.c) return;
+          const tok = String(n.c).split("_");
+          if(tok.length >= 3){
+            acc.push({
+              code: n.c,
+              name: n.n || n.c,
+              ro: String(n.r || "").toUpperCase(),
+              discipline: n.d || "",
+              lod: n.l || ""
+            });
+          }
+          if(n.k && n.k.length) walk(n.k);
+        });
+      })(tree);
+      systemsAll = acc;
+    } catch(e){}
   }
-  // Optional project.production.systemCodes allow-list
+
+  let systems = systemsAll.slice();
+  if(teamCodes.length && systems.length){
+    const filtered = systems.filter(function(s){
+      const ro = (typeof normalizeTaskTeamCode === "function") ? normalizeTaskTeamCode(s.ro) : String(s.ro || "").toUpperCase();
+      if(!ro) return true;
+      return !!teamSet[ro];
+    });
+    // Critical: never drop to zero because of a label mismatch
+    systems = filtered.length ? filtered : systemsAll.slice();
+  }
+
   if(Array.isArray(project.production.systemCodes) && project.production.systemCodes.length){
     const allow = {};
     project.production.systemCodes.forEach(function(c){ allow[String(c)] = true; });
-    systems = systems.filter(function(s){ return allow[s.code]; });
+    const allowed = systems.filter(function(s){ return allow[s.code]; });
+    if(allowed.length) systems = allowed;
   }
 
-  // Cap for performance on first seed if huge — keep all matched teams but limit if still extreme
+  project.production._lastSyncMeta = {
+    fbCount: (fbs || []).length,
+    teamCodes: teamCodes.slice(),
+    systemsAll: systemsAll.length,
+    systemsUsed: systems.length,
+    ssTreeDefined: (typeof SS_TREE_COMPACT !== "undefined")
+  };
+
   const MAX_PP = 2500;
   const existingById = {};
   (project.production.packages || []).forEach(function(pp){ if(pp && pp.id) existingById[pp.id] = pp; });
@@ -7839,14 +7912,14 @@ function ensureProductionFramework(project, opts){
   const phases = selectedPhases(project);
   const defaultPhase = phases.length ? phases[0].code : "";
 
-  fbs.forEach(function(fb){
-    const fbCode = String(fb.code).toUpperCase();
+  (fbs || []).forEach(function(fb){
+    const fbCode = String(fb.code || "").toUpperCase();
+    if(!fbCode) return;
     systems.forEach(function(sys){
       if(next.length >= MAX_PP) return;
       const id = "PP-" + fbCode + "-" + String(sys.code).replace(/[^A-Za-z0-9_]/g, "_");
       const prev = existingById[id];
       if(prev){
-        // refresh attributes from settings, keep user fields
         prev.fb = fbCode;
         prev.ss = sys.code;
         prev.name = sys.name || prev.name;
@@ -7878,6 +7951,7 @@ function ensureProductionFramework(project, opts){
   project.production.lastSyncedAt = Date.now();
   return project.production;
 }
+
 
 function getProductionPackages(project, filter){
   ensureProductionFramework(project);
@@ -7978,7 +8052,7 @@ function renderProductionWbs(project){
   htmlOut += 'Identity persists across all work stages.</div>';
   htmlOut += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">';
   htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnSyncProductionFromSettings">Re-sync from settings</button>';
-  htmlOut += '<span style="font-size:11px;color:#666;">' + (project.production.packages || []).length + ' packages · FB ' + tree.length + '</span>';
+  htmlOut += '<span style="font-size:11px;color:#666;">' + (project.production.packages || []).length + ' packages · FB ' + tree.length + (project.production._lastSyncMeta ? (' · Ss ' + (project.production._lastSyncMeta.systemsUsed||0) + ' · teams ' + ((project.production._lastSyncMeta.teamCodes||[]).join(',')||'—')) : '') + '</span>';
   if(stages.length){
     htmlOut += '<span style="font-size:11px;color:#666;">Stages: ' + stages.map(function(s){ return stageLabel(s.id); }).join(" · ") + '</span>';
   }
@@ -7988,7 +8062,24 @@ function renderProductionWbs(project){
     htmlOut += '<div class="card" style="padding:16px;">No production packages yet. Select Functional Breakdown and Task Teams under <strong>Project Settings</strong>, then Re-sync.</div>';
     el.innerHTML = htmlOut;
     const b = document.getElementById("btnSyncProductionFromSettings");
-    if(b) b.onclick = function(){ project.production.systemCodes = null; ensureProductionFramework(project, { force: true }); try{ saveData(DATA); }catch(e){} renderProductionWbs(project); };
+    if(b) b.onclick = function(){
+      try {
+        if(!project.production) project.production = normalizeProductionState(null);
+        project.production.systemCodes = null;
+        project.production.packages = []; // full rebuild from settings
+        ensureProductionFramework(project, { force: true });
+        try{ saveData(DATA); }catch(e){}
+        var meta = (project.production && project.production._lastSyncMeta) || {};
+        var n = (project.production.packages || []).length;
+        try{
+          showToast("Synced " + n + " packages · FB " + (meta.fbCount||0) + " · Ss " + (meta.systemsUsed||0) + " · Ro " + ((meta.teamCodes||[]).join(",")||"—"));
+        }catch(e){}
+        renderProductionWbs(project);
+      } catch(err){
+        console.error(err);
+        try{ showToast("Sync failed: " + (err && err.message ? err.message : err)); }catch(e){}
+      }
+    };
     return;
   }
 
@@ -8033,10 +8124,22 @@ function renderProductionWbs(project){
   const btn = document.getElementById("btnSyncProductionFromSettings");
   if(btn){
     btn.onclick = function(){
-      ensureProductionFramework(project, { force: true });
-      try{ saveData(DATA); }catch(e){}
-      try{ showToast("Production packages synced from settings"); }catch(e){}
-      renderProductionWbs(project);
+      try {
+        if(!project.production) project.production = normalizeProductionState(null);
+        project.production.systemCodes = null;
+        project.production.packages = [];
+        ensureProductionFramework(project, { force: true });
+        try { saveData(DATA); } catch(e){}
+        var meta = (project.production && project.production._lastSyncMeta) || {};
+        var n = (project.production.packages || []).length;
+        try {
+          showToast("Synced " + n + " packages | FB " + (meta.fbCount||0) + " | Ss " + (meta.systemsUsed||0) + " | Ro " + ((meta.teamCodes||[]).join(",")||"—") + (meta.ssTreeDefined ? "" : " | NO SS TREE"));
+        } catch(e){}
+        renderProductionWbs(project);
+      } catch(err){
+        console.error(err);
+        try { showToast("Sync failed: " + (err && err.message ? err.message : String(err))); } catch(e){}
+      }
     };
   }
 }
