@@ -2316,8 +2316,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.6.9";
-const APP_BUILD = "2026-08-24-perf-role-title";
+const APP_VERSION = "3.6.10";
+const APP_BUILD = "2026-08-25-role-switch-fix";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -2480,6 +2480,107 @@ document.addEventListener("DOMContentLoaded", () => {
   try { renderAccessMatrix(); } catch(e){}
 });
 
+
+/** Active functional role for this project (drives task list / WBS / title). */
+function getProjectViewerRole(project){
+  try {
+    if(project && project.viewerRole && project.viewerRole.func){
+      var f = String(project.viewerRole.func || "IM").toUpperCase();
+      if(f === "ADMIN") f = "IM";
+      return {
+        func: f,
+        name: project.viewerRole.name || "",
+        discipline: project.viewerRole.discipline || "",
+        memberId: project.viewerRole.memberId || ""
+      };
+    }
+  } catch(e){}
+  try {
+    var u = (typeof getCurrentUser === "function") ? getCurrentUser() : null;
+    if(u && u.func){
+      var uf = u.isAdmin ? "IM" : String(u.func || "IM").toUpperCase();
+      if(uf === "ADMIN") uf = "IM";
+      return {
+        func: uf,
+        name: u.name || "",
+        discipline: u.discipline || "",
+        memberId: u.id || u.email || ""
+      };
+    }
+  } catch(e){}
+  return { func: "IM", name: "", discipline: "", memberId: "" };
+}
+
+function roleOptionLabel(code){
+  var c = String(code || "").toUpperCase();
+  var roles = (typeof FUNCTIONAL_ROLES !== "undefined" && FUNCTIONAL_ROLES.length) ? FUNCTIONAL_ROLES : [
+    { code:"DTL", label:"Delivery Team Lead" },
+    { code:"PDM", label:"Project Delivery Manager" },
+    { code:"IM", label:"Information Manager" },
+    { code:"TTM", label:"Task Team Manager" }
+  ];
+  for(var i=0;i<roles.length;i++){
+    if(String(roles[i].code).toUpperCase() === c) return roles[i].label || c;
+  }
+  if(c === "IM") return "Information Manager";
+  if(c === "DTL") return "Delivery Team Lead";
+  if(c === "PDM") return "Project Delivery Manager";
+  if(c === "TTM") return "Task Team Manager";
+  return c;
+}
+
+function applyRoleSelection(proj, value){
+  var v = String(value || "");
+  if(!v){
+    if(typeof setCurrentUser === "function") setCurrentUser(null);
+    if(proj){ proj.viewerRole = null; try{ saveData(DATA); }catch(e){} }
+  } else if(v === "__admin__"){
+    if(typeof setCurrentUser === "function") setCurrentUser({ name: "Admin", func: "ADMIN", isAdmin: true });
+    if(proj){ proj.viewerRole = { func: "IM", name: "Admin" }; try{ saveData(DATA); }catch(e){} }
+    try{ showToast("Admin · IM task list"); }catch(e){}
+  } else if(v.indexOf("role:") === 0){
+    var code = String(v.slice(5) || "IM").toUpperCase();
+    var label = roleOptionLabel(code);
+    if(typeof setCurrentUser === "function"){
+      setCurrentUser({ name: label, func: code, isAdmin: false });
+    }
+    if(proj){
+      proj.viewerRole = { func: code, name: label };
+      try{ saveData(DATA); }catch(e){}
+    }
+    try{ showToast("Task list: " + label); }catch(e){}
+  } else if(v.indexOf("m:") === 0){
+    var key = v.slice(2);
+    var mems = ((proj && proj.projectTeam && proj.projectTeam.members) || []);
+    var mem = mems.find(function(x){
+      return String(x.id)===key || String(x.email||"")===key || String(x.name||"")===key;
+    });
+    if(mem){
+      var mf = String(mem.func || "IM").toUpperCase();
+      if(typeof setCurrentUser === "function"){
+        setCurrentUser({
+          id: mem.id, name: mem.name, email: mem.email,
+          func: mf, discipline: mem.discipline || "",
+          isAdmin: (mf === "IM" || mf === "DTL")
+        });
+      }
+      if(proj){
+        proj.viewerRole = {
+          func: mf,
+          discipline: mem.discipline || "",
+          memberId: mem.id || mem.email || "",
+          name: mem.name || ""
+        };
+        try{ saveData(DATA); }catch(e){}
+      }
+      try{ showToast("Working as " + (mem.name || "") + " (" + mf + ")"); }catch(e){}
+    }
+  }
+  try{ invalidateHierarchyCache(proj && proj.id); }catch(e){}
+  try{ syncTopbarProjectTitle(proj); }catch(e){}
+  try{ renderWorkspace(); }catch(e){}
+}
+
 function refreshRoleSwitcher(project){
   const sels = [document.getElementById("topbarRoleSwitcher")].filter(Boolean);
   if(!sels.length) return;
@@ -2490,7 +2591,27 @@ function refreshRoleSwitcher(project){
   const team = (typeof ensureProjectTeam === "function") ? ensureProjectTeam(project) : (project.projectTeam || { members: [] });
   const members = (team.members || []).slice().sort(function(a,b){ return String(a.name||"").localeCompare(String(b.name||"")); });
   const cur = (typeof getCurrentUser === "function") ? getCurrentUser() : null;
-  const viewer = (typeof getProjectViewerRole === "function") ? getProjectViewerRole(project) : { func: "IM" };
+  const viewer = getProjectViewerRole(project);
+  const viewerFunc = String((viewer && viewer.func) || "IM").toUpperCase();
+
+  // Desired select value after rebuild
+  var wantVal = "";
+  if(cur && cur.isAdmin){
+    wantVal = "__admin__";
+  } else if(cur && (cur.id || cur.email) && members.length){
+    var matchMem = members.find(function(m){
+      return (cur.id && String(m.id) === String(cur.id)) ||
+             (cur.email && String(m.email||"") === String(cur.email)) ||
+             (cur.name && String(m.name||"") === String(cur.name));
+    });
+    if(matchMem){
+      wantVal = "m:" + String(matchMem.id || matchMem.email || matchMem.name);
+    } else {
+      wantVal = "role:" + viewerFunc;
+    }
+  } else {
+    wantVal = "role:" + viewerFunc;
+  }
 
   var opts = '<option value="">Who am I on this project?</option>';
   if(members.length){
@@ -2498,26 +2619,32 @@ function refreshRoleSwitcher(project){
     members.forEach(function(m){
       var val = "m:" + String(m.id || m.email || m.name);
       var lab = (m.name || "?") + " · " + (m.func || "") + (m.discipline ? ("-" + m.discipline) : "");
-      var selected = cur && (cur.id === m.id || cur.email === m.email || cur.name === m.name);
-      opts += '<option value="' + String(val).replace(/"/g,"&quot;") + '"' + (selected ? " selected" : "") + ">" + lab.replace(/</g,"&lt;") + "</option>";
+      opts += '<option value="' + String(val).replace(/"/g,"&quot;") + '">' + lab.replace(/</g,"&lt;") + "</option>";
     });
     opts += "</optgroup>";
   }
   opts += '<optgroup label="Functional role (task list)">';
-  var roles = (typeof FUNCTIONAL_ROLES !== "undefined" && FUNCTIONAL_ROLES.length) ? FUNCTIONAL_ROLES : [
+  var roles = [
+    { code:"IM", label:"Information Manager" },
     { code:"DTL", label:"Delivery Team Lead" },
     { code:"PDM", label:"Project Delivery Manager" },
-    { code:"IM", label:"Information Manager" },
     { code:"TTM", label:"Task Team Manager" }
   ];
+  // Prefer FUNCTIONAL_ROLES subset if present
+  try {
+    if(typeof FUNCTIONAL_ROLES !== "undefined" && FUNCTIONAL_ROLES.length){
+      var wantCodes = { IM:1, DTL:1, PDM:1, TTM:1 };
+      var filtered = FUNCTIONAL_ROLES.filter(function(r){ return wantCodes[String(r.code||"").toUpperCase()]; });
+      if(filtered.length) roles = filtered.map(function(r){ return { code: String(r.code).toUpperCase(), label: r.label || r.code }; });
+    }
+  } catch(e){}
   roles.forEach(function(r){
-    var code = r.code || r;
+    var code = String(r.code || r).toUpperCase();
     var label = r.label || code;
-    var selected = (!cur || !cur.id) && viewer && String(viewer.func) === String(code);
-    opts += '<option value="role:' + code + '"' + (selected ? " selected" : "") + ">" + code + " — " + String(label).replace(/</g,"&lt;") + "</option>";
+    opts += '<option value="role:' + code + '">' + code + " — " + String(label).replace(/</g,"&lt;") + "</option>";
   });
   opts += "</optgroup>";
-  opts += '<option value="__admin__"' + (cur && cur.isAdmin ? " selected" : "") + ">Admin (elevated)</option>";
+  opts += '<option value="__admin__">Admin (elevated)</option>';
 
   function bindSel(sel){
     sel.innerHTML = opts;
@@ -2525,54 +2652,20 @@ function refreshRoleSwitcher(project){
       sel.classList.add("show");
       sel.style.display = "inline-block";
     }
+    // Force the visible selection to the active role (this was the main UI bug)
+    try {
+      sel.value = wantVal;
+      if(sel.value !== wantVal){
+        // fallback: pure role
+        sel.value = "role:" + viewerFunc;
+      }
+    } catch(e){}
     if(sel._whoBound) return;
     sel._whoBound = true;
     sel.addEventListener("change", function(){
-      var v = sel.value;
-      var proj = (typeof projectById === "function" && typeof currentProjectId !== "undefined") ? projectById(currentProjectId) : project;
-      if(!v){
-        if(typeof setCurrentUser === "function") setCurrentUser(null);
-        if(proj){ proj.viewerRole = null; try{ saveData(DATA); }catch(e){} }
-        try{ invalidateHierarchyCache(proj && proj.id); }catch(e){}
-        try{ syncTopbarProjectTitle(proj); }catch(e){}
-        try{ renderWorkspace(); }catch(e){}
-        return;
-      }
-      if(v === "__admin__"){
-        setCurrentUser({ name: "Admin", func: "ADMIN", isAdmin: true });
-        if(proj){ proj.viewerRole = { func: "IM", name: "Admin" }; try{ saveData(DATA); }catch(e){} }
-        try{ showToast("Admin · IM task list"); }catch(e){}
-        try{ invalidateHierarchyCache(proj && proj.id); }catch(e){}
-        try{ syncTopbarProjectTitle(proj); }catch(e){}
-        try{ renderWorkspace(); }catch(e){}
-        return;
-      }
-      if(v.indexOf("role:") === 0){
-        var code = v.slice(5);
-        setCurrentUser({ name: code, func: code, isAdmin: (code === "IM" || code === "DTL") });
-        if(proj){ proj.viewerRole = { func: code, name: code }; try{ saveData(DATA); }catch(e){} }
-        try{ showToast("Task list: " + code); }catch(e){}
-        try{ invalidateHierarchyCache(proj && proj.id); }catch(e){}
-        try{ syncTopbarProjectTitle(proj); }catch(e){}
-        try{ renderWorkspace(); }catch(e){}
-        return;
-      }
-      if(v.indexOf("m:") === 0){
-        var key = v.slice(2);
-        var mems = ((proj && proj.projectTeam && proj.projectTeam.members) || []);
-        var mem = mems.find(function(x){ return String(x.id)===key || String(x.email||"")===key || String(x.name||"")===key; });
-        if(mem){
-          setCurrentUser({ id: mem.id, name: mem.name, email: mem.email, func: mem.func, discipline: mem.discipline || "", isAdmin: mem.func==="IM"||mem.func==="DTL" });
-          if(proj){
-            proj.viewerRole = { func: mem.func, discipline: mem.discipline || "", memberId: mem.id || mem.email || "", name: mem.name || "" };
-            try{ saveData(DATA); }catch(e){}
-          }
-          try{ showToast("Working as " + mem.name + " (" + mem.func + ")"); }catch(e){}
-          try{ invalidateHierarchyCache(proj && proj.id); }catch(e){}
-        try{ syncTopbarProjectTitle(proj); }catch(e){}
-        try{ renderWorkspace(); }catch(e){}
-        }
-      }
+      var proj = (typeof projectById === "function" && typeof currentProjectId !== "undefined")
+        ? projectById(currentProjectId) : project;
+      applyRoleSelection(proj, sel.value);
     });
   }
   sels.forEach(bindSel);
