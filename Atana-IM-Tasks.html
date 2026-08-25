@@ -2324,8 +2324,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.9.0";
-const APP_BUILD = "2026-08-25-phase3-tidp";
+const APP_VERSION = "3.10.0";
+const APP_BUILD = "2026-08-25-phase4-frrm";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -7990,7 +7990,12 @@ function normalizeTidpRow(row){
     loinReadiness: row.loinReadiness != null ? Number(row.loinReadiness) : null,
     interfaceReadiness: row.interfaceReadiness != null ? Number(row.interfaceReadiness) : null,
     informationReadiness: row.informationReadiness != null ? Number(row.informationReadiness) : null,
-    notes: String(row.notes || "")
+    notes: String(row.notes || ""),
+    /** Phase 4 FRRM — functional role authority (not named user yet) */
+    funcRole: String(row.funcRole || row.role || "").toUpperCase(),
+    funcRoleName: String(row.funcRoleName || ""),
+    authority: String(row.authority || "").toUpperCase(),
+    authorityName: String(row.authorityName || "")
   };
 }
 
@@ -8036,15 +8041,18 @@ function ensureTidpRowsForProject(project, opts){
       const key = pp.id + "|" + seed.category + "|" + seed.activity;
       if(byKey[key]){
         // refresh workstage target LOIN only — keep status & identity
-        const row = byKey[key];
+        let row = byKey[key];
         row.workstage = stageId;
         if(!row.targetLod) row.targetLod = wmm.lod;
         if(!row.targetLoi) row.targetLoi = wmm.loi;
+        if(typeof applyFrrmToTidpRow === "function") row = applyFrrmToTidpRow(row);
+        byKey[key] = row;
+        existing[row.id] = row;
         return;
       }
       const id = nextTidpId(project);
       // bump internal list so nextTidpId advances
-      const row = normalizeTidpRow({
+      let row = normalizeTidpRow({
         id: id,
         ppId: pp.id,
         fb: pp.fb,
@@ -8059,6 +8067,7 @@ function ensureTidpRowsForProject(project, opts){
         status: TIDP_STATUS.CREATED,
         airRef: seed.air
       });
+      if(typeof applyFrrmToTidpRow === "function") row = applyFrrmToTidpRow(row);
       existing[id] = row;
       byKey[key] = row;
       project.production.tidpRows.push(row);
@@ -8086,6 +8095,163 @@ function getTidpRowsForPackage(project, ppId){
   const rows = (project.production && project.production.tidpRows) || [];
   return rows.filter(function(r){ return r.ppId === ppId; });
 }
+
+
+/* ===================== PHASE 4 — FRRM =====================
+   Functional Role Responsibility Matrix
+   Task Team (Ro) = Scope ownership
+   Functional Role = Authority (not user security yet)
+   TIDP Row → Activity → Role → Authority → allowed workflow states
+   ========================================================== */
+
+const FRRM_ROLES = {
+  DTL:  { code: "DTL",  name: "Delivery Team Lead",        kind: "enabling" },
+  PDM:  { code: "PDM",  name: "Project Delivery Manager",  kind: "enabling" },
+  IM:   { code: "IM",   name: "Information Manager",       kind: "enabling" },
+  TTM:  { code: "TTM",  name: "Task Team Manager",         kind: "task_team" },
+  TTIM: { code: "TTIM", name: "Task Team Information Manager", kind: "task_team" },
+  IA:   { code: "IA",   name: "Information Author",        kind: "task_team" },
+  PR:   { code: "PR",   name: "Peer Reviewer",             kind: "task_team" }
+};
+
+/** Authority codes */
+const FRRM_AUTHORITY = {
+  O: { code: "O", name: "Owner",   description: "Accountable for successful delivery" },
+  A: { code: "A", name: "Author",  description: "Creates or modifies information" },
+  V: { code: "V", name: "Verify",  description: "Confirms compliance" },
+  R: { code: "R", name: "Review",  description: "Technical review" },
+  P: { code: "P", name: "Approve", description: "Authorises progression" }
+};
+
+/**
+ * Object-level FRRM (structure only).
+ * objectType: package | tidp | deliverable | information_package
+ */
+const FRRM_OBJECT_MATRIX = {
+  package: [
+    { role: "TTM",  authorities: ["O", "P"] },
+    { role: "TTIM", authorities: ["V"] },
+    { role: "IA",   authorities: ["A"] },
+    { role: "PR",   authorities: ["R"] }
+  ],
+  tidp: [
+    { role: "IA",   authorities: ["A"], activities: ["Plan", "Model", "Document", "Specify", "Schedule"] },
+    { role: "TTIM", authorities: ["V"], activities: ["Coordinate", "Verify"] },
+    { role: "PR",   authorities: ["R"], activities: ["Review"] },
+    { role: "TTM",  authorities: ["P", "O"], activities: ["Approve"] }
+  ],
+  deliverable: [
+    { role: "IA",   authorities: ["A"] },
+    { role: "TTIM", authorities: ["V"] },
+    { role: "PR",   authorities: ["R"] },
+    { role: "TTM",  authorities: ["P"] }
+  ],
+  information_package: [
+    { role: "TTIM", authorities: ["O", "A", "V"] },
+    { role: "IM",   authorities: ["V"] },
+    { role: "TTM",  authorities: ["P"] }
+  ]
+};
+
+/** Activity → primary Functional Role + Authority (assignment engine seed) */
+const FRRM_ACTIVITY_ASSIGNMENT = {
+  Plan:       { role: "IA",   authority: "A", category: "PLN" },
+  Model:      { role: "IA",   authority: "A", category: "AUT" },
+  Document:   { role: "IA",   authority: "A", category: "AUT" },
+  Specify:    { role: "IA",   authority: "A", category: "AUT" },
+  Schedule:   { role: "IA",   authority: "A", category: "AUT" },
+  Coordinate: { role: "TTIM", authority: "V", category: "CRD" },
+  Verify:     { role: "TTIM", authority: "V", category: "VFY" },
+  Review:     { role: "PR",   authority: "R", category: "APR" },
+  Approve:    { role: "TTM",  authority: "P", category: "APR" }
+};
+
+/**
+ * Workflow states allowed by Functional Role (not user login security).
+ * IA: Created → Assigned → In Progress → Submitted
+ * TTIM: Verified
+ * PR: Reviewed
+ * TTM: Approved, Closed
+ */
+const FRRM_ROLE_ALLOWED_STATUS = {
+  IA:   ["created", "assigned", "in_progress", "submitted"],
+  TTIM: ["verified"],
+  PR:   ["reviewed"],
+  TTM:  ["approved", "closed"],
+  TTIM_COORD: ["in_progress", "submitted", "verified"],
+  IM:   ["verified", "reviewed"],
+  PDM:  ["reviewed", "approved"],
+  DTL:  ["approved", "closed"]
+};
+
+function frrmAssignmentForActivity(activity){
+  const a = String(activity || "Model");
+  const hit = FRRM_ACTIVITY_ASSIGNMENT[a] || FRRM_ACTIVITY_ASSIGNMENT.Model;
+  return {
+    role: hit.role,
+    authority: hit.authority,
+    authorityName: (FRRM_AUTHORITY[hit.authority] && FRRM_AUTHORITY[hit.authority].name) || hit.authority,
+    roleName: (FRRM_ROLES[hit.role] && FRRM_ROLES[hit.role].name) || hit.role,
+    category: hit.category
+  };
+}
+
+function frrmAllowedStatusesForRole(roleCode){
+  const r = String(roleCode || "").toUpperCase();
+  return (FRRM_ROLE_ALLOWED_STATUS[r] || []).slice();
+}
+
+/** Can this functional role drive the given TIDP status transition? (structure only) */
+function frrmCanSetStatus(roleCode, status){
+  const allowed = frrmAllowedStatusesForRole(roleCode);
+  return allowed.indexOf(String(status || "").toLowerCase()) >= 0;
+}
+
+function frrmPackageResponsibilities(){
+  return (FRRM_OBJECT_MATRIX.package || []).map(function(row){
+    return {
+      role: row.role,
+      roleName: (FRRM_ROLES[row.role] && FRRM_ROLES[row.role].name) || row.role,
+      authorities: (row.authorities || []).map(function(a){
+        return { code: a, name: (FRRM_AUTHORITY[a] && FRRM_AUTHORITY[a].name) || a };
+      })
+    };
+  });
+}
+
+/**
+ * Apply FRRM assignment onto a TIDP row (role + authority from activity).
+ * Does not bind to a named user — that is later (security / organogram binding).
+ */
+function applyFrrmToTidpRow(row){
+  if(!row) return row;
+  const asg = frrmAssignmentForActivity(row.activity);
+  row.funcRole = asg.role;
+  row.authority = asg.authority;
+  row.authorityName = asg.authorityName;
+  row.funcRoleName = asg.roleName;
+  // Keep Ro as task team scope owner attribute (already on row)
+  return row;
+}
+
+function frrmMatrixSummaryHtml(){
+  let h = '<div class="card" style="padding:12px;margin:12px 0;box-shadow:0 2px 8px rgba(0,0,0,.06);">';
+  h += '<div style="font-weight:700;font-size:12px;margin-bottom:6px;">FRRM — Functional Role → Authority (Phase 4)</div>';
+  h += '<div style="font-size:11px;color:#555;margin-bottom:8px;">Task team (Ro) owns scope. Functional role owns authority. User security not applied yet.</div>';
+  h += '<table style="width:100%;font-size:11px;border-collapse:collapse;"><thead><tr>';
+  h += '<th style="text-align:left;padding:4px;">Activity</th><th style="text-align:left;padding:4px;">Role</th><th style="text-align:left;padding:4px;">Authority</th><th style="text-align:left;padding:4px;">Allowed statuses</th></tr></thead><tbody>';
+  Object.keys(FRRM_ACTIVITY_ASSIGNMENT).forEach(function(act){
+    const a = FRRM_ACTIVITY_ASSIGNMENT[act];
+    const st = frrmAllowedStatusesForRole(a.role).join(", ");
+    h += '<tr><td style="padding:3px 4px;">' + act + '</td>';
+    h += '<td style="padding:3px 4px;"><strong>' + a.role + '</strong> ' + ((FRRM_ROLES[a.role]&&FRRM_ROLES[a.role].name)||"") + '</td>';
+    h += '<td style="padding:3px 4px;">' + a.authority + ' — ' + ((FRRM_AUTHORITY[a.authority]&&FRRM_AUTHORITY[a.authority].name)||"") + '</td>';
+    h += '<td style="padding:3px 4px;color:#666;">' + st + '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
+
 
 function packageArchetypeForRo(ro){
   const c = String(ro || "ZZ").toUpperCase();
@@ -8345,7 +8511,7 @@ function ensureProductionFramework(project, opts){
     systemsAll: systemsAll.length,
     systemsUsed: systems.length,
     phase: defaultPhase,
-    framework: "Phase3"
+    framework: "Phase4"
   };
   try { ensureTidpRowsForProject(project); } catch(e){ console.warn("TIDP seed", e); }
   return project.production;
@@ -8594,6 +8760,9 @@ function renderProductionWbs(project){
     htmlOut += '</div>';
   }
   htmlOut += '<div style="font-size:11px;color:#555;margin-bottom:8px;">FB groups are <strong>collapsed by default</strong>. Expand one FB, then one Ro. Scope is set under <strong>Settings → Functional</strong> and <strong>Spatial</strong> matrices. XX and EXISTING are excluded.</div>';
+  if(typeof frrmMatrixSummaryHtml === "function"){
+    htmlOut += '<details style="margin:8px 0;border:1px solid #e5e7eb;border-radius:8px;"><summary style="cursor:pointer;padding:8px 10px;font-size:12px;font-weight:600;">FRRM assignment map (Phase 4)</summary><div style="padding:0 8px 8px;">' + frrmMatrixSummaryHtml() + '</div></details>';
+  }
   htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">';
   htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnSyncProductionFromSettings">Re-sync from settings</button>';
   htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnCollapseAllFb">Collapse all</button>';
@@ -8631,7 +8800,7 @@ function renderProductionWbs(project){
           inner += ' <span style="color:#888;font-weight:400;font-size:11px;">(' + rg.packages.length + ')</span></summary>';
           inner += '<div style="overflow:auto;max-height:240px;margin-top:6px;">';
           inner += '<table style="width:100%;font-size:11px;border-collapse:collapse;"><thead><tr>';
-          inner += '<th style="text-align:left;padding:4px;">Package</th><th style="text-align:left;padding:4px;">Ss</th><th style="text-align:left;padding:4px;">Name</th><th style="text-align:left;padding:4px;">Status</th><th style="text-align:left;padding:4px;">Phase</th><th style="text-align:left;padding:4px;">TIDP</th>';
+          inner += '<th style="text-align:left;padding:4px;">Package</th><th style="text-align:left;padding:4px;">Ss</th><th style="text-align:left;padding:4px;">Name</th><th style="text-align:left;padding:4px;">Status</th><th style="text-align:left;padding:4px;">Phase</th><th style="text-align:left;padding:4px;">TIDP / FRRM</th>';
           inner += '</tr></thead><tbody>';
           rg.packages.slice(0, 60).forEach(function(pp){
             var trs = (typeof getTidpRowsForPackage === "function") ? getTidpRowsForPackage(project, pp.id) : [];
@@ -8642,7 +8811,8 @@ function renderProductionWbs(project){
             inner += '<td style="padding:3px 4px;">' + escapeHtml(pp.name) + '</td>';
             inner += '<td style="padding:3px 4px;">' + escapeHtml(pp.status || "not_started") + '</td>';
             inner += '<td style="padding:3px 4px;">' + escapeHtml(pp.phase || "NEW") + '</td>';
-            inner += '<td style="padding:3px 4px;">' + (trs.length ? (tp + '% (' + trs.length + ' TR)') : '—') + '</td>';
+            var frrmBits = trs.slice(0, 3).map(function(r){ return (r.activity||"") + ":" + (r.funcRole||"?"); }).join(" · ");
+            inner += '<td style="padding:3px 4px;font-size:10px;">' + (trs.length ? (tp + '% · ' + escapeHtml(frrmBits) + (trs.length > 3 ? "…" : "")) : '—') + '</td>';
             inner += '</tr>';
           });
           if(rg.packages.length > 60){
