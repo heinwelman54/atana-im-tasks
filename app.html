@@ -2324,8 +2324,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.7.3";
-const APP_BUILD = "2026-08-25-scope-matrix-perf";
+const APP_VERSION = "3.8.1";
+const APP_BUILD = "2026-08-25-collapse-scope-tabs";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -7699,17 +7699,106 @@ function normalizeProject(p){
    Ro is an attribute on the package — not a WBS level.
    ========================================================================== */
 
-function normalizeProductionState(src){
-  const s = (src && typeof src === "object") ? src : {};
+
+
+
+/* ===================== PHASE 2 — PRODUCTION FRAMEWORK =====================
+   Lifecycle rule (locked):
+     Production Package = Scope Object   (FB + Ss, persistent identity)
+     Workstage          = Maturity State (not a new package)
+     LOIN               = Measurement    (LOD + LOI + Documentation Need)
+     TIDP Rows          = Production Requirements (later phase)
+     Deliverables       = Evidence
+     Information Packages = Exchange Containers (later phase)
+   One package matures through WS01–WS07; it is NEVER recreated per workstage.
+   ========================================================================== */
+
+/** Workstage maturity defaults (WMM). Project stages S1–S6 map here; WS07 reserved. */
+const WORKSTAGE_MATURITY_DEFAULTS = {
+  S1: { lod: "1", loi: "1", docs: ["M3"], label: "Brief / inception", outcomes: ["Scope confirmed"] },
+  S2: { lod: "2", loi: "2", docs: ["M3","DR"], label: "Concept", outcomes: ["Concept LOIN"] },
+  S3: { lod: "3", loi: "3", docs: ["DR","SH","SP"], label: "Design development", outcomes: ["Coordination LOIN"] },
+  S4: { lod: "4", loi: "4", docs: ["DR","SH","SP","CA"], label: "Technical design", outcomes: ["Technical LOIN"] },
+  S5: { lod: "5", loi: "5", docs: ["DR","SH","SP","CA","BQ"], label: "Construction", outcomes: ["Construction LOIN"] },
+  S6: { lod: "5", loi: "5", docs: ["DR","SH","CA"], label: "Handover", outcomes: ["As-built evidence"] },
+  S7: { lod: "5", loi: "5", docs: ["CA"], label: "In use / AIM", outcomes: ["Asset LOIN"] }
+};
+
+/**
+ * Package Archetype Library (PAL) — discipline templates.
+ * Generation uses archetype by Ro (task team attribute).
+ */
+const PACKAGE_ARCHETYPE_LIBRARY = {
+  AR: { code: "AR", name: "Architecture", defaultDocs: ["DR","SH","SP"], focus: "Envelope, spaces, finishes" },
+  ST: { code: "ST", name: "Structural", defaultDocs: ["DR","SH","CA"], focus: "Primary/secondary structure" },
+  ME: { code: "ME", name: "Mechanical", defaultDocs: ["DR","SH","SP"], focus: "Mechanical systems" },
+  MH: { code: "MH", name: "HVAC", defaultDocs: ["DR","SH","SP"], focus: "HVAC systems" },
+  EE: { code: "EE", name: "Electrical", defaultDocs: ["DR","SH","SP","SC"], focus: "Power, lighting, ELV" },
+  YS: { code: "YS", name: "Security", defaultDocs: ["DR","SH","SP"], focus: "Security systems" },
+  YC: { code: "YC", name: "Controls", defaultDocs: ["DR","SH","SP"], focus: "Controls / BMS" },
+  FD: { code: "FD", name: "Fire Detection", defaultDocs: ["DR","SH","SP"], focus: "Detection & alarm" },
+  FP: { code: "FP", name: "Fire Protection", defaultDocs: ["DR","SH","SP"], focus: "Suppression / protection" },
+  PD: { code: "PD", name: "Public Health", defaultDocs: ["DR","SH","SP"], focus: "Public health / plumbing" },
+  CV: { code: "CV", name: "Civil", defaultDocs: ["DR","SH","SP"], focus: "Civil works" },
+  PE: { code: "PE", name: "Process", defaultDocs: ["DR","SH","SP"], focus: "Process engineering" },
+  ZZ: { code: "ZZ", name: "Multi-disciplinary", defaultDocs: ["DR","SH"], focus: "Shared / multi-discipline" },
+  IM: { code: "IM", name: "Information Management", defaultDocs: ["M3","DB"], focus: "Information governance" }
+};
+
+const PACKAGE_STATUS = {
+  NOT_STARTED: "not_started",
+  IN_PROGRESS: "in_progress",
+  LOIN_READY: "loin_ready",
+  APPROVED: "approved",
+  ON_HOLD: "on_hold"
+};
+
+/** LOIN = LOD + LOI + Documentation Need (ALF) */
+function emptyLoin(seed){
+  seed = seed || {};
   return {
-    version: 1,
-    /** Selected system codes (3rd-group Ss) enabled for this project */
-    systemCodes: Array.isArray(s.systemCodes) ? s.systemCodes.map(String) : null,
-    /** Production packages keyed by stable id PP-{FB}-{Ss} */
-    packages: Array.isArray(s.packages) ? s.packages.map(normalizeProductionPackage).filter(Boolean) : [],
-    /** Optional overrides / notes */
-    lastSyncedAt: s.lastSyncedAt || null,
-    autoSyncFromSettings: s.autoSyncFromSettings !== false
+    lod: String(seed.lod != null ? seed.lod : ""),
+    loi: String(seed.loi != null ? seed.loi : ""),
+    docs: Array.isArray(seed.docs) ? seed.docs.map(String) : []
+  };
+}
+
+function normalizeStageMaturityMap(raw, archetype){
+  const out = {};
+  const src = (raw && typeof raw === "object") ? raw : {};
+  const arch = archetype && PACKAGE_ARCHETYPE_LIBRARY[archetype] ? PACKAGE_ARCHETYPE_LIBRARY[archetype] : null;
+  Object.keys(WORKSTAGE_MATURITY_DEFAULTS).forEach(function(sid){
+    const def = WORKSTAGE_MATURITY_DEFAULTS[sid];
+    const prev = src[sid] || {};
+    const target = emptyLoin(prev.target || {
+      lod: def.lod,
+      loi: def.loi,
+      docs: (arch && arch.defaultDocs && sid >= "S3") ? arch.defaultDocs.slice() : (def.docs || []).slice()
+    });
+    const achieved = emptyLoin(prev.achieved || {});
+    out[sid] = {
+      target: target,
+      achieved: achieved,
+      status: prev.status || PACKAGE_STATUS.NOT_STARTED,
+      activities: Array.isArray(prev.activities) ? prev.activities : [],
+      approvals: Array.isArray(prev.approvals) ? prev.approvals : [],
+      outcomes: Array.isArray(prev.outcomes) ? prev.outcomes : (def.outcomes || []).slice()
+    };
+  });
+  return out;
+}
+
+/**
+ * AIRF stub on package: why information exists (full AEIR later).
+ * Information Requirement → LOIN → Documentation Need → Deliverable (evidence).
+ */
+function normalizeAirf(raw){
+  const a = (raw && typeof raw === "object") ? raw : {};
+  return {
+    requirement: String(a.requirement || ""),
+    purpose: String(a.purpose || a.why || ""),
+    suitability: String(a.suitability || ""),
+    exchangeStage: String(a.exchangeStage || "")
   };
 }
 
@@ -7718,25 +7807,114 @@ function normalizeProductionPackage(pp){
   const fb = String(pp.fb || pp.functionalBreakdown || "").toUpperCase().trim();
   const ss = String(pp.ss || pp.system || pp.ssCode || "").trim();
   if(!fb || !ss) return null;
+  // IDENTITY: PP-{FB}-{Ss} — stable for full project lifecycle (never per-workstage)
   const id = String(pp.id || ("PP-" + fb + "-" + ss.replace(/[^A-Za-z0-9_]/g, "_")));
+  const ro = String(pp.ro || pp.role || pp.taskTeam || "").toUpperCase();
+  const archetype = String(pp.archetype || ro || "ZZ").toUpperCase();
+  let phase = String(pp.phase || "NEW").toUpperCase();
+  if(phase.indexOf("EXIST") >= 0) phase = "NEW"; // Production WBS excludes EXISTING
+  const status = pp.status && PACKAGE_STATUS[String(pp.status).toUpperCase()]
+    ? String(pp.status).toLowerCase()
+    : (pp.status || PACKAGE_STATUS.NOT_STARTED);
   return {
     id: id,
     fb: fb,
     ss: ss,
     name: String(pp.name || pp.label || ss),
-    /** Ro = task team attribute (NOT a WBS level) */
-    ro: String(pp.ro || pp.role || pp.taskTeam || "").toUpperCase(),
+    ro: ro,
     roLabel: String(pp.roLabel || ""),
-    phase: String(pp.phase || ""),
+    archetype: archetype,
+    phase: phase,
+    status: status,
     disabled: !!pp.disabled,
+    // reserved for later phases — structure only
     dependencies: Array.isArray(pp.dependencies) ? pp.dependencies.map(String) : [],
     interfaces: Array.isArray(pp.interfaces) ? pp.interfaces.map(String) : [],
-    targetLoin: (pp.targetLoin && typeof pp.targetLoin === "object") ? pp.targetLoin : { lod: "", loi: "", docs: [] },
-    /** Maturity per work stage id (S1…S6) — package identity persists */
-    stageMaturity: (pp.stageMaturity && typeof pp.stageMaturity === "object") ? pp.stageMaturity : {},
+    targetLoin: emptyLoin(pp.targetLoin),
+    stageMaturity: normalizeStageMaturityMap(pp.stageMaturity, archetype),
+    airf: normalizeAirf(pp.airf),
     notes: String(pp.notes || "")
   };
 }
+
+function normalizeProductionState(src){
+  const s = (src && typeof src === "object") ? src : {};
+  const scope = (s.scope && typeof s.scope === "object") ? s.scope : {};
+  return {
+    version: 2,
+    systemCodes: Array.isArray(s.systemCodes) ? s.systemCodes.map(String) : null,
+    packages: Array.isArray(s.packages) ? s.packages.map(normalizeProductionPackage).filter(Boolean) : [],
+    lastSyncedAt: s.lastSyncedAt || null,
+    autoSyncFromSettings: s.autoSyncFromSettings !== false,
+    scope: {
+      teamsEnabled: (scope.teamsEnabled && typeof scope.teamsEnabled === "object") ? scope.teamsEnabled : {},
+      fbEnabled: (scope.fbEnabled && typeof scope.fbEnabled === "object") ? scope.fbEnabled : {},
+      fbTeam: (scope.fbTeam && typeof scope.fbTeam === "object") ? scope.fbTeam : {},
+      slEnabled: (scope.slEnabled && typeof scope.slEnabled === "object") ? scope.slEnabled : {},
+      slTeam: (scope.slTeam && typeof scope.slTeam === "object") ? scope.slTeam : {},
+      productionPhases: Array.isArray(scope.productionPhases) && scope.productionPhases.length
+        ? scope.productionPhases.map(String)
+        : ["NEW", "NEW CONSTRUCTION"]
+    }
+  };
+}
+
+/** LOIN achievement ratio for one stage cell (0–1). */
+function loinStageScore(cell){
+  if(!cell || !cell.target) return 0;
+  const t = cell.target;
+  const a = cell.achieved || emptyLoin();
+  let parts = 0, hit = 0;
+  if(t.lod){ parts++; if(String(a.lod) && Number(a.lod) >= Number(t.lod)) hit++; }
+  if(t.loi){ parts++; if(String(a.loi) && Number(a.loi) >= Number(t.loi)) hit++; }
+  const tdocs = t.docs || [];
+  if(tdocs.length){
+    parts++;
+    const ad = a.docs || [];
+    const ok = tdocs.every(function(d){ return ad.indexOf(d) >= 0; });
+    if(ok) hit++;
+  }
+  return parts ? (hit / parts) : (cell.status === PACKAGE_STATUS.APPROVED ? 1 : 0);
+}
+
+/** Metrics & Progress Framework (MPF) — not drawing counts. */
+function computeProductionMetrics(project){
+  const list = getProductionPackages(project);
+  const stageId = (project && project.currentStageId) || "S3";
+  let loinSum = 0, ready = 0, approved = 0, inProg = 0, total = list.length;
+  list.forEach(function(pp){
+    const cell = (pp.stageMaturity && pp.stageMaturity[stageId]) ? pp.stageMaturity[stageId] : null;
+    const sc = loinStageScore(cell);
+    loinSum += sc;
+    if(pp.status === PACKAGE_STATUS.APPROVED || (cell && cell.status === PACKAGE_STATUS.APPROVED)) approved++;
+    else if(pp.status === PACKAGE_STATUS.LOIN_READY || sc >= 0.999) ready++;
+    else if(pp.status === PACKAGE_STATUS.IN_PROGRESS || sc > 0) inProg++;
+  });
+  const loinReadiness = total ? Math.round((loinSum / total) * 100) : 0;
+  const productionReadiness = total ? Math.round(((ready + approved) / total) * 100) : 0;
+  return {
+    totalPackages: total,
+    currentStageId: stageId,
+    productionReadiness: productionReadiness,
+    loinReadiness: loinReadiness,
+    informationReadiness: loinReadiness, // Phase 2: proxy until IP automation
+    interfaceReadiness: null, // later phase
+    assetReadiness: null, // later phase
+    approved: approved,
+    loinReady: ready,
+    inProgress: inProg,
+    notStarted: Math.max(0, total - approved - ready - inProg)
+  };
+}
+
+function packageArchetypeForRo(ro){
+  const c = String(ro || "ZZ").toUpperCase();
+  return PACKAGE_ARCHETYPE_LIBRARY[c] || PACKAGE_ARCHETYPE_LIBRARY.ZZ;
+}
+
+
+
+
 
 /** Flatten SS_TREE_COMPACT to 3rd-group depth (Ss_aa_bb_cc). */
 function flattenSsThirdGroup(tree){
@@ -7809,6 +7987,18 @@ function normalizeTaskTeamCode(raw){
   return "";
 }
 
+
+/** Task teams that can own production packages (exclude process roles). */
+var PRODUCTION_TEAM_CODES = ["AR","ST","ME","MH","EE","CV","PD","FP","FD","YS","YC","PE","QS","HG","CW"];
+function isProductionTeamCode(code){
+  var c = String(code || "").toUpperCase();
+  if(!c) return false;
+  if(PRODUCTION_TEAM_CODES.indexOf(c) >= 0) return true;
+  // reject known process / management roles
+  if(/^(IM|PDM|DTL|DM|TTM|TTIM|PEER|PR|APP|AP|ADMIN|ZZ)$/.test(c)) return false;
+  return c.length <= 3;
+}
+
 function selectedTaskTeamCodes(project){
   var out = [];
   var seen = {};
@@ -7846,112 +8036,110 @@ function ensureProductionFramework(project, opts){
   opts = opts || {};
   if(!project) return null;
   if(!project.production) project.production = normalizeProductionState(null);
+  else project.production = normalizeProductionState(project.production);
 
-  const fbs = selectedFunctionalBreakdowns(project);
-  const teamCodes = selectedTaskTeamCodes(project);
+  const scope = project.production.scope || {};
+  const fbsAll = selectedFunctionalBreakdowns(project);
+  const fbs = fbsAll.filter(function(fb){
+    const code = String(fb.code || "").toUpperCase();
+    if(!code) return false;
+    // XX always out of production scope unless explicitly enabled in matrix
+    if(code === "XX"){
+      return !!(scope.fbEnabled && scope.fbEnabled["XX"] === true);
+    }
+    if(scope.fbEnabled && Object.prototype.hasOwnProperty.call(scope.fbEnabled, code))
+      return !!scope.fbEnabled[code];
+    return fb.selected !== false;
+  });
+
+  // Only production discipline teams
+  let teamCodes = selectedTaskTeamCodes(project).filter(function(c){
+    return (typeof isProductionTeamCode === "function") ? isProductionTeamCode(c) : true;
+  });
+  teamCodes = teamCodes.filter(function(c){
+    if(scope.teamsEnabled && Object.prototype.hasOwnProperty.call(scope.teamsEnabled, c))
+      return !!scope.teamsEnabled[c];
+    return true;
+  });
   const teamSet = {};
   teamCodes.forEach(function(c){ teamSet[c] = true; });
 
   let systemsAll = [];
   try { systemsAll = flattenSsThirdGroup(); } catch(e){ systemsAll = []; }
-  if(!systemsAll.length){
-    // Emergency fallback: walk SS tree for any Ss_x_y_z
-    try {
-      const tree = (typeof SS_TREE_COMPACT !== "undefined") ? SS_TREE_COMPACT : [];
-      const acc = [];
-      (function walk(nodes){
-        (nodes || []).forEach(function(n){
-          if(!n || !n.c) return;
-          const tok = String(n.c).split("_");
-          if(tok.length >= 3){
-            acc.push({
-              code: n.c,
-              name: n.n || n.c,
-              ro: String(n.r || "").toUpperCase(),
-              discipline: n.d || "",
-              lod: n.l || ""
-            });
-          }
-          if(n.k && n.k.length) walk(n.k);
-        });
-      })(tree);
-      systemsAll = acc;
-    } catch(e){}
-  }
 
-  let systems = systemsAll.slice();
-  if(teamCodes.length && systems.length){
-    const filtered = systems.filter(function(s){
-      const ro = (typeof normalizeTaskTeamCode === "function") ? normalizeTaskTeamCode(s.ro) : String(s.ro || "").toUpperCase();
-      if(!ro) return true;
-      return !!teamSet[ro];
-    });
-    // Critical: never drop to zero because of a label mismatch
-    systems = filtered.length ? filtered : systemsAll.slice();
-  }
+  let systems = systemsAll.filter(function(s){
+    const ro = (typeof normalizeTaskTeamCode === "function") ? normalizeTaskTeamCode(s.ro) : String(s.ro || "").toUpperCase();
+    if(!ro) return false;
+    if(typeof isProductionTeamCode === "function" && !isProductionTeamCode(ro)) return false;
+    return !!teamSet[ro];
+  });
 
-  if(Array.isArray(project.production.systemCodes) && project.production.systemCodes.length){
-    const allow = {};
-    project.production.systemCodes.forEach(function(c){ allow[String(c)] = true; });
-    const allowed = systems.filter(function(s){ return allow[s.code]; });
-    if(allowed.length) systems = allowed;
-  }
-
-  project.production._lastSyncMeta = {
-    fbCount: (fbs || []).length,
-    teamCodes: teamCodes.slice(),
-    systemsAll: systemsAll.length,
-    systemsUsed: systems.length,
-    ssTreeDefined: (typeof SS_TREE_COMPACT !== "undefined")
-  };
-
-  const MAX_PP = 2500;
+  const defaultPhase = "NEW";
   const existingById = {};
-  (project.production.packages || []).forEach(function(pp){ if(pp && pp.id) existingById[pp.id] = pp; });
+  (project.production.packages || []).forEach(function(pp){
+    if(pp && pp.id) existingById[pp.id] = normalizeProductionPackage(pp);
+  });
 
+  const MAX_PP = 1200;
   const next = [];
-  const phases = selectedPhases(project);
-  const defaultPhase = phases.length ? phases[0].code : "";
-
-  (fbs || []).forEach(function(fb){
+  fbs.forEach(function(fb){
     const fbCode = String(fb.code || "").toUpperCase();
-    if(!fbCode) return;
+    if(fbCode === "XX" && !(scope.fbEnabled && scope.fbEnabled.XX)) return;
+    const fbTeamMap = (scope.fbTeam && scope.fbTeam[fbCode]) ? scope.fbTeam[fbCode] : null;
     systems.forEach(function(sys){
       if(next.length >= MAX_PP) return;
+      const ro = (typeof normalizeTaskTeamCode === "function") ? normalizeTaskTeamCode(sys.ro) : String(sys.ro || "").toUpperCase();
+      if(!ro || (typeof isProductionTeamCode === "function" && !isProductionTeamCode(ro))) return;
+      // Per-FB matrix: if any team ticks exist for this FB, require explicit true
+      if(fbTeamMap && typeof fbTeamMap === "object" && Object.keys(fbTeamMap).length){
+        if(!fbTeamMap[ro]) return;
+      }
       const id = "PP-" + fbCode + "-" + String(sys.code).replace(/[^A-Za-z0-9_]/g, "_");
       const prev = existingById[id];
       if(prev){
-        prev.fb = fbCode;
-        prev.ss = sys.code;
         prev.name = sys.name || prev.name;
-        prev.ro = sys.ro || prev.ro;
+        prev.ro = ro || prev.ro;
         prev.roLabel = sys.discipline || prev.roLabel;
-        if(!prev.phase && defaultPhase) prev.phase = defaultPhase;
+        prev.archetype = prev.archetype || ro || "ZZ";
+        prev.phase = defaultPhase; // force NEW — never EXISTING on production WBS
+        if(String(prev.fb).toUpperCase() === "XX") return; // drop XX packages
+        if(!prev.stageMaturity || !Object.keys(prev.stageMaturity).length){
+          prev.stageMaturity = normalizeStageMaturityMap(null, prev.archetype);
+        }
         next.push(prev);
       } else {
-        next.push({
+        next.push(normalizeProductionPackage({
           id: id,
           fb: fbCode,
           ss: sys.code,
           name: sys.name || sys.code,
-          ro: sys.ro || "",
+          ro: ro,
           roLabel: sys.discipline || "",
+          archetype: ro,
           phase: defaultPhase,
-          disabled: false,
-          dependencies: [],
-          interfaces: [],
-          targetLoin: { lod: sys.lod || "", loi: "", docs: [] },
-          stageMaturity: {},
-          notes: ""
-        });
+          status: (typeof PACKAGE_STATUS !== "undefined" ? PACKAGE_STATUS.NOT_STARTED : "not_started"),
+          targetLoin: { lod: (sys.lod || "").replace(/^LOD\s*/i,""), loi: "", docs: [] },
+          stageMaturity: (typeof normalizeStageMaturityMap === "function") ? normalizeStageMaturityMap(null, ro) : {},
+          airf: { requirement: "Production scope for " + (sys.name || sys.code), purpose: fbCode + " / " + sys.code }
+        }));
       }
     });
   });
 
   project.production.packages = next;
   project.production.lastSyncedAt = Date.now();
+  project.production._lastSyncMeta = {
+    fbCount: fbs.length,
+    teamCodes: teamCodes.slice(),
+    systemsAll: systemsAll.length,
+    systemsUsed: systems.length,
+    phase: defaultPhase,
+    framework: "Phase2"
+  };
   return project.production;
 }
+
+
 
 
 function getProductionPackages(project, filter){
@@ -8031,7 +8219,7 @@ function wirePlannerModeSeg(project){
 }
 
 
-function renderScopeMatrixEditors(project){
+function renderScopeMatrixEditors(project, mode){
   if(!project) return;
   if(!project.production) project.production = normalizeProductionState(null);
   const scope = project.production.scope;
@@ -8088,8 +8276,13 @@ function renderScopeMatrixEditors(project){
     });
   }
 
-  matrixTable("fb", fbs, "fbScopeMatrixHost");
-  matrixTable("sl", levels, "slScopeMatrixHost");
+  mode = mode || "functional";
+  if(mode === "functional" || mode === "breakdown"){
+    matrixTable("fb", fbs, "fbScopeMatrixHost");
+  }
+  if(mode === "spatial" || mode === "breakdown"){
+    matrixTable("sl", levels, "slScopeMatrixHost");
+  }
 
   const th = document.getElementById("teamScopeHost");
   if(th){
@@ -8138,117 +8331,127 @@ function collectScopeMatrixFromForm(project){
 function renderProductionWbs(project){
   const el = document.getElementById("wbsTree");
   if(!el) return;
-  ensureProductionFramework(project);
-  const tree = productionWbsTree(project);
-  const schedule = (typeof projectStageSchedule === "function") ? projectStageSchedule(project) : null;
-  const stageLabel = function(id){
-    try {
-      if(typeof getStageLabel === "function") return getStageLabel(project, id);
-    } catch(e){}
-    return id;
-  };
-  const stages = schedule || [];
+  // Do NOT rebuild packages on every paint (performance)
+  if(!project.production) project.production = normalizeProductionState(null);
+  const packages = getProductionPackages(project).filter(function(p){
+    return String(p.fb).toUpperCase() !== "XX" && String(p.phase || "").toUpperCase().indexOf("EXIST") < 0;
+  });
+  const metrics = (typeof computeProductionMetrics === "function") ? computeProductionMetrics(project) : null;
+  const tree = productionWbsTree(project).map(function(fbNode){
+    // strip XX and filter packages
+    if(String(fbNode.fb).toUpperCase() === "XX") return null;
+    const roGroups = (fbNode.roGroups || []).map(function(rg){
+      return {
+        ro: rg.ro,
+        label: rg.label,
+        packages: (rg.packages || []).filter(function(p){
+          return String(p.phase || "").toUpperCase().indexOf("EXIST") < 0;
+        })
+      };
+    }).filter(function(rg){ return rg.packages.length; });
+    const count = roGroups.reduce(function(n, rg){ return n + rg.packages.length; }, 0);
+    return count ? { fb: fbNode.fb, label: fbNode.label, count: count, roGroups: roGroups } : null;
+  }).filter(Boolean);
 
   let htmlOut = "";
   htmlOut += '<div class="card" style="margin-bottom:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
-  htmlOut += '<div style="font-size:12px;font-weight:700;color:var(--purple-900);margin-bottom:6px;">Production WBS — scope driven</div>';
-  htmlOut += '<div style="font-size:11px;color:#555;line-height:1.45;">Source of truth: <strong>FB → Ss → Production Package</strong>. ';
-  htmlOut += 'Task team (<strong>Ro</strong>) is an <em>attribute</em>, not a WBS level. ';
-  htmlOut += 'Packages are generated from <strong>Project Settings</strong> (Functional breakdown, task teams, phases) and Uniclass Ss (3rd group). ';
-  htmlOut += 'Identity persists across all work stages.</div>';
-  htmlOut += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">';
-  htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnSyncProductionFromSettings">Re-sync from settings</button>';
-  htmlOut += '<span style="font-size:11px;color:#666;">' + (project.production.packages || []).length + ' packages · FB ' + tree.length + (project.production._lastSyncMeta ? (' · Ss ' + (project.production._lastSyncMeta.systemsUsed||0) + ' · teams ' + ((project.production._lastSyncMeta.teamCodes||[]).join(',')||'—')) : '') + '</span>';
-  if(stages.length){
-    htmlOut += '<span style="font-size:11px;color:#666;">Stages: ' + stages.map(function(s){ return stageLabel(s.id); }).join(" · ") + '</span>';
+  htmlOut += '<div style="font-size:12px;font-weight:700;color:var(--purple-900);margin-bottom:6px;">Production WBS — Phase 2</div>';
+  if(metrics){
+    htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;font-size:11px;">';
+    htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f3f0f6;"><strong>Packages</strong> ' + packages.length + '</span>';
+    htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#ecfdf5;"><strong>Production readiness</strong> ' + metrics.productionReadiness + '%</span>';
+    htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#eff6ff;"><strong>LOIN readiness</strong> ' + metrics.loinReadiness + '%</span>';
+    htmlOut += '</div>';
   }
+  htmlOut += '<div style="font-size:11px;color:#555;margin-bottom:8px;">FB groups are <strong>collapsed by default</strong>. Expand one FB, then one Ro. Scope is set under <strong>Settings → Functional</strong> and <strong>Spatial</strong> matrices. XX and EXISTING are excluded.</div>';
+  htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">';
+  htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnSyncProductionFromSettings">Re-sync from settings</button>';
+  htmlOut += '<button type="button" class="btn btn-ghost btn-xs" id="btnCollapseAllFb">Collapse all</button>';
+  htmlOut += '<span style="font-size:11px;color:#666;">' + packages.length + ' packages · ' + tree.length + ' FB</span>';
   htmlOut += '</div></div>';
 
-  if(!tree.length || !tree.some(function(t){ return t.count; })){
-    htmlOut += '<div class="card" style="padding:16px;">No production packages yet. Select Functional Breakdown and Task Teams under <strong>Project Settings</strong>, then Re-sync.</div>';
+  if(!tree.length){
+    htmlOut += '<div class="card" style="padding:16px;">No in-scope packages. Open <strong>Edit project → Functional</strong>, tick FB × task teams, Save, then Re-sync.</div>';
     el.innerHTML = htmlOut;
-    const b = document.getElementById("btnSyncProductionFromSettings");
-    if(b) b.onclick = function(){
-      try {
-        if(!project.production) project.production = normalizeProductionState(null);
-        project.production.systemCodes = null;
-        project.production.packages = []; // full rebuild from settings
-        ensureProductionFramework(project, { force: true });
-        try{ saveData(DATA); }catch(e){}
-        var meta = (project.production && project.production._lastSyncMeta) || {};
-        var n = (project.production.packages || []).length;
-        try{
-          showToast("Synced " + n + " packages · FB " + (meta.fbCount||0) + " · Ss " + (meta.systemsUsed||0) + " · Ro " + ((meta.teamCodes||[]).join(",")||"—"));
-        }catch(e){}
-        renderProductionWbs(project);
-      } catch(err){
-        console.error(err);
-        try{ showToast("Sync failed: " + (err && err.message ? err.message : err)); }catch(e){}
-      }
-    };
-    return;
+  } else {
+    tree.forEach(function(fbNode){
+      // NEVER open by default
+      htmlOut += '<details class="prod-fb" data-fb="' + escapeHtml(fbNode.fb) + '" style="margin-bottom:8px;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.05);">';
+      htmlOut += '<summary style="cursor:pointer;padding:10px 12px;font-weight:700;user-select:none;">FB ' + escapeHtml(fbNode.fb) + ' — ' + escapeHtml(fbNode.label);
+      htmlOut += ' <span style="font-weight:500;color:#666;font-size:11px;">(' + fbNode.count + ')</span></summary>';
+      htmlOut += '<div class="prod-fb-body" data-fb-body="' + escapeHtml(fbNode.fb) + '" style="padding:8px 12px 12px;"></div>';
+      htmlOut += '</details>';
+    });
+    el.innerHTML = htmlOut;
+
+    el.querySelectorAll("details.prod-fb").forEach(function(det){
+      det.open = false; // force collapsed
+      det.addEventListener("toggle", function(){
+        if(!det.open) return;
+        const fb = det.getAttribute("data-fb");
+        const body = det.querySelector("[data-fb-body]");
+        if(!body || body.getAttribute("data-loaded") === "1") return;
+        const node = tree.find(function(t){ return String(t.fb) === String(fb); });
+        if(!node){ body.innerHTML = ""; return; }
+        let inner = "";
+        (node.roGroups || []).forEach(function(rg){
+          inner += '<details class="prod-ro" style="margin:6px 0 8px 4px;border-left:3px solid #d5c427;padding-left:8px;">';
+          inner += '<summary style="cursor:pointer;font-size:12px;font-weight:600;">Ro ' + escapeHtml(rg.ro);
+          if(rg.label && rg.label !== rg.ro) inner += ' — ' + escapeHtml(rg.label);
+          inner += ' <span style="color:#888;font-weight:400;font-size:11px;">(' + rg.packages.length + ')</span></summary>';
+          inner += '<div style="overflow:auto;max-height:240px;margin-top:6px;">';
+          inner += '<table style="width:100%;font-size:11px;border-collapse:collapse;"><thead><tr>';
+          inner += '<th style="text-align:left;padding:4px;">Package</th><th style="text-align:left;padding:4px;">Ss</th><th style="text-align:left;padding:4px;">Name</th><th style="text-align:left;padding:4px;">Status</th><th style="text-align:left;padding:4px;">Phase</th>';
+          inner += '</tr></thead><tbody>';
+          rg.packages.slice(0, 60).forEach(function(pp){
+            inner += '<tr>';
+            inner += '<td style="padding:3px 4px;font-family:var(--mono);font-size:10px;">' + escapeHtml(pp.id) + '</td>';
+            inner += '<td style="padding:3px 4px;font-family:var(--mono);">' + escapeHtml(pp.ss) + '</td>';
+            inner += '<td style="padding:3px 4px;">' + escapeHtml(pp.name) + '</td>';
+            inner += '<td style="padding:3px 4px;">' + escapeHtml(pp.status || "not_started") + '</td>';
+            inner += '<td style="padding:3px 4px;">' + escapeHtml(pp.phase || "NEW") + '</td>';
+            inner += '</tr>';
+          });
+          if(rg.packages.length > 60){
+            inner += '<tr><td colspan="5" style="padding:6px;color:#888;">+' + (rg.packages.length-60) + ' more</td></tr>';
+          }
+          inner += '</tbody></table></div></details>';
+        });
+        body.innerHTML = inner || '<p class="section-sub">No packages.</p>';
+        body.setAttribute("data-loaded", "1");
+        // Ro also collapsed by default
+        body.querySelectorAll("details.prod-ro").forEach(function(d){ d.open = false; });
+      });
+    });
   }
 
-  tree.forEach(function(fbNode){
-    htmlOut += '<details class="wbs-stage" open style="margin-bottom:10px;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,.06);">';
-    htmlOut += '<summary style="cursor:pointer;padding:10px 12px;font-weight:700;background:linear-gradient(90deg,rgba(62,11,59,.06),transparent);">';
-    htmlOut += 'FB ' + escapeHtml(fbNode.fb) + ' — ' + escapeHtml(fbNode.label);
-    htmlOut += ' <span style="font-weight:500;color:#666;font-size:11px;">(' + fbNode.count + ' packages)</span>';
-    htmlOut += '</summary><div style="padding:8px 12px 12px;">';
-
-    (fbNode.roGroups || []).forEach(function(rg){
-      htmlOut += '<details open style="margin:6px 0 8px 8px;border-left:3px solid #d5c427;padding-left:8px;">';
-      htmlOut += '<summary style="cursor:pointer;font-size:12px;font-weight:600;">Ro ' + escapeHtml(rg.ro);
-      if(rg.label && rg.label !== rg.ro) htmlOut += ' — ' + escapeHtml(rg.label);
-      htmlOut += ' <span style="font-weight:400;color:#888;font-size:11px;">(' + rg.packages.length + ')</span></summary>';
-      htmlOut += '<div style="overflow:auto;margin-top:6px;"><table class="data-table" style="width:100%;font-size:11px;border-collapse:collapse;">';
-      htmlOut += '<thead><tr>';
-      htmlOut += '<th style="text-align:left;padding:4px;">Package</th>';
-      htmlOut += '<th style="text-align:left;padding:4px;">Ss</th>';
-      htmlOut += '<th style="text-align:left;padding:4px;">Name</th>';
-      htmlOut += '<th style="text-align:left;padding:4px;">Ro</th>';
-      htmlOut += '<th style="text-align:left;padding:4px;">Phase</th>';
-      htmlOut += '<th style="text-align:left;padding:4px;">LOD target</th>';
-      htmlOut += '</tr></thead><tbody>';
-      rg.packages.forEach(function(pp){
-        htmlOut += '<tr data-pp-id="' + escapeHtml(pp.id) + '">';
-        htmlOut += '<td style="padding:3px 4px;font-family:var(--mono);font-size:10px;">' + escapeHtml(pp.id) + '</td>';
-        htmlOut += '<td style="padding:3px 4px;font-family:var(--mono);">' + escapeHtml(pp.ss) + '</td>';
-        htmlOut += '<td style="padding:3px 4px;">' + escapeHtml(pp.name) + '</td>';
-        htmlOut += '<td style="padding:3px 4px;">' + escapeHtml(pp.ro || "—") + '</td>';
-        htmlOut += '<td style="padding:3px 4px;">' + escapeHtml(pp.phase || "—") + '</td>';
-        htmlOut += '<td style="padding:3px 4px;">' + escapeHtml((pp.targetLoin && pp.targetLoin.lod) || "—") + '</td>';
-        htmlOut += '</tr>';
-      });
-      htmlOut += '</tbody></table></div></details>';
-    });
-
-    htmlOut += '</div></details>';
-  });
-
-  el.innerHTML = htmlOut;
   const btn = document.getElementById("btnSyncProductionFromSettings");
   if(btn){
     btn.onclick = function(){
       try {
-        if(!project.production) project.production = normalizeProductionState(null);
         project.production.systemCodes = null;
         project.production.packages = [];
         ensureProductionFramework(project, { force: true });
         try { saveData(DATA); } catch(e){}
-        var meta = (project.production && project.production._lastSyncMeta) || {};
-        var n = (project.production.packages || []).length;
+        var m = project.production._lastSyncMeta || {};
         try {
-          showToast("Synced " + n + " packages | FB " + (meta.fbCount||0) + " | Ss " + (meta.systemsUsed||0) + " | Ro " + ((meta.teamCodes||[]).join(",")||"—") + (meta.ssTreeDefined ? "" : " | NO SS TREE"));
+          showToast("Synced " + (project.production.packages||[]).length + " packages | FB " + (m.fbCount||0) + " | Ss " + (m.systemsUsed||0));
         } catch(e){}
         renderProductionWbs(project);
       } catch(err){
         console.error(err);
-        try { showToast("Sync failed: " + (err && err.message ? err.message : String(err))); } catch(e){}
+        try { showToast("Sync failed: " + (err.message || err)); } catch(e){}
       }
     };
   }
+  const col = document.getElementById("btnCollapseAllFb");
+  if(col){
+    col.onclick = function(){
+      el.querySelectorAll("details.prod-fb, details.prod-ro").forEach(function(d){ d.open = false; });
+    };
+  }
 }
+
 
 function renderProductionGantt(project){
   let host = document.getElementById("wbsGantt") || document.getElementById("ganttChart");
@@ -19179,9 +19382,9 @@ function bindSheetTabs(root){
         p.classList.toggle("active", on);
       });
       try {
-        if(id === "breakdown" && typeof renderScopeMatrixEditors === "function"){
+        if((id === "functional" || id === "spatial" || id === "breakdown") && typeof renderScopeMatrixEditors === "function"){
           const proj = (typeof projectById === "function" && typeof currentProjectId !== "undefined") ? projectById(currentProjectId) : null;
-          if(proj) renderScopeMatrixEditors(proj);
+          if(proj) renderScopeMatrixEditors(proj, id);
         }
       } catch(e){}
       try { p = root.querySelector(".sheet-handle"); } catch(e) {}
@@ -20684,7 +20887,8 @@ function openEditProjectSheet(project){
       <button type="button" class="sheet-tab" data-sptab="phases">Project phases</button>
       <button type="button" class="sheet-tab" data-sptab="delivery">Delivery</button>
       <button type="button" class="sheet-tab" data-sptab="projectteam">Project team</button>
-      <button type="button" class="sheet-tab" data-sptab="breakdown">FB / Spatial</button>
+      <button type="button" class="sheet-tab" data-sptab="functional">Functional</button>
+      <button type="button" class="sheet-tab" data-sptab="spatial">Spatial</button>
       <button type="button" class="sheet-tab" data-sptab="acc">Integration</button>
       <button type="button" class="sheet-tab" data-sptab="scope">Scope</button>
     </div>
@@ -20848,17 +21052,23 @@ function openEditProjectSheet(project){
     </div>
 
 
-    <div class="sheet-tab-panel" data-sptab-panel="breakdown">
+    
+    <div class="sheet-tab-panel" data-sptab-panel="functional">
       <div class="settings-section">
-        <h3>Functional &amp; spatial scope matrix</h3>
-        <p class="section-sub">Tick task teams <strong>in scope</strong> per FB and SL. <strong>XX</strong> default off. Production WBS uses ticked FB × team only. <strong>EXISTING</strong> phase excluded (packages default to <strong>NEW</strong>).</p>
+        <h3>Functional breakdown scope</h3>
+        <p class="section-sub">Tick which <strong>task teams (Ro)</strong> apply to each <strong>FB</strong>. <strong>XX</strong> is off by default (no production WBS). Unticked = out of scope.</p>
         <div id="teamScopeHost" style="margin-bottom:12px;"></div>
         <div id="fbScopeMatrixHost"></div>
-        <div id="slScopeMatrixHost" style="margin-top:16px;"></div>
       </div>
     </div>
-
-    <div class="sheet-tab-panel" data-sptab-panel="acc">
+    <div class="sheet-tab-panel" data-sptab-panel="spatial">
+      <div class="settings-section">
+        <h3>Spatial breakdown scope</h3>
+        <p class="section-sub">Tick which <strong>task teams</strong> apply to each <strong>spatial / level</strong> code. Used for deliverables and naming — not for Production Package identity.</p>
+        <div id="slScopeMatrixHost"></div>
+      </div>
+    </div>
+<div class="sheet-tab-panel" data-sptab-panel="acc">
       <div class="settings-section">
         <h3>Integration — FORMA / ACC</h3>
         <p class="section-sub">Link this Atana project to an ACC project, then choose Docs folders for DB sync and deliverable tracking.</p>
