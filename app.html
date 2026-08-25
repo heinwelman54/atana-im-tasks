@@ -2324,8 +2324,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.10.0";
-const APP_BUILD = "2026-08-25-phase4-frrm";
+const APP_VERSION = "3.10.1";
+const APP_BUILD = "2026-08-25-perf-open";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -7837,14 +7837,17 @@ function normalizeProductionPackage(pp){
   };
 }
 
-function normalizeProductionState(src){
+function normalizeProductionState(src, opts){
+  opts = opts || {};
   const s = (src && typeof src === "object") ? src : {};
   const scope = (s.scope && typeof s.scope === "object") ? s.scope : {};
+  // Soft path: keep existing package/tidp arrays by reference when already v2+ (avoids hang on open)
+  const soft = !opts.force && s.version >= 2 && Array.isArray(s.packages);
   return {
     version: 2,
     systemCodes: Array.isArray(s.systemCodes) ? s.systemCodes.map(String) : null,
-    packages: Array.isArray(s.packages) ? s.packages.map(normalizeProductionPackage).filter(Boolean) : [],
-    tidpRows: Array.isArray(s.tidpRows) ? s.tidpRows.map(normalizeTidpRow).filter(Boolean) : [],
+    packages: soft ? s.packages : (Array.isArray(s.packages) ? s.packages.map(normalizeProductionPackage).filter(Boolean) : []),
+    tidpRows: soft ? (Array.isArray(s.tidpRows) ? s.tidpRows : []) : (Array.isArray(s.tidpRows) ? s.tidpRows.map(normalizeTidpRow).filter(Boolean) : []),
     lastSyncedAt: s.lastSyncedAt || null,
     autoSyncFromSettings: s.autoSyncFromSettings !== false,
     scope: {
@@ -8017,6 +8020,10 @@ function ensureTidpRowsForProject(project, opts){
   if(!project) return [];
   if(!project.production) project.production = normalizeProductionState(null);
   if(!Array.isArray(project.production.tidpRows)) project.production.tidpRows = [];
+  // Skip heavy seed if already populated (unless force)
+  if(!opts.force && project.production.tidpRows.length > 0){
+    return project.production.tidpRows;
+  }
 
   const existing = {};
   project.production.tidpRows.forEach(function(r){
@@ -8263,38 +8270,34 @@ function packageArchetypeForRo(ro){
 
 
 /** Flatten SS_TREE_COMPACT to 3rd-group depth (Ss_aa_bb_cc). */
+var _ssThirdGroupCache = null;
 function flattenSsThirdGroup(tree){
+  if(!tree && _ssThirdGroupCache) return _ssThirdGroupCache;
   const out = [];
-  function walk(nodes, depth){
+  function walk(nodes){
     (nodes || []).forEach(function(n){
       if(!n || !n.c) return;
-      const parts = String(n.c).split("_").filter(Boolean);
-      // Ss + 3 numbers => length 4 parts e.g. Ss, 25, 30, 95
-      const isThird = parts.length >= 4 || (parts.length === 3 && parts[0] === "Ss");
-      // Prefer explicit 3rd group: Ss_XX_YY_ZZ (4 tokens)
       const tokens = String(n.c).split("_");
-      // 3rd group ONLY: Ss_10_20_30 (exactly 4 tokens). Exclude 4th group Ss_10_20_30_40.
+      // 3rd group ONLY: Ss_10_20_30 (exactly 4 tokens)
       if(tokens.length === 4 && tokens[0] === "Ss"){
         out.push({
           code: n.c,
           name: n.n || n.c,
-          ro: String(n.r || "").toUpperCase(),
-          discipline: n.d || "",
-          lod: n.l || ""
+          ro: n.r || "",
+          discipline: n.d || n.r || "",
+          lod: n.lod || ""
         });
       }
-      if(n.k && n.k.length) walk(n.k, depth + 1);
+      if(n.ch && n.ch.length) walk(n.ch);
     });
   }
-  walk(tree || (typeof SS_TREE_COMPACT !== "undefined" ? SS_TREE_COMPACT : []), 0);
-  // de-dupe by code
-  const seen = {};
-  return out.filter(function(x){
-    if(seen[x.code]) return false;
-    seen[x.code] = true;
-    return true;
-  });
+  try {
+    walk(tree || ((typeof SS_TREE_COMPACT !== "undefined") ? SS_TREE_COMPACT : []));
+  } catch(e){}
+  if(!tree) _ssThirdGroupCache = out;
+  return out;
 }
+
 
 function selectedFunctionalBreakdowns(project){
   const cat = (project && project.midpCatalog) ? project.midpCatalog : (typeof defaultMidpCatalog === "function" ? defaultMidpCatalog() : {});
@@ -8410,10 +8413,16 @@ function selectedPhases(project){
  * Merges by id — does not wipe user notes/deps/maturity.
  */
 function ensureProductionFramework(project, opts){
+
   opts = opts || {};
   if(!project) return null;
   if(!project.production) project.production = normalizeProductionState(null);
-  else project.production = normalizeProductionState(project.production);
+  // FAST PATH: do not rebuild thousands of packages on every project open / paint
+  if(!opts.force && Array.isArray(project.production.packages) && project.production.packages.length > 0){
+    return project.production;
+  }
+  // Normalize only when rebuilding
+  project.production = normalizeProductionState(project.production);
 
   const scope = project.production.scope || {};
   const fbsAll = selectedFunctionalBreakdowns(project);
@@ -8513,7 +8522,7 @@ function ensureProductionFramework(project, opts){
     phase: defaultPhase,
     framework: "Phase4"
   };
-  try { ensureTidpRowsForProject(project); } catch(e){ console.warn("TIDP seed", e); }
+  try { ensureTidpRowsForProject(project, { force: true }); } catch(e){ console.warn("TIDP seed", e); }
   return project.production;
 }
 
@@ -8521,15 +8530,17 @@ function ensureProductionFramework(project, opts){
 
 
 function getProductionPackages(project, filter){
-  ensureProductionFramework(project);
-  let list = (project.production && project.production.packages) || [];
+  if(!project) return [];
+  if(!project.production) project.production = normalizeProductionState(null);
+  // Do NOT call ensureProductionFramework here — that hangs the UI on open
+  let list = (project.production.packages) || [];
   filter = filter || {};
   if(filter.fb) list = list.filter(function(p){ return String(p.fb) === String(filter.fb); });
   if(filter.ro) list = list.filter(function(p){ return String(p.ro) === String(filter.ro); });
-  if(filter.includeDisabled) { /* keep */ }
-  else list = list.filter(function(p){ return !p.disabled; });
+  if(!filter.includeDisabled) list = list.filter(function(p){ return !p.disabled; });
   return list;
 }
+
 
 /** Group packages for WBS: FB → Ro → packages (Ro is attribute grouping only) */
 function productionWbsTree(project){
@@ -16967,7 +16978,7 @@ function renderWorkspace(){
   try { syncTopbarEditBtn(true); } catch(e){}
   try { refreshRoleSwitcher(project); } catch(e){ console.warn("whoami", e); }
   try { wireShowAllRoleTasksBtn(project); } catch(e){}
-  try { if((project.plannerMode||"production")!=="delivery") ensureProductionFramework(project); } catch(e){}
+  /* production packages only rebuild on explicit Re-sync (performance) */
   try { refreshCategorySubs(project); } catch(e){}
 
   const prog = projectProgress(project);
@@ -19614,9 +19625,16 @@ function openProject(id){
   const _pOpen = projectById(id);
   try { syncTopbarProjectTitle(_pOpen); } catch(e){ document.getElementById("topbarTitle").textContent = (_pOpen && _pOpen.name) ? _pOpen.name : "Project"; }
 
-  renderWorkspace();
-  document.getElementById("mainContent").scrollTop = 0;
-  if(typeof updateFabVisibility === "function") updateFabVisibility();
+  // Paint shell first, then workspace (prevents freeze on large projects)
+  try {
+    requestAnimationFrame(function(){
+      try { renderWorkspace(); } catch(e){ console.error(e); }
+      try { document.getElementById("mainContent").scrollTop = 0; } catch(e){}
+      if(typeof updateFabVisibility === "function") updateFabVisibility();
+    });
+  } catch(e){
+    try { renderWorkspace(); } catch(e2){ console.error(e2); }
+  }
 }
 
 function clearTopbarProjectImg(){
