@@ -2324,8 +2324,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.11.1";
-const APP_BUILD = "2026-08-25-fix-ss-walk";
+const APP_VERSION = "3.14.0";
+const APP_BUILD = "2026-08-25-phase8-ipe-aeir";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -7849,6 +7849,17 @@ function normalizeProductionState(src, opts){
     packages: soft ? s.packages : (Array.isArray(s.packages) ? s.packages.map(normalizeProductionPackage).filter(Boolean) : []),
     tidpRows: soft ? (Array.isArray(s.tidpRows) ? s.tidpRows : []) : (Array.isArray(s.tidpRows) ? s.tidpRows.map(normalizeTidpRow).filter(Boolean) : []),
     dependencies: soft ? (Array.isArray(s.dependencies) ? s.dependencies : []) : (Array.isArray(s.dependencies) ? s.dependencies.map(normalizeDependency).filter(Boolean) : []),
+    interfaces: soft ? (Array.isArray(s.interfaces) ? s.interfaces : []) : (Array.isArray(s.interfaces) ? s.interfaces.map(normalizeInterfaceObject).filter(Boolean) : []),
+    interfaceIssues: soft ? (Array.isArray(s.interfaceIssues) ? s.interfaceIssues : []) : (Array.isArray(s.interfaceIssues) ? s.interfaceIssues.map(normalizeInterfaceIssue).filter(Boolean) : []),
+    interfacePackages: soft ? (Array.isArray(s.interfacePackages) ? s.interfacePackages : []) : (Array.isArray(s.interfacePackages) ? s.interfacePackages.map(normalizeInterfacePackage).filter(Boolean) : []),
+    modelPackages: soft ? (Array.isArray(s.modelPackages) ? s.modelPackages : []) : (Array.isArray(s.modelPackages) ? s.modelPackages.map(normalizeModelPackage).filter(Boolean) : []),
+    modelObjects: soft ? (Array.isArray(s.modelObjects) ? s.modelObjects : []) : (Array.isArray(s.modelObjects) ? s.modelObjects.map(normalizeModelObject).filter(Boolean) : []),
+    verificationRecords: soft ? (Array.isArray(s.verificationRecords) ? s.verificationRecords : []) : (Array.isArray(s.verificationRecords) ? s.verificationRecords.map(normalizeVerificationRecord).filter(Boolean) : []),
+    searchSets: soft ? (Array.isArray(s.searchSets) ? s.searchSets : []) : (Array.isArray(s.searchSets) ? s.searchSets.map(normalizeSearchSet).filter(Boolean) : []),
+    clashRules: soft ? (Array.isArray(s.clashRules) ? s.clashRules : []) : (Array.isArray(s.clashRules) ? s.clashRules.map(normalizeClashRule).filter(Boolean) : []),
+    informationPackages: soft ? (Array.isArray(s.informationPackages) ? s.informationPackages : []) : (Array.isArray(s.informationPackages) ? s.informationPackages.map(normalizeInformationPackage).filter(Boolean) : []),
+    exchangeEvents: soft ? (Array.isArray(s.exchangeEvents) ? s.exchangeEvents : []) : (Array.isArray(s.exchangeEvents) ? s.exchangeEvents.map(normalizeExchangeEvent).filter(Boolean) : []),
+    packageValidations: soft ? (Array.isArray(s.packageValidations) ? s.packageValidations : []) : (Array.isArray(s.packageValidations) ? s.packageValidations.map(normalizePackageValidationRecord).filter(Boolean) : []),
     lastSyncedAt: s.lastSyncedAt || null,
     autoSyncFromSettings: s.autoSyncFromSettings !== false,
     scope: {
@@ -8518,6 +8529,872 @@ function readinessBadgeHtml(code){
 }
 
 
+/* ===================== PHASE 6 — DIF =====================
+   Dependency & Interface Framework
+   Dependency (PPDM) = Can I proceed?
+   Interface (DIF)   = Am I coordinated?
+   Consumer owns the interface.
+   ========================================================= */
+
+const IF_TYPES = {
+  IF10: { code: "IF10", name: "Geometric",          description: "Physical interaction" },
+  IF20: { code: "IF20", name: "Spatial",            description: "Space interaction" },
+  IF30: { code: "IF30", name: "Information",        description: "Data interaction" },
+  IF40: { code: "IF40", name: "Performance",        description: "Engineering interaction" },
+  IF50: { code: "IF50", name: "Construction",       description: "Construction interaction" },
+  IF60: { code: "IF60", name: "Asset Information",  description: "Operational interaction" }
+};
+
+const IF_STATUS = {
+  IFS00: { code: "IFS00", name: "Identified" },
+  IFS10: { code: "IFS10", name: "Planned" },
+  IFS20: { code: "IFS20", name: "Active" },
+  IFS30: { code: "IFS30", name: "Coordinated" },
+  IFS40: { code: "IFS40", name: "Verified" },
+  IFS50: { code: "IFS50", name: "Approved" },
+  IFS60: { code: "IFS60", name: "Closed" }
+};
+
+const IF_READINESS = {
+  IR0: { code: "IR0", name: "Not Ready" },
+  IR1: { code: "IR1", name: "Partially Ready" },
+  IR2: { code: "IR2", name: "Ready" },
+  IR3: { code: "IR3", name: "Fully Ready" }
+};
+
+/** Map DEP type → default interface type when seeding from dependencies */
+const DEP_TO_IF_TYPE = {
+  D01: "IF10", D02: "IF20", D03: "IF30", D04: "IF40", D05: "IF50"
+};
+
+function nextInterfaceId(project){
+  const list = (project.production && project.production.interfaces) || [];
+  let max = 0;
+  list.forEach(function(x){
+    const m = String(x.id || "").match(/IF-(\d+)/i);
+    if(m) max = Math.max(max, parseInt(m[1], 10));
+  });
+  return "IF-" + String(max + 1).padStart(6, "0");
+}
+
+function nextInterfaceIssueId(project){
+  const list = (project.production && project.production.interfaceIssues) || [];
+  let max = 0;
+  list.forEach(function(x){
+    const m = String(x.id || "").match(/ISS-(\d+)/i);
+    if(m) max = Math.max(max, parseInt(m[1], 10));
+  });
+  return "ISS-" + String(max + 1).padStart(6, "0");
+}
+
+function nextInterfacePackageId(project){
+  const list = (project.production && project.production.interfacePackages) || [];
+  let max = 0;
+  list.forEach(function(x){
+    const m = String(x.id || "").match(/INTP-(\d+)/i);
+    if(m) max = Math.max(max, parseInt(m[1], 10));
+  });
+  return "INTP-" + String(max + 1).padStart(5, "0");
+}
+
+function normalizeInterfaceObject(ifo){
+  if(!ifo || typeof ifo !== "object") return null;
+  const id = String(ifo.id || "").trim();
+  if(!id) return null;
+  const type = String(ifo.type || "IF10").toUpperCase();
+  const status = String(ifo.status || "IFS00").toUpperCase();
+  const readiness = String(ifo.readiness || "IR0").toUpperCase();
+  return {
+    id: id,
+    fb: String(ifo.fb || "").toUpperCase(),
+    sourcePpId: String(ifo.sourcePpId || ""),
+    targetPpId: String(ifo.targetPpId || ""),
+    type: IF_TYPES[type] ? type : "IF10",
+    /** Consumer owns interface (target package / its Ro) */
+    ownerPpId: String(ifo.ownerPpId || ifo.targetPpId || ""),
+    ownerRo: String(ifo.ownerRo || "").toUpperCase(),
+    requiredLod: String(ifo.requiredLod != null ? ifo.requiredLod : "2"),
+    requiredLoi: String(ifo.requiredLoi != null ? ifo.requiredLoi : "2"),
+    status: IF_STATUS[status] ? status : "IFS00",
+    readiness: IF_READINESS[readiness] ? readiness : "IR0",
+    verificationStatus: String(ifo.verificationStatus || ""),
+    depId: String(ifo.depId || ""),
+    note: String(ifo.note || "")
+  };
+}
+
+function normalizeInterfaceIssue(iss){
+  if(!iss || typeof iss !== "object") return null;
+  const id = String(iss.id || "").trim();
+  if(!id) return null;
+  return {
+    id: id,
+    interfaceId: String(iss.interfaceId || ""),
+    title: String(iss.title || "Interface issue"),
+    description: String(iss.description || ""),
+    status: String(iss.status || "open").toLowerCase(),
+    severity: String(iss.severity || "medium").toLowerCase(),
+    ownerRo: String(iss.ownerRo || "").toUpperCase(),
+    createdAt: iss.createdAt || Date.now()
+  };
+}
+
+function normalizeInterfacePackage(pkg){
+  if(!pkg || typeof pkg !== "object") return null;
+  const id = String(pkg.id || "").trim();
+  if(!id) return null;
+  return {
+    id: id,
+    name: String(pkg.name || id),
+    fb: String(pkg.fb || "").toUpperCase(),
+    interfaceIds: Array.isArray(pkg.interfaceIds) ? pkg.interfaceIds.map(String) : [],
+    note: String(pkg.note || "")
+  };
+}
+
+/**
+ * Seed Interface Objects from existing Dependencies (same FB pairs).
+ * Consumer (target) owns the interface. Only on force re-sync.
+ */
+function ensureInterfaceObjects(project, opts){
+  opts = opts || {};
+  if(!project) return [];
+  if(!project.production) project.production = normalizeProductionState(null);
+  if(!Array.isArray(project.production.interfaces)) project.production.interfaces = [];
+  if(!Array.isArray(project.production.interfaceIssues)) project.production.interfaceIssues = [];
+  if(!Array.isArray(project.production.interfacePackages)) project.production.interfacePackages = [];
+
+  if(!opts.force && project.production.interfaces.length > 0){
+    return project.production.interfaces;
+  }
+
+  const deps = project.production.dependencies || [];
+  const packages = getProductionPackages(project);
+  const byId = {};
+  packages.forEach(function(p){ byId[p.id] = p; });
+
+  const existingKeys = {};
+  project.production.interfaces.forEach(function(ifo){
+    existingKeys[ifo.sourcePpId + "↔" + ifo.targetPpId + ":" + ifo.type] = true;
+  });
+
+  const MAX_NEW = 400;
+  let added = 0;
+  deps.forEach(function(dep){
+    if(added >= MAX_NEW) return;
+    if(!dep || !dep.sourcePpId || !dep.targetPpId) return;
+    const type = DEP_TO_IF_TYPE[dep.type] || "IF10";
+    const key = dep.sourcePpId + "↔" + dep.targetPpId + ":" + type;
+    if(existingKeys[key]) return;
+    existingKeys[key] = true;
+    const tgt = byId[dep.targetPpId];
+    const src = byId[dep.sourcePpId];
+    const ifo = normalizeInterfaceObject({
+      id: nextInterfaceId(project),
+      fb: (tgt && tgt.fb) || (src && src.fb) || "",
+      sourcePpId: dep.sourcePpId,
+      targetPpId: dep.targetPpId,
+      type: type,
+      ownerPpId: dep.targetPpId,
+      ownerRo: (tgt && tgt.ro) || "",
+      requiredLod: dep.requiredLod || "2",
+      requiredLoi: dep.requiredLoi || "2",
+      status: "IFS00",
+      readiness: "IR0",
+      depId: dep.id || "",
+      note: dep.note || ""
+    });
+    if(ifo){
+      project.production.interfaces.push(ifo);
+      added++;
+    }
+  });
+  return project.production.interfaces;
+}
+
+/** Interface readiness for a package (as participant). Fields + simple status rollup. */
+function evaluatePackageInterfaceReadiness(project, ppId){
+  const list = ((project.production && project.production.interfaces) || []).filter(function(ifo){
+    return ifo.sourcePpId === ppId || ifo.targetPpId === ppId;
+  });
+  const issues = ((project.production && project.production.interfaceIssues) || []).filter(function(iss){
+    return iss.status === "open" && list.some(function(ifo){ return ifo.id === iss.interfaceId; });
+  });
+  let openIf = 0, coordinated = 0, verified = 0, closed = 0;
+  list.forEach(function(ifo){
+    const st = ifo.status || "IFS00";
+    if(st === "IFS60") closed++;
+    else if(st === "IFS40" || st === "IFS50") verified++;
+    else if(st === "IFS30") coordinated++;
+    else openIf++;
+  });
+  let readiness = "IR0";
+  if(!list.length) readiness = "IR3";
+  else if(closed === list.length) readiness = "IR3";
+  else if(verified + closed === list.length) readiness = "IR2";
+  else if(coordinated + verified + closed > 0) readiness = "IR1";
+  else readiness = "IR0";
+
+  return {
+    ppId: ppId,
+    interfaceCount: list.length,
+    openInterfaces: openIf,
+    openIssues: issues.length,
+    readiness: readiness,
+    readinessLabel: (IF_READINESS[readiness] && IF_READINESS[readiness].name) || readiness
+  };
+}
+
+function interfaceReadinessBadgeHtml(code){
+  const meta = IF_READINESS[code] || { name: code };
+  const colors = { IR0: "#fee2e2", IR1: "#ffedd5", IR2: "#dcfce7", IR3: "#dbeafe" };
+  const fg = { IR0: "#991b1b", IR1: "#9a3412", IR2: "#166534", IR3: "#1e40af" };
+  return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:' +
+    (colors[code]||"#eee") + ';color:' + (fg[code]||"#333") + ';">' + code + " " + escapeHtml(meta.name) + "</span>";
+}
+
+function productionInterfaceMetrics(project){
+  const ifs = (project.production && project.production.interfaces) || [];
+  const issues = (project.production && project.production.interfaceIssues) || [];
+  const openIssues = issues.filter(function(i){ return i.status === "open"; }).length;
+  const openIf = ifs.filter(function(i){ return !i.status || i.status < "IFS30"; }).length;
+  return {
+    totalInterfaces: ifs.length,
+    openInterfaces: openIf,
+    openIssues: openIssues,
+    interfacePackages: ((project.production && project.production.interfacePackages) || []).length
+  };
+}
+
+
+/* ===================== PHASE 7 — MPF + MVF =====================
+   Model Package Framework + Model Verification Framework
+   Production Package → Model Package → Model Objects → Verification
+   Verify Systems (FB/Ss/Pr/EF) — not drawings/sheets/views/categories.
+   =============================================================== */
+
+function nextModelPackageId(pp){
+  if(pp && pp.id) return String(pp.id).replace(/^PP-/, "MP-");
+  return "MP-" + String((pp && pp.fb) || "XX") + "-" + String((pp && pp.ss) || "Ss").replace(/[^A-Za-z0-9_]/g, "_");
+}
+
+function normalizeModelObject(obj){
+  if(!obj || typeof obj !== "object") return null;
+  const id = String(obj.id || obj.objectId || "").trim();
+  if(!id) return null;
+  return {
+    id: id,
+    sourceModel: String(obj.sourceModel || obj.model || ""),
+    source: String(obj.source || "revit").toLowerCase(), // revit | ifc | forma
+    fb: String(obj.fb || "").toUpperCase(),
+    ss: String(obj.ss || ""),
+    pr: String(obj.pr || ""),
+    ef: String(obj.ef || ""),
+    workstage: String(obj.workstage || ""),
+    revision: String(obj.revision || ""),
+    name: String(obj.name || ""),
+    lastSyncAt: obj.lastSyncAt || null
+  };
+}
+
+function normalizeVerificationRecord(vr){
+  if(!vr || typeof vr !== "object") return null;
+  return {
+    id: String(vr.id || ("VR-" + Date.now())),
+    mpId: String(vr.mpId || ""),
+    domain: String(vr.domain || ""), // scope | classification | loin | dependency | interface | information
+    result: String(vr.result || "pending"), // pass | warning | fail | pending
+    message: String(vr.message || ""),
+    checkedAt: vr.checkedAt || null
+  };
+}
+
+function normalizeModelPackage(mp){
+  if(!mp || typeof mp !== "object") return null;
+  const ppId = String(mp.ppId || mp.PP_ID || "");
+  const id = String(mp.id || mp.MP_ID || (ppId ? String(ppId).replace(/^PP-/, "MP-") : "")).trim();
+  if(!id) return null;
+  return {
+    id: id,
+    ppId: ppId,
+    fb: String(mp.fb || "").toUpperCase(),
+    ss: String(mp.ss || ""),
+    ownerRo: String(mp.ownerRo || mp.ro || "").toUpperCase(),
+    targetLoin: (mp.targetLoin && typeof mp.targetLoin === "object") ? {
+      lod: String(mp.targetLoin.lod || ""),
+      loi: String(mp.targetLoin.loi || ""),
+      docs: Array.isArray(mp.targetLoin.docs) ? mp.targetLoin.docs.map(String) : []
+    } : { lod: "", loi: "", docs: [] },
+    currentLoin: (mp.currentLoin && typeof mp.currentLoin === "object") ? {
+      lod: String(mp.currentLoin.lod || ""),
+      loi: String(mp.currentLoin.loi || ""),
+      docs: Array.isArray(mp.currentLoin.docs) ? mp.currentLoin.docs.map(String) : []
+    } : { lod: "", loi: "", docs: [] },
+    verificationStatus: String(mp.verificationStatus || "pending"),
+    readinessStatus: String(mp.readinessStatus || "pending"),
+    /** Readiness scores 0–100 (structure; filled by evaluation) */
+    classificationReadiness: mp.classificationReadiness != null ? Number(mp.classificationReadiness) : null,
+    scopeReadiness: mp.scopeReadiness != null ? Number(mp.scopeReadiness) : null,
+    loinReadiness: mp.loinReadiness != null ? Number(mp.loinReadiness) : null,
+    interfaceReadiness: mp.interfaceReadiness != null ? Number(mp.interfaceReadiness) : null,
+    mri: mp.mri != null ? Number(mp.mri) : null,
+    objectIds: Array.isArray(mp.objectIds) ? mp.objectIds.map(String) : [],
+    searchSetId: String(mp.searchSetId || ""),
+    lastSyncAt: mp.lastSyncAt || null
+  };
+}
+
+function normalizeSearchSet(ss){
+  if(!ss || typeof ss !== "object") return null;
+  const id = String(ss.id || "").trim();
+  if(!id) return null;
+  return {
+    id: id,
+    name: String(ss.name || id),
+    mpId: String(ss.mpId || ""),
+    fb: String(ss.fb || "").toUpperCase(),
+    ss: String(ss.ss || ""),
+    filter: String(ss.filter || ("FB=" + (ss.fb||"") + ";Ss=" + (ss.ss||""))),
+    source: "atana"
+  };
+}
+
+function normalizeClashRule(cr){
+  if(!cr || typeof cr !== "object") return null;
+  const id = String(cr.id || "").trim();
+  if(!id) return null;
+  return {
+    id: id,
+    name: String(cr.name || id),
+    interfaceId: String(cr.interfaceId || ""),
+    searchSetA: String(cr.searchSetA || ""),
+    searchSetB: String(cr.searchSetB || ""),
+    sourcePpId: String(cr.sourcePpId || ""),
+    targetPpId: String(cr.targetPpId || ""),
+    status: String(cr.status || "defined")
+  };
+}
+
+/**
+ * Ensure 1 Model Package per Production Package.
+ * Force only on re-sync — never on project open.
+ */
+function ensureModelPackages(project, opts){
+  opts = opts || {};
+  if(!project) return [];
+  if(!project.production) project.production = normalizeProductionState(null);
+  if(!Array.isArray(project.production.modelPackages)) project.production.modelPackages = [];
+  if(!Array.isArray(project.production.modelObjects)) project.production.modelObjects = [];
+  if(!Array.isArray(project.production.verificationRecords)) project.production.verificationRecords = [];
+  if(!Array.isArray(project.production.searchSets)) project.production.searchSets = [];
+  if(!Array.isArray(project.production.clashRules)) project.production.clashRules = [];
+
+  if(!opts.force && project.production.modelPackages.length > 0){
+    return project.production.modelPackages;
+  }
+
+  const packages = getProductionPackages(project);
+  const existing = {};
+  project.production.modelPackages.forEach(function(mp){
+    if(mp && mp.ppId) existing[mp.ppId] = normalizeModelPackage(mp);
+  });
+
+  const next = [];
+  const searchSets = [];
+  packages.forEach(function(pp){
+    let mp = existing[pp.id];
+    const mpId = nextModelPackageId(pp);
+    if(!mp){
+      mp = normalizeModelPackage({
+        id: mpId,
+        ppId: pp.id,
+        fb: pp.fb,
+        ss: pp.ss,
+        ownerRo: pp.ro,
+        targetLoin: pp.targetLoin || { lod: "", loi: "", docs: [] },
+        currentLoin: { lod: "", loi: "", docs: [] },
+        verificationStatus: "pending",
+        readinessStatus: "pending"
+      });
+    } else {
+      mp.fb = pp.fb;
+      mp.ss = pp.ss;
+      mp.ownerRo = pp.ro || mp.ownerRo;
+      if(pp.targetLoin) mp.targetLoin = pp.targetLoin;
+    }
+    // Search set from package
+    const ssId = "SS-" + mpId;
+    mp.searchSetId = ssId;
+    searchSets.push(normalizeSearchSet({
+      id: ssId,
+      name: (pp.fb || "") + " + " + (pp.ss || ""),
+      mpId: mpId,
+      fb: pp.fb,
+      ss: pp.ss,
+      filter: "FB=" + (pp.fb||"") + ";Ss=" + (pp.ss||"")
+    }));
+    next.push(mp);
+  });
+
+  project.production.modelPackages = next;
+  // Merge search sets by id
+  const ssById = {};
+  (project.production.searchSets || []).forEach(function(s){ if(s && s.id) ssById[s.id] = s; });
+  searchSets.forEach(function(s){ if(s) ssById[s.id] = s; });
+  project.production.searchSets = Object.keys(ssById).map(function(k){ return ssById[k]; });
+
+  // Clash rules from interfaces
+  if(opts.force){
+    ensureClashRulesFromInterfaces(project);
+  }
+  return project.production.modelPackages;
+}
+
+function ensureClashRulesFromInterfaces(project){
+  if(!project.production) return [];
+  if(!Array.isArray(project.production.clashRules)) project.production.clashRules = [];
+  const ifs = project.production.interfaces || [];
+  const existing = {};
+  project.production.clashRules.forEach(function(cr){
+    if(cr && cr.interfaceId) existing[cr.interfaceId] = true;
+  });
+  const mps = project.production.modelPackages || [];
+  const mpByPp = {};
+  mps.forEach(function(mp){ if(mp.ppId) mpByPp[mp.ppId] = mp; });
+
+  let added = 0;
+  const MAX = 400;
+  ifs.forEach(function(ifo){
+    if(added >= MAX) return;
+    if(!ifo || existing[ifo.id]) return;
+    const mpA = mpByPp[ifo.sourcePpId];
+    const mpB = mpByPp[ifo.targetPpId];
+    const cr = normalizeClashRule({
+      id: "CR-" + String(ifo.id).replace(/^IF-/, ""),
+      name: (ifo.note || (ifo.sourcePpId + " vs " + ifo.targetPpId)),
+      interfaceId: ifo.id,
+      searchSetA: mpA ? mpA.searchSetId : "",
+      searchSetB: mpB ? mpB.searchSetId : "",
+      sourcePpId: ifo.sourcePpId,
+      targetPpId: ifo.targetPpId,
+      status: "defined"
+    });
+    if(cr){
+      project.production.clashRules.push(cr);
+      existing[ifo.id] = true;
+      added++;
+    }
+  });
+  return project.production.clashRules;
+}
+
+/**
+ * Structural MVF evaluation (no live model objects yet → scope/classification pending).
+ * Uses PP maturity, PPDM, DIF when available.
+ */
+function evaluateModelPackage(project, mp){
+  if(!mp) return null;
+  const stageId = project.currentStageId || "S3";
+  const objects = ((project.production && project.production.modelObjects) || []).filter(function(o){
+    return o.ss === mp.ss && o.fb === mp.fb;
+  });
+
+  // Classification readiness: share of objects with FB+Ss+Pr+EF (or 0 if no objects)
+  let classScore = null;
+  if(objects.length){
+    let ok = 0;
+    objects.forEach(function(o){
+      if(o.fb && o.ss && o.pr && o.ef) ok++;
+      else if(o.fb && o.ss) ok += 0.5;
+    });
+    classScore = Math.round((ok / objects.length) * 100);
+  }
+
+  // Scope readiness: objects present for required Ss
+  let scopeScore = objects.length ? 100 : 0; // until live sync: 0 if no objects imported
+
+  // LOIN: compare current vs target
+  let loinScore = 0;
+  const tLod = Number(String((mp.targetLoin && mp.targetLoin.lod) || "").replace(/[^\d.]/g, "")) || 0;
+  const cLod = Number(String((mp.currentLoin && mp.currentLoin.lod) || "").replace(/[^\d.]/g, "")) || 0;
+  const tLoi = Number(String((mp.targetLoin && mp.targetLoin.loi) || "").replace(/[^\d.]/g, "")) || 0;
+  const cLoi = Number(String((mp.currentLoin && mp.currentLoin.loi) || "").replace(/[^\d.]/g, "")) || 0;
+  if(tLod || tLoi){
+    let parts = 0, hit = 0;
+    if(tLod){ parts++; if(cLod >= tLod) hit++; }
+    if(tLoi){ parts++; if(cLoi >= tLoi) hit++; }
+    loinScore = parts ? Math.round((hit / parts) * 100) : 0;
+  }
+
+  // Interface readiness from DIF
+  let ifScore = null;
+  try {
+    if(typeof evaluatePackageInterfaceReadiness === "function"){
+      const ir = evaluatePackageInterfaceReadiness(project, mp.ppId);
+      const map = { IR0: 0, IR1: 35, IR2: 70, IR3: 100 };
+      ifScore = map[ir.readiness] != null ? map[ir.readiness] : 0;
+    }
+  } catch(e){}
+
+  // Dependency readiness
+  let depScore = null;
+  try {
+    if(typeof evaluatePackageDependencyReadiness === "function"){
+      const dr = evaluatePackageDependencyReadiness(project, mp.ppId);
+      const map = { R0: 0, R1: 35, R2: 70, R3: 100 };
+      depScore = map[dr.readiness] != null ? map[dr.readiness] : 0;
+    }
+  } catch(e){}
+
+  // MRI weighted: LOIN 40%, Scope 25%, Classification 15%, Interface 10%, Dependency 10%
+  const weights = { loin: 0.40, scope: 0.25, classification: 0.15, interface: 0.10, dependency: 0.10 };
+  let mri = 0, wsum = 0;
+  function add(score, w){
+    if(score == null || !Number.isFinite(score)) return;
+    mri += score * w; wsum += w;
+  }
+  add(loinScore, weights.loin);
+  add(scopeScore, weights.scope);
+  add(classScore, weights.classification);
+  add(ifScore, weights.interface);
+  add(depScore, weights.dependency);
+  if(wsum > 0) mri = Math.round(mri / wsum);
+
+  mp.classificationReadiness = classScore;
+  mp.scopeReadiness = scopeScore;
+  mp.loinReadiness = loinScore;
+  mp.interfaceReadiness = ifScore;
+  mp.mri = mri;
+  mp.verificationStatus = objects.length ? (mri >= 70 ? "pass" : (mri >= 40 ? "warning" : "fail")) : "pending";
+  mp.readinessStatus = mp.verificationStatus;
+
+  return {
+    mp: mp,
+    objectCount: objects.length,
+    domains: {
+      scope: scopeScore,
+      classification: classScore,
+      loin: loinScore,
+      dependency: depScore,
+      interface: ifScore
+    },
+    mri: mri
+  };
+}
+
+function evaluateAllModelPackages(project){
+  const list = (project.production && project.production.modelPackages) || [];
+  return list.map(function(mp){ return evaluateModelPackage(project, mp); }).filter(Boolean);
+}
+
+function productionModelMetrics(project){
+  const mps = (project.production && project.production.modelPackages) || [];
+  const objs = (project.production && project.production.modelObjects) || [];
+  const rules = (project.production && project.production.clashRules) || [];
+  const sets = (project.production && project.production.searchSets) || [];
+  let mriSum = 0, mriN = 0;
+  mps.forEach(function(mp){
+    if(mp.mri != null && Number.isFinite(Number(mp.mri))){ mriSum += Number(mp.mri); mriN++; }
+  });
+  return {
+    modelPackages: mps.length,
+    modelObjects: objs.length,
+    searchSets: sets.length,
+    clashRules: rules.length,
+    avgMri: mriN ? Math.round(mriSum / mriN) : null
+  };
+}
+
+
+/* ===================== PHASE 8 — IPE & AEIR =====================
+   Information Package Engine + Exchange Information Requirements
+   Production creates Information; Information Packages create Exchanges.
+   Only IPs move Shared/Published — not Production Packages.
+   ================================================================ */
+
+/** AEIR — workstage exchange requirements (structure) */
+const AEIR_WORKSTAGE = {
+  S1: { exchange: "Planning Information", packageType: "Management", suitability: ["S0"], objective: "Brief / inception" },
+  S2: { exchange: "Concept Information", packageType: "Design", suitability: ["S1", "S2"], objective: "Coordination / Information" },
+  S3: { exchange: "Coordinated Information", packageType: "Design", suitability: ["S1", "S2", "S3"], objective: "Coordination, Review, Verification" },
+  S4: { exchange: "Technical Design Information", packageType: "Design", suitability: ["S4", "S5", "D3"], objective: "Approval, Client Review" },
+  S5: { exchange: "Construction Information", packageType: "Construction", suitability: ["A1", "D4", "D5"], objective: "Construction, Manufacturing, Authority" },
+  S6: { exchange: "Asset Information", packageType: "Asset", suitability: ["S6", "S7", "CR"], objective: "PIM / AIM / Handover" },
+  S7: { exchange: "In-use Information", packageType: "Asset", suitability: ["CR", "S7"], objective: "AIM operations" }
+};
+
+/** Suitability / state framework (ISO 19650-oriented) */
+const SUITABILITY_CODES = {
+  S0: { code: "S0", state: "WIP", name: "Initial (internal)", revision: "Pxx.yy" },
+  S1: { code: "S1", state: "SHARED", name: "Suitable for Coordination", revision: "Pxx" },
+  S2: { code: "S2", state: "SHARED", name: "Suitable for Information", revision: "Pxx" },
+  S3: { code: "S3", state: "SHARED", name: "Suitable for Internal Review", revision: "Pxx" },
+  S4: { code: "S4", state: "SHARED", name: "Suitable for Approval", revision: "Pxx" },
+  S5: { code: "S5", state: "SHARED", name: "Suitable for Client Review", revision: "Pxx" },
+  S6: { code: "S6", state: "SHARED", name: "Suitable for PIM Authorisation", revision: "Pxx" },
+  S7: { code: "S7", state: "SHARED", name: "Suitable for AIM Authorisation", revision: "Pxx" },
+  D1: { code: "D1", state: "SHARED", name: "Suitable for Costing", revision: "Pxx" },
+  D2: { code: "D2", state: "SHARED", name: "Suitable for Tender", revision: "Pxx" },
+  D3: { code: "D3", state: "SHARED", name: "Suitable for Design", revision: "Pxx" },
+  D4: { code: "D4", state: "SHARED", name: "Suitable for Manufacture", revision: "Pxx" },
+  D5: { code: "D5", state: "SHARED", name: "Suitable for Council Approval", revision: "Pxx" },
+  A1: { code: "A1", state: "PUBLISHED", name: "Authorised for Construction", revision: "Cxx" },
+  A2: { code: "A2", state: "PUBLISHED", name: "Authorised (A2)", revision: "Cxx" },
+  B1: { code: "B1", state: "PUBLISHED", name: "Partially signed off", revision: "Pxx" },
+  CR: { code: "CR", state: "PUBLISHED", name: "As-constructed record", revision: "Cxx" }
+};
+
+const IP_STATUS = {
+  IPS00: { code: "IPS00", name: "Created" },
+  IPS10: { code: "IPS10", name: "Assembling" },
+  IPS20: { code: "IPS20", name: "Validated" },
+  IPS30: { code: "IPS30", name: "Shared" },
+  IPS40: { code: "IPS40", name: "Published" },
+  IPS50: { code: "IPS50", name: "Closed" }
+};
+
+function nextInformationPackageId(project, stageId, fb, ro){
+  const st = String(stageId || "S3").replace(/^S/, "WS");
+  const f = String(fb || "ZZ").toUpperCase();
+  const r = String(ro || "ZZ").toUpperCase();
+  const base = "IP-" + st + "-" + f + "-" + r;
+  const list = (project.production && project.production.informationPackages) || [];
+  const same = list.filter(function(p){ return String(p.id).indexOf(base) === 0; }).length;
+  return same ? (base + "-" + String(same + 1).padStart(2, "0")) : base;
+}
+
+function nextExchangeEventId(project){
+  const list = (project.production && project.production.exchangeEvents) || [];
+  let max = 0;
+  list.forEach(function(x){
+    const m = String(x.id || "").match(/EX-(\d+)/i);
+    if(m) max = Math.max(max, parseInt(m[1], 10));
+  });
+  return "EX-" + String(max + 1).padStart(6, "0");
+}
+
+function normalizeInformationPackage(ip){
+  if(!ip || typeof ip !== "object") return null;
+  const id = String(ip.id || "").trim();
+  if(!id) return null;
+  const st = String(ip.status || "IPS00").toUpperCase();
+  const suit = String(ip.suitability || "S1").toUpperCase();
+  return {
+    id: id,
+    workstage: String(ip.workstage || ip.stageId || ""),
+    fb: String(ip.fb || "").toUpperCase(),
+    ro: String(ip.ro || "").toUpperCase(),
+    packageType: String(ip.packageType || "Design"),
+    suitability: SUITABILITY_CODES[suit] ? suit : "S1",
+    informationState: String(ip.informationState || (SUITABILITY_CODES[suit] && SUITABILITY_CODES[suit].state) || "SHARED"),
+    status: IP_STATUS[st] ? st : "IPS00",
+    revision: String(ip.revision || ""),
+    deliverableIds: Array.isArray(ip.deliverableIds) ? ip.deliverableIds.map(String) : [],
+    exchangeEventIds: Array.isArray(ip.exchangeEventIds) ? ip.exchangeEventIds.map(String) : [],
+    validationIds: Array.isArray(ip.validationIds) ? ip.validationIds.map(String) : [],
+    /** IRI components 0–100 */
+    packageCompleteness: ip.packageCompleteness != null ? Number(ip.packageCompleteness) : null,
+    metadataCompleteness: ip.metadataCompleteness != null ? Number(ip.metadataCompleteness) : null,
+    deliverableReadiness: ip.deliverableReadiness != null ? Number(ip.deliverableReadiness) : null,
+    suitabilityReadiness: ip.suitabilityReadiness != null ? Number(ip.suitabilityReadiness) : null,
+    validationStatus: String(ip.validationStatus || "pending"),
+    iri: ip.iri != null ? Number(ip.iri) : null,
+    aeirPurpose: String(ip.aeirPurpose || ""),
+    notes: String(ip.notes || "")
+  };
+}
+
+function normalizeExchangeEvent(ex){
+  if(!ex || typeof ex !== "object") return null;
+  const id = String(ex.id || "").trim();
+  if(!id) return null;
+  return {
+    id: id,
+    packageId: String(ex.packageId || ""),
+    sender: String(ex.sender || ""),
+    recipient: String(ex.recipient || ""),
+    suitability: String(ex.suitability || ""),
+    revision: String(ex.revision || ""),
+    date: ex.date || Date.now(),
+    purpose: String(ex.purpose || ""),
+    /** Exchange is a transmission record — NOT a CDE state */
+    note: String(ex.note || "")
+  };
+}
+
+function normalizePackageValidationRecord(vr){
+  if(!vr || typeof vr !== "object") return null;
+  const id = String(vr.id || "").trim();
+  if(!id) return null;
+  return {
+    id: id,
+    packageId: String(vr.packageId || ""),
+    gate: String(vr.gate || "shared"), // shared | published
+    result: String(vr.result || "pending"), // pass | fail | pending
+    checks: Array.isArray(vr.checks) ? vr.checks : [],
+    checkedAt: vr.checkedAt || null,
+    message: String(vr.message || "")
+  };
+}
+
+/**
+ * Seed Information Packages from FB × production Ro × current workstage (AEIR).
+ * Force only — never on project open.
+ */
+function ensureInformationPackages(project, opts){
+  opts = opts || {};
+  if(!project) return [];
+  if(!project.production) project.production = normalizeProductionState(null);
+  if(!Array.isArray(project.production.informationPackages)) project.production.informationPackages = [];
+  if(!Array.isArray(project.production.exchangeEvents)) project.production.exchangeEvents = [];
+  if(!Array.isArray(project.production.packageValidations)) project.production.packageValidations = [];
+
+  if(!opts.force && project.production.informationPackages.length > 0){
+    return project.production.informationPackages;
+  }
+
+  const stageId = project.currentStageId || "S3";
+  const aeir = AEIR_WORKSTAGE[stageId] || AEIR_WORKSTAGE.S3;
+  const packages = getProductionPackages(project);
+  // Unique FB × Ro from production packages
+  const keys = {};
+  packages.forEach(function(pp){
+    const fb = String(pp.fb || "").toUpperCase();
+    const ro = String(pp.ro || "").toUpperCase();
+    if(!fb || !ro) return;
+    keys[fb + "|" + ro] = { fb: fb, ro: ro };
+  });
+
+  const existing = {};
+  project.production.informationPackages.forEach(function(ip){
+    if(ip && ip.id) existing[ip.workstage + "|" + ip.fb + "|" + ip.ro] = normalizeInformationPackage(ip);
+  });
+
+  const next = [];
+  const suit = (aeir.suitability && aeir.suitability[0]) || "S1";
+  Object.keys(keys).forEach(function(k){
+    const pair = keys[k];
+    const ek = stageId + "|" + pair.fb + "|" + pair.ro;
+    let ip = existing[ek];
+    if(!ip){
+      ip = normalizeInformationPackage({
+        id: nextInformationPackageId(project, stageId, pair.fb, pair.ro),
+        workstage: stageId,
+        fb: pair.fb,
+        ro: pair.ro,
+        packageType: aeir.packageType || "Design",
+        suitability: suit,
+        informationState: (SUITABILITY_CODES[suit] && SUITABILITY_CODES[suit].state) || "SHARED",
+        status: "IPS00",
+        revision: "",
+        aeirPurpose: aeir.exchange || "",
+        notes: aeir.objective || ""
+      });
+    } else {
+      ip.aeirPurpose = aeir.exchange || ip.aeirPurpose;
+      ip.packageType = aeir.packageType || ip.packageType;
+    }
+    // Structural IRI (no live deliverables yet)
+    ip = evaluateInformationPackageIri(project, ip);
+    next.push(ip);
+  });
+
+  project.production.informationPackages = next;
+  return next;
+}
+
+/** IRI — Information Readiness Index (0–100). Structure scores until deliverables linked. */
+function evaluateInformationPackageIri(project, ip){
+  if(!ip) return ip;
+  // Package completeness: has id, fb, ro, workstage, suitability
+  let pkg = 0;
+  if(ip.id) pkg += 25;
+  if(ip.fb) pkg += 25;
+  if(ip.ro) pkg += 25;
+  if(ip.workstage && ip.suitability) pkg += 25;
+
+  // Metadata
+  let meta = 0;
+  if(ip.packageType) meta += 25;
+  if(ip.informationState) meta += 25;
+  if(ip.aeirPurpose) meta += 25;
+  if(ip.revision || ip.status) meta += 25;
+
+  // Deliverable readiness: share of linked deliverables (0 if none yet)
+  const delivN = (ip.deliverableIds || []).length;
+  const delivScore = delivN ? 100 : 0;
+
+  // Suitability readiness: code is valid for AEIR stage
+  const aeir = AEIR_WORKSTAGE[ip.workstage] || AEIR_WORKSTAGE.S3;
+  const allowed = aeir.suitability || [];
+  const suitScore = (allowed.indexOf(ip.suitability) >= 0) ? 100 : 40;
+
+  // Validation
+  const valScore = ip.validationStatus === "pass" ? 100 : (ip.validationStatus === "fail" ? 0 : 30);
+
+  ip.packageCompleteness = pkg;
+  ip.metadataCompleteness = meta;
+  ip.deliverableReadiness = delivScore;
+  ip.suitabilityReadiness = suitScore;
+  ip.iri = Math.round((pkg * 0.25 + meta * 0.2 + delivScore * 0.25 + suitScore * 0.15 + valScore * 0.15));
+  return ip;
+}
+
+function productionInformationMetrics(project){
+  const ips = (project.production && project.production.informationPackages) || [];
+  const exs = (project.production && project.production.exchangeEvents) || [];
+  const vals = (project.production && project.production.packageValidations) || [];
+  let iriSum = 0, iriN = 0;
+  let shared = 0, published = 0;
+  ips.forEach(function(ip){
+    if(ip.iri != null && Number.isFinite(Number(ip.iri))){ iriSum += Number(ip.iri); iriN++; }
+    if(ip.status === "IPS30" || ip.informationState === "SHARED") shared++;
+    if(ip.status === "IPS40" || ip.informationState === "PUBLISHED") published++;
+  });
+  return {
+    informationPackages: ips.length,
+    exchangeEvents: exs.length,
+    validations: vals.length,
+    avgIri: iriN ? Math.round(iriSum / iriN) : null,
+    shared: shared,
+    published: published,
+    aeirStage: (project && project.currentStageId) || "S3"
+  };
+}
+
+
+
+
+
+
+
+/** Resolve task-team display label from code — never trust SS tree "d" alone (often mis-tagged). */
+function resolveRoLabel(project, roCode, fallback){
+  const code = (typeof normalizeTaskTeamCode === "function")
+    ? normalizeTaskTeamCode(roCode) : String(roCode || "").toUpperCase();
+  if(!code) return fallback || "—";
+  try {
+    const roles = (project && project.midpCatalog && project.midpCatalog.roles) || [];
+    for(let i = 0; i < roles.length; i++){
+      const r = roles[i];
+      if(!r) continue;
+      const rc = (typeof normalizeTaskTeamCode === "function") ? normalizeTaskTeamCode(r.code) : String(r.code||"").toUpperCase();
+      if(rc === code) return String(r.label || r.name || r.description || code).toUpperCase();
+    }
+  } catch(e){}
+  if(typeof PACKAGE_ARCHETYPE_LIBRARY !== "undefined" && PACKAGE_ARCHETYPE_LIBRARY[code]){
+    return PACKAGE_ARCHETYPE_LIBRARY[code].name || code;
+  }
+  const STATIC = {
+    AR: "ARCHITECTURE", ST: "STRUCTURAL", ME: "MECHANICAL", MH: "HVAC",
+    EE: "ELECTRICAL", CV: "CIVIL", PD: "PUBLIC HEALTH", FP: "FIRE PROTECTION",
+    FD: "FIRE DETECTION", YS: "SECURITY", YC: "CONTROLS", PE: "PROCESS",
+    QS: "QUANTITY SURVEYOR", HG: "HIGHWAYS", CW: "CIVIL WATER"
+  };
+  if(STATIC[code]) return STATIC[code];
+  if(fallback && !/LANDSCAP/i.test(String(fallback))) return String(fallback);
+  return code;
+}
 
 function packageArchetypeForRo(ro){
   const c = String(ro || "ZZ").toUpperCase();
@@ -8740,7 +9617,7 @@ function ensureProductionFramework(project, opts){
     if(pp && pp.id) existingById[pp.id] = normalizeProductionPackage(pp);
   });
 
-  const MAX_PP = 1200;
+  const MAX_PP = 5000;
   const next = [];
   fbs.forEach(function(fb){
     const fbCode = String(fb.code || "").toUpperCase();
@@ -8759,7 +9636,7 @@ function ensureProductionFramework(project, opts){
       if(prev){
         prev.name = sys.name || prev.name;
         prev.ro = ro || prev.ro;
-        prev.roLabel = sys.discipline || prev.roLabel;
+        prev.roLabel = (typeof resolveRoLabel === "function") ? resolveRoLabel(project, ro || prev.ro, sys.discipline) : (sys.discipline || prev.roLabel);
         prev.archetype = prev.archetype || ro || "ZZ";
         prev.phase = defaultPhase; // force NEW — never EXISTING on production WBS
         if(String(prev.fb).toUpperCase() === "XX") return; // drop XX packages
@@ -8795,11 +9672,14 @@ function ensureProductionFramework(project, opts){
     systemsAll: systemsAll.length,
     systemsUsed: systems.length,
     phase: defaultPhase,
-    framework: "Phase5",
+    framework: "Phase8",
     packageCount: next.length
   };
   try { ensureTidpRowsForProject(project, { force: true }); } catch(e){ console.warn("TIDP seed", e); }
   try { ensureProductionDependencies(project, { force: true }); } catch(e){ console.warn("DEP seed", e); }
+  try { ensureInterfaceObjects(project, { force: true }); } catch(e){ console.warn("IF seed", e); }
+  try { ensureModelPackages(project, { force: true }); } catch(e){ console.warn("MP seed", e); }
+  try { ensureInformationPackages(project, { force: true }); } catch(e){ console.warn("IP seed", e); }
   return project.production;
 }
 
@@ -9039,7 +9919,7 @@ function renderProductionWbs(project){
 
   let htmlOut = "";
   htmlOut += '<div class="card" style="margin-bottom:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
-  htmlOut += '<div style="font-size:12px;font-weight:700;color:var(--purple-900);margin-bottom:6px;">Production WBS — Phase 2</div>';
+  htmlOut += '<div style="font-size:12px;font-weight:700;color:var(--purple-900);margin-bottom:6px;">Production WBS — Phase 8 (IPE / AEIR)</div>';
   if(metrics){
     htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;font-size:11px;">';
     htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f3f0f6;"><strong>Packages</strong> ' + packages.length + '</span>';
@@ -9047,6 +9927,39 @@ function renderProductionWbs(project){
     htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#eff6ff;"><strong>LOIN readiness</strong> ' + metrics.loinReadiness + '%</span>';
     htmlOut += '</div>';
   }
+  try {
+    var ifm = (typeof productionInterfaceMetrics === "function") ? productionInterfaceMetrics(project) : null;
+    if(ifm){
+      htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px;font-size:11px;">';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f5f3ff;"><strong>Interfaces</strong> ' + ifm.totalInterfaces + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#fef3c7;"><strong>Open interfaces</strong> ' + ifm.openInterfaces + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#fee2e2;"><strong>Open IF issues</strong> ' + ifm.openIssues + '</span>';
+      htmlOut += '</div>';
+    }
+  } catch(e){}
+  try {
+    var mm = (typeof productionModelMetrics === "function") ? productionModelMetrics(project) : null;
+    if(mm){
+      htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px;font-size:11px;">';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#ecfeff;"><strong>Model packages</strong> ' + mm.modelPackages + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f0fdf4;"><strong>Search sets</strong> ' + mm.searchSets + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#faf5ff;"><strong>Clash rules</strong> ' + mm.clashRules + '</span>';
+      if(mm.avgMri != null) htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#fff7ed;"><strong>Avg MRI</strong> ' + mm.avgMri + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f8fafc;"><strong>Model objects</strong> ' + mm.modelObjects + ' <span style="color:#888;">(import/sync later)</span></span>';
+      htmlOut += '</div>';
+    }
+  } catch(e){}
+  try {
+    var im = (typeof productionInformationMetrics === "function") ? productionInformationMetrics(project) : null;
+    if(im){
+      htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px;font-size:11px;">';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#eef2ff;"><strong>Info packages</strong> ' + im.informationPackages + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#fce7f3;"><strong>Exchanges</strong> ' + im.exchangeEvents + '</span>';
+      if(im.avgIri != null) htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#ecfdf5;"><strong>Avg IRI</strong> ' + im.avgIri + '%</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f8fafc;">AEIR ' + escapeHtml(String(im.aeirStage||"")) + ' · Shared ' + im.shared + ' · Published ' + im.published + '</span>';
+      htmlOut += '</div>';
+    }
+  } catch(e){}
   htmlOut += '<div style="font-size:11px;color:#555;margin-bottom:8px;">FB groups are <strong>collapsed by default</strong>. Expand one FB, then one Ro. Scope is set under <strong>Settings → Functional</strong> and <strong>Spatial</strong> matrices. XX and EXISTING are excluded.</div>';
   if(typeof frrmMatrixSummaryHtml === "function"){
     htmlOut += '<details style="margin:8px 0;border:1px solid #e5e7eb;border-radius:8px;"><summary style="cursor:pointer;padding:8px 10px;font-size:12px;font-weight:600;">FRRM assignment map (Phase 4)</summary><div style="padding:0 8px 8px;">' + frrmMatrixSummaryHtml() + '</div></details>';
@@ -9083,12 +9996,13 @@ function renderProductionWbs(project){
         let inner = "";
         (node.roGroups || []).forEach(function(rg){
           inner += '<details class="prod-ro" style="margin:6px 0 8px 4px;border-left:3px solid #d5c427;padding-left:8px;">';
+          var roDisp = (typeof resolveRoLabel === "function") ? resolveRoLabel(project, rg.ro, rg.label) : (rg.label || rg.ro);
           inner += '<summary style="cursor:pointer;font-size:12px;font-weight:600;">Ro ' + escapeHtml(rg.ro);
-          if(rg.label && rg.label !== rg.ro) inner += ' — ' + escapeHtml(rg.label);
+          if(roDisp && roDisp !== rg.ro) inner += ' — ' + escapeHtml(roDisp);
           inner += ' <span style="color:#888;font-weight:400;font-size:11px;">(' + rg.packages.length + ')</span></summary>';
           inner += '<div style="overflow:auto;max-height:240px;margin-top:6px;">';
           inner += '<table style="width:100%;font-size:11px;border-collapse:collapse;"><thead><tr>';
-          inner += '<th style="text-align:left;padding:4px;">Package</th><th style="text-align:left;padding:4px;">Ss</th><th style="text-align:left;padding:4px;">Name</th><th style="text-align:left;padding:4px;">Status</th><th style="text-align:left;padding:4px;">Phase</th><th style="text-align:left;padding:4px;">TIDP / FRRM</th><th style="text-align:left;padding:4px;">Dep readiness</th>';
+          inner += '<th style="text-align:left;padding:4px;">Package</th><th style="text-align:left;padding:4px;">Ss</th><th style="text-align:left;padding:4px;">Name</th><th style="text-align:left;padding:4px;">Status</th><th style="text-align:left;padding:4px;">Phase</th><th style="text-align:left;padding:4px;">TIDP / FRRM</th><th style="text-align:left;padding:4px;">Dep readiness</th><th style="text-align:left;padding:4px;">Interface</th>';
           inner += '</tr></thead><tbody>';
           rg.packages.slice(0, 60).forEach(function(pp){
             var trs = (typeof getTidpRowsForPackage === "function") ? getTidpRowsForPackage(project, pp.id) : [];
@@ -9107,6 +10021,16 @@ function renderProductionWbs(project){
               inner += '<td style="padding:3px 4px;font-size:10px;">' + (typeof readinessBadgeHtml === "function" ? readinessBadgeHtml(depR.readiness) : depR.readiness);
               inner += ' <span style="color:#888;">C' + depR.critical + '/M' + depR.major + '/m' + depR.minor;
               if(depR.blocked) inner += ' · blocked ' + depR.blocked;
+              inner += '</span></td>';
+            } else {
+              inner += '<td style="padding:3px 4px;">—</td>';
+            }
+            var ifR = null;
+            try { if(typeof evaluatePackageInterfaceReadiness === "function") ifR = evaluatePackageInterfaceReadiness(project, pp.id); } catch(e){}
+            if(ifR){
+              inner += '<td style="padding:3px 4px;font-size:10px;">' + (typeof interfaceReadinessBadgeHtml === "function" ? interfaceReadinessBadgeHtml(ifR.readiness) : ifR.readiness);
+              inner += ' <span style="color:#888;">' + ifR.interfaceCount + ' IF';
+              if(ifR.openIssues) inner += ' · ' + ifR.openIssues + ' iss';
               inner += '</span></td>';
             } else {
               inner += '<td style="padding:3px 4px;">—</td>';
@@ -9136,14 +10060,26 @@ function renderProductionWbs(project){
         project.production.packages = [];
         project.production.tidpRows = [];
         project.production.dependencies = [];
+        project.production.interfaces = [];
+        project.production.interfaceIssues = project.production.interfaceIssues || [];
+        project.production.interfacePackages = project.production.interfacePackages || [];
+        project.production.modelPackages = [];
+        project.production.searchSets = [];
+        project.production.clashRules = [];
+        project.production.informationPackages = [];
+        // keep modelObjects / exchange history if present
         ensureProductionFramework(project, { force: true });
         try { saveData(DATA); } catch(e){}
         var m = project.production._lastSyncMeta || {};
         try {
           var trn = (project.production.tidpRows || []).length;
           var dn = (project.production.dependencies || []).length;
+          var ifn = (project.production.interfaces || []).length;
+          var mpn = (project.production.modelPackages || []).length;
+          var ipn = (project.production.informationPackages || []).length;
           var n = (project.production.packages || []).length;
-          showToast("Synced " + n + " packages · " + trn + " TIDP · " + dn + " deps | Ss " + (m.systemsAll||0) + "→" + (m.systemsUsed||0) + " | FB " + (m.fbCount||0));
+          var capNote = (n >= 5000) ? " (cap 5000)" : "";
+          showToast("Synced " + n + " PP" + capNote + " · " + mpn + " MP · " + ipn + " IP · " + trn + " TIDP · " + dn + " deps · " + ifn + " IF");
         } catch(e){}
         renderProductionWbs(project);
       } catch(err){
