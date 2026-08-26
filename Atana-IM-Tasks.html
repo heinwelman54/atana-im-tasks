@@ -15,6 +15,8 @@
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
 <title>Atana-IM-Tasks</title>
 <link rel="manifest" href="./manifest.json">
+<link rel="stylesheet" href="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css" type="text/css">
+<script src="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.min.js"></script>
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
 <style>
@@ -1889,6 +1891,7 @@
         <button data-wsview="midp">MIDP</button>
         <button data-wsview="prjtools">Tools</button>
         <button data-wsview="prjdocs">Documents</button>
+        <button data-wsview="models">Models</button>
       </div>
       <div class="segmented" id="imtasksSub" style="margin-top:8px;margin-bottom:0;">
         <button class="active" data-imsub="tasks">Tasks</button>
@@ -2176,6 +2179,23 @@
         </div>
       </div>
 
+      <div class="ws-view" id="wsview-models">
+        <div class="section-title" style="margin-bottom:6px;">Model viewer</div>
+        <p class="section-sub">APS Viewer for RVT / IFC / NWD / DWG / PDF in the linked Forma/ACC Docs folder. Sign in via the Forma button. Files need an ACC viewable (open once in Forma/ACC if the viewer is empty).</p>
+        <div id="modelsViewerStatus" class="card" style="padding:8px 10px;margin-bottom:8px;font-size:12px;"></div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;">
+          <button type="button" class="btn btn-ghost btn-xs" id="btnModelsRefresh">Refresh folder</button>
+          <button type="button" class="btn btn-ghost btn-xs" id="btnModelsUp" style="display:none;">↑ Parent folder</button>
+          <span id="modelsPathLabel" style="font-size:11px;color:#666;flex:1;"></span>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(220px,320px) 1fr;gap:10px;min-height:420px;">
+          <div id="modelsFileList" class="card" style="padding:8px;overflow:auto;max-height:70vh;"></div>
+          <div id="modelsViewerHost" class="card" style="position:relative;min-height:420px;height:70vh;overflow:hidden;background:#1a1a1a;">
+            <div id="modelsViewerEmpty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:13px;padding:16px;text-align:center;">Select a model on the left.</div>
+          </div>
+        </div>
+      </div>
+
     </section>
 
   </main>
@@ -2324,8 +2344,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.20.0";
-const APP_BUILD = "2026-08-25-phase14-adif";
+const APP_VERSION = "3.21.0";
+const APP_BUILD = "2026-08-26-models-aps-viewer";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -12868,6 +12888,298 @@ function apsProjectDisplay(p){
     type: p.type || "projects"
   };
 }
+
+/* ===================== APS MODEL VIEWER ===================== */
+const MODELS_VIEWABLE_EXT = ["rvt","rfa","ifc","nwd","nwc","nwf","dwg","dxf","pdf","navisworks"];
+let _modelsViewer = null;
+let _modelsViewerReady = false;
+let _modelsFolderStack = [];
+let _modelsCurrentFolder = "";
+let _modelsBound = false;
+
+function modelsFileExt(name){
+  const n = String(name || "").toLowerCase();
+  const i = n.lastIndexOf(".");
+  return i >= 0 ? n.slice(i + 1) : "";
+}
+
+function modelsIsViewableName(name){
+  return MODELS_VIEWABLE_EXT.indexOf(modelsFileExt(name)) >= 0;
+}
+
+function modelsViewerEnv(){
+  const region = (typeof apsPreferredRegion === "function" ? apsPreferredRegion() : "EMEA");
+  if(region === "EMEA" || region === "EU" || region === "EMEA"){
+    return { env: "AutodeskProduction2", api: "streamingV2_EU" };
+  }
+  return { env: "AutodeskProduction2", api: "streamingV2" };
+}
+
+async function modelsGetTokenPair(){
+  if(typeof apsRefreshIfNeeded !== "function") return null;
+  const auth = await apsRefreshIfNeeded();
+  if(!auth || !auth.access_token) return null;
+  const sec = auth.expires_at ? Math.max(60, Math.floor((auth.expires_at - Date.now()) / 1000)) : 3600;
+  return { token: auth.access_token, seconds: sec };
+}
+
+function modelsExtractDerivativeUrn(versionObj){
+  if(!versionObj) return "";
+  try {
+    const rel = versionObj.relationships || {};
+    const der = rel.derivatives || {};
+    const data = der.data || {};
+    const id = data.id || "";
+    if(id) return String(id);
+  } catch(e){}
+  try {
+    const attrs = versionObj.attributes || {};
+    if(attrs.derivativeUrn) return String(attrs.derivativeUrn);
+  } catch(e){}
+  return "";
+}
+
+async function modelsTipDerivativeUrn(projectId, itemId){
+  const tip = await apsItemTip(projectId, itemId);
+  const node = (tip && tip.data) ? tip.data : tip;
+  let urn = modelsExtractDerivativeUrn(node);
+  if(urn) return { urn: urn, version: node, tip: tip };
+  // included versions
+  const inc = (tip && tip.included) || [];
+  for(let i = 0; i < inc.length; i++){
+    urn = modelsExtractDerivativeUrn(inc[i]);
+    if(urn) return { urn: urn, version: inc[i], tip: tip };
+  }
+  return { urn: "", version: node, tip: tip };
+}
+
+function modelsAccFileUrl(project, folderId, itemId){
+  const accGuid = String(project.accProjectId || "").replace(/^b\./, "");
+  if(!accGuid) return "";
+  let href = "https://acc.autodesk.com/docs/files/projects/" + encodeURIComponent(accGuid);
+  if(folderId) href += "?folderUrn=" + encodeURIComponent(folderId);
+  if(itemId) href += (folderId ? "&" : "?") + "entityId=" + encodeURIComponent(itemId);
+  return href;
+}
+
+function modelsSetStatus(htmlStr){
+  const el = document.getElementById("modelsViewerStatus");
+  if(el) el.innerHTML = htmlStr;
+}
+
+async function modelsEnsureViewer(){
+  if(_modelsViewerReady && _modelsViewer) return _modelsViewer;
+  if(typeof Autodesk === "undefined" || !Autodesk.Viewing){
+    throw new Error("APS Viewer script not loaded");
+  }
+  const pair = await modelsGetTokenPair();
+  if(!pair) throw new Error("Forma/ACC not signed in");
+  const env = modelsViewerEnv();
+  const host = document.getElementById("modelsViewerHost");
+  if(!host) throw new Error("Viewer host missing");
+
+  await new Promise(function(resolve, reject){
+    Autodesk.Viewing.Initializer({
+      env: env.env,
+      api: env.api,
+      getAccessToken: function(cb){
+        modelsGetTokenPair().then(function(p){
+          if(!p) cb("", 0);
+          else cb(p.token, p.seconds);
+        }).catch(function(){ cb("", 0); });
+      }
+    }, function(){
+      try {
+        if(_modelsViewer){
+          try { _modelsViewer.finish(); } catch(e){}
+          _modelsViewer = null;
+        }
+        // keep empty hint sibling
+        let canvas = document.getElementById("modelsViewerCanvas");
+        if(!canvas){
+          canvas = document.createElement("div");
+          canvas.id = "modelsViewerCanvas";
+          canvas.style.cssText = "position:absolute;inset:0;";
+          host.appendChild(canvas);
+        }
+        _modelsViewer = new Autodesk.Viewing.GuiViewer3D(canvas, { extensions: ["Autodesk.DocumentBrowser"] });
+        const started = _modelsViewer.start();
+        if(started) console.warn("viewer start", started);
+        _modelsViewer.setTheme("dark-theme");
+        _modelsViewerReady = true;
+        resolve(_modelsViewer);
+      } catch(err){ reject(err); }
+    });
+  });
+  return _modelsViewer;
+}
+
+async function modelsLoadUrn(urn, label){
+  const empty = document.getElementById("modelsViewerEmpty");
+  if(empty) empty.style.display = "none";
+  const viewer = await modelsEnsureViewer();
+  const docId = urn.indexOf("urn:") === 0 ? urn : ("urn:" + urn);
+  return new Promise(function(resolve, reject){
+    Autodesk.Viewing.Document.load(docId, function(doc){
+      const viewable = doc.getRoot().getDefaultGeometry();
+      if(!viewable){
+        reject(new Error("No viewable geometry on this file"));
+        return;
+      }
+      viewer.loadDocumentNode(doc, viewable).then(function(){
+        try { showToast("Loaded " + (label || "model")); } catch(e){}
+        resolve(true);
+      }).catch(reject);
+    }, function(code, msg, errs){
+      reject(new Error(msg || ("Viewer load failed (" + code + ")")));
+    });
+  });
+}
+
+async function modelsListFolder(project, folderId){
+  const pid = project.accProjectId;
+  if(typeof apsFolderItemsAndFolders === "function"){
+    return await apsFolderItemsAndFolders(pid, folderId);
+  }
+  const all = await apsFolderContents(pid, folderId, {});
+  const folders = [], items = [];
+  (all || []).forEach(function(it){
+    const t = String(it.type || "").toLowerCase();
+    if(t.indexOf("folder") >= 0) folders.push(it);
+    else items.push(it);
+  });
+  return { folders: folders, items: items };
+}
+
+function modelsItemName(it){
+  const a = (it && it.attributes) || {};
+  return a.displayName || a.name || it.id || "file";
+}
+
+function renderModelsFileList(project, folders, items){
+  const el = document.getElementById("modelsFileList");
+  if(!el) return;
+  let htmlOut = "";
+  folders.sort(function(a,b){ return modelsItemName(a).localeCompare(modelsItemName(b)); });
+  items.sort(function(a,b){ return modelsItemName(a).localeCompare(modelsItemName(b)); });
+  folders.forEach(function(f){
+    htmlOut += '<div class="models-row models-folder" data-folder-id="' + escapeHtml(f.id) + '" style="padding:6px 8px;cursor:pointer;border-radius:8px;margin-bottom:4px;background:#f3f0f6;font-size:12px;">📁 ' + escapeHtml(modelsItemName(f)) + "</div>";
+  });
+  const viewable = items.filter(function(it){ return modelsIsViewableName(modelsItemName(it)); });
+  const other = items.filter(function(it){ return !modelsIsViewableName(modelsItemName(it)); });
+  viewable.forEach(function(it){
+    const name = modelsItemName(it);
+    htmlOut += '<div class="models-row models-file" data-item-id="' + escapeHtml(it.id) + '" style="padding:6px 8px;cursor:pointer;border-radius:8px;margin-bottom:4px;font-size:12px;border:1px solid #eee;">📐 ' + escapeHtml(name) + "</div>";
+  });
+  if(other.length){
+    htmlOut += '<div style="margin:8px 0 4px;font-size:10px;color:#888;">Other files (' + other.length + ')</div>';
+    other.slice(0, 40).forEach(function(it){
+      htmlOut += '<div style="padding:4px 8px;font-size:11px;color:#888;">' + escapeHtml(modelsItemName(it)) + "</div>";
+    });
+  }
+  if(!folders.length && !viewable.length){
+    htmlOut = '<p class="section-sub">No folders or viewable models in this folder.</p>';
+  }
+  el.innerHTML = htmlOut;
+  el.querySelectorAll(".models-folder").forEach(function(row){
+    row.onclick = function(){
+      const id = row.getAttribute("data-folder-id");
+      if(!id) return;
+      _modelsFolderStack.push(_modelsCurrentFolder);
+      modelsOpenFolder(project, id);
+    };
+  });
+  el.querySelectorAll(".models-file").forEach(function(row){
+    row.onclick = function(){
+      el.querySelectorAll(".models-file").forEach(function(r){ r.style.background = ""; });
+      row.style.background = "#ede9fe";
+      modelsOpenItem(project, row.getAttribute("data-item-id"), row.textContent.replace(/^📐\s*/, ""));
+    };
+  });
+}
+
+async function modelsOpenFolder(project, folderId){
+  _modelsCurrentFolder = folderId;
+  const pathEl = document.getElementById("modelsPathLabel");
+  if(pathEl) pathEl.textContent = folderId === project.accRootFolderId ? (project.accRootFolderPath || "Root") : "Folder";
+  const up = document.getElementById("btnModelsUp");
+  if(up) up.style.display = _modelsFolderStack.length ? "inline-block" : "none";
+  modelsSetStatus("Loading folder…");
+  try {
+    const listing = await modelsListFolder(project, folderId);
+    renderModelsFileList(project, listing.folders || [], listing.items || []);
+    modelsSetStatus("Folder loaded · " + ((listing.folders||[]).length) + " folders · " + ((listing.items||[]).length) + " files. Region " + (typeof apsPreferredRegion === "function" ? apsPreferredRegion() : "EMEA") + ".");
+  } catch(err){
+    console.error(err);
+    modelsSetStatus("Could not list folder: " + (err.message || err));
+    try { showToast("Folder list failed"); } catch(e){}
+  }
+}
+
+async function modelsOpenItem(project, itemId, label){
+  modelsSetStatus("Resolving viewable for " + escapeHtml(label || "file") + "…");
+  try {
+    const found = await modelsTipDerivativeUrn(project.accProjectId, itemId);
+    if(!found.urn){
+      modelsSetStatus("No derivative URN — open this file once in Forma/ACC so Autodesk can generate a viewable, then refresh.");
+      try { showToast("No viewable yet for this file"); } catch(e){}
+      return;
+    }
+    modelsSetStatus("Loading viewer… " + escapeHtml(label || "") +
+      ' · <a href="' + escapeHtml(modelsAccFileUrl(project, _modelsCurrentFolder, itemId)) + '" target="_blank" rel="noopener">Open in ACC</a>');
+    await modelsLoadUrn(found.urn, label);
+    modelsSetStatus("Viewing " + escapeHtml(label || "") +
+      ' · <a href="' + escapeHtml(modelsAccFileUrl(project, _modelsCurrentFolder, itemId)) + '" target="_blank" rel="noopener">Open in ACC</a>');
+  } catch(err){
+    console.error(err);
+    modelsSetStatus("Viewer error: " + escapeHtml(err.message || String(err)) + ". If the file is new, open it once in Forma/ACC to create the viewable.");
+    try { showToast("Viewer failed: " + (err.message || err)); } catch(e){}
+  }
+}
+
+function bindModelsViewerUi(project){
+  if(_modelsBound) return;
+  _modelsBound = true;
+  const ref = document.getElementById("btnModelsRefresh");
+  if(ref){
+    ref.onclick = function(){
+      const p = projectById(currentProjectId) || project;
+      const folder = _modelsCurrentFolder || (p && p.accRootFolderId);
+      if(p && folder) modelsOpenFolder(p, folder);
+    };
+  }
+  const up = document.getElementById("btnModelsUp");
+  if(up){
+    up.onclick = function(){
+      const p = projectById(currentProjectId) || project;
+      const prev = _modelsFolderStack.pop();
+      if(p && prev) modelsOpenFolder(p, prev);
+    };
+  }
+}
+
+async function renderModelsViewer(project){
+  bindModelsViewerUi(project);
+  const auth = (typeof apsLoadAuth === "function") ? apsLoadAuth() : null;
+  const signed = !!(auth && auth.access_token);
+  if(!signed){
+    modelsSetStatus("Not signed in to Forma/ACC. Use the Forma button in the header, then refresh this tab.");
+    const list = document.getElementById("modelsFileList");
+    if(list) list.innerHTML = '<p class="section-sub">Sign in first.</p>';
+    return;
+  }
+  if(!project.accProjectId){
+    modelsSetStatus("No Forma/ACC project linked. Edit project → Integration → link a project and set the root Docs folder.");
+    return;
+  }
+  if(!project.accRootFolderId){
+    modelsSetStatus("Root Docs folder not set. Edit project → Integration → choose the root folder.");
+    return;
+  }
+  if(!_modelsCurrentFolder) _modelsCurrentFolder = project.accRootFolderId;
+  await modelsOpenFolder(project, _modelsCurrentFolder);
+}
+
 function apsPreferredRegion(){
   try {
     const cfg = apsLoadCfg();
@@ -17788,6 +18100,7 @@ function setActiveWsView(view){
     }
     if(main === "prjtools" && typeof bindProjectTools === "function") bindProjectTools(project);
     if(main === "prjdocs" && typeof bindProjectDocs === "function") bindProjectDocs(project);
+    if(main === "models" && typeof renderModelsViewer === "function") renderModelsViewer(project);
   } catch(e){ console.error(e); }
 }
 function bindWorkspaceSubtabs(){
