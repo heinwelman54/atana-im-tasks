@@ -1007,7 +1007,9 @@
   .org-role-col .role-title{font-size:11px;font-weight:800;color:var(--gold-700);margin-bottom:6px;}
   .org-plate{display:flex;flex-direction:column;gap:2px;padding:6px 8px;margin:0 0 6px;border-radius:8px;background:var(--purple-900);color:#f9f7e5;font-size:11px;cursor:grab;}
   .org-plate .nm{font-weight:700;display:flex;align-items:center;gap:6px;}
-  .org-acc-tick{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:#16a34a;color:#fff;font-size:11px;font-weight:800;flex:0 0 16px;box-shadow:0 1px 2px rgba(0,0,0,0.25);}
+  .org-acc-tick,.org-acc-miss{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;color:#fff;font-size:11px;font-weight:800;flex:0 0 16px;box-shadow:0 1px 2px rgba(0,0,0,0.25);}
+  .org-acc-tick{background:#16a34a;}
+  .org-acc-miss{background:#dc2626;}
   .org-plate .em{opacity:0.75;font-size:10px;word-break:break-all;}
   .org-plate.dragging{opacity:0.5;}
   .org-plate{position:relative;padding-right:22px;}
@@ -2355,8 +2357,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.22.1";
-const APP_BUILD = "2026-08-26-org-fuzzy-acc-tick";
+const APP_VERSION = "3.22.2";
+const APP_BUILD = "2026-08-26-org-slot-match";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -23965,9 +23967,15 @@ function renderProjectTeamPanel(project){
     const cls = "org-plate" + (multi ? " multi-assigned" : "") + (ghost ? " ghost" : "");
     const drag = ghost ? "" : ` draggable="true" data-member-id="${escapeHtml(m.id)}"`;
     const rm = ghost ? "" : `<button type="button" class="org-plate-x" data-remove-member="${escapeHtml(m.id)}" title="Remove">×</button>`;
-    const accMatch = !ghost && accOrganogramHasMember(project, m);
-    const tick = accMatch ? `<span class="org-acc-tick" title="Matches ACC organogram">✓</span>` : "";
-    return `<div class="${cls}"${drag} title="${escapeHtml((ghost ? "ACC: " : "") + (m.email||m.roleName||""))}${accMatch ? " · matches ACC" : ""}">
+    const slot = (!ghost && typeof accOrganogramSlotMatch === "function")
+      ? accOrganogramSlotMatch(project, m, opts.func || m.func, opts.disc || m.discipline)
+      : { onAcc: false, slotMatch: false };
+    const accMatch = !!(slot && slot.slotMatch);
+    const accMismatch = !ghost && !(slot && slot.slotMatch);
+    const tick = accMatch
+      ? `<span class="org-acc-tick" title="Matches ACC: same person, role and task team">✓</span>`
+      : (accMismatch ? `<span class="org-acc-miss" title="${slot && slot.onAcc ? "On ACC but different role or task team — update ACC" : "Not on ACC organogram — add or update ACC"}">✕</span>` : "");
+    return `<div class="${cls}"${drag} title="${escapeHtml((ghost ? "ACC: " : "") + (m.email||m.roleName||""))}${accMatch ? " · matches ACC slot" : (accMismatch ? " · does not match ACC slot" : "")}">
       ${rm}
       <span class="nm">${tick}${escapeHtml(m.name)}</span>
       <span class="em">${escapeHtml(m.func)}${m.discipline && !["DTL","PDM","IM","DM"].includes(m.func) ? " · "+escapeHtml(m.discipline) : ""}${m.email ? " · "+escapeHtml(m.email) : ""}${ghost ? " · ACC" : ""}</span>
@@ -23982,7 +23990,7 @@ function renderProjectTeamPanel(project){
     const over = multi || multiAcc;
     return {
       multi: over,
-      html: appList.map(m => plate(m, { multi })).join("") + ghosts.map(m => plate(m, { ghost: true, multi: multiAcc })).join("")
+      html: appList.map(m => plate(m, { multi, func: func, disc: disc })).join("") + ghosts.map(m => plate(m, { ghost: true, multi: multiAcc, func: func, disc: disc })).join("")
     };
   };
   let html = `<div class="settings-section">
@@ -24436,15 +24444,36 @@ function remapAccMembersToProjectTeams(project, members){
   return members;
 }
 
+function accMemberIdentityKey(m){
+  const em = String((m && m.email) || "").toLowerCase().trim();
+  if(em) return "e:" + em;
+  const nm = String((m && m.name) || "").toLowerCase().trim();
+  return nm ? ("n:" + nm) : "";
+}
+
 function accOrganogramHasMember(project, member){
   const acc = (project && project.accOrganogram && project.accOrganogram.members) || [];
-  const em = String((member && (member.email || "")) || "").toLowerCase().trim();
-  const nm = String((member && member.name) || "").toLowerCase().trim();
-  if(em){
-    return acc.some(function(a){ return String(a.email || "").toLowerCase().trim() === em; });
-  }
-  if(!nm) return false;
-  return acc.some(function(a){ return String(a.name || "").toLowerCase().trim() === nm; });
+  const key = accMemberIdentityKey(member);
+  if(!key) return false;
+  return acc.some(function(a){ return accMemberIdentityKey(a) === key; });
+}
+
+/** Same person + same functional role + same task team (after alias/fuzzy resolve). */
+function accOrganogramSlotMatch(project, member, func, disc){
+  const acc = (project && project.accOrganogram && project.accOrganogram.members) || [];
+  const key = accMemberIdentityKey(member);
+  if(!key) return { onAcc: false, slotMatch: false };
+  const hits = acc.filter(function(a){ return accMemberIdentityKey(a) === key; });
+  if(!hits.length) return { onAcc: false, slotMatch: false };
+  const wantFunc = String(func || member.func || "").toUpperCase();
+  const enabling = ["DTL","PDM","IM","DM"];
+  const slotMatch = hits.some(function(a){
+    const aFunc = String(a.func || "").toUpperCase();
+    if(wantFunc && aFunc !== wantFunc) return false;
+    if(!disc || enabling.indexOf(wantFunc) >= 0) return true;
+    return disciplineMatchesTeam(a.discipline, memberRoleBlob(a), disc, project);
+  });
+  return { onAcc: true, slotMatch: slotMatch };
 }
 
 function matchAccRoleLabel(label){
