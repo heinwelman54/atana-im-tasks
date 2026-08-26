@@ -2194,35 +2194,28 @@
 
       <div class="ws-view" id="wsview-models">
         <div class="section-title" style="margin-bottom:6px;">Model viewer</div>
-        <p class="section-sub">WIP models for the selected task team and functional breakdown. Default types: RVT / IFC / NWD. Use Production WBS <strong>View</strong> to isolate Ss scope.</p>
+        <p class="section-sub">Pick a task team and a functional breakdown — the matching WIP model opens automatically. Ss packages on the Production WBS show whether a model exists; click a package to pop out and isolate that Ss.</p>
         <div id="modelsViewerStatus" class="card" style="padding:8px 10px;margin-bottom:8px;font-size:12px;"></div>
-        <div id="modelsFilterBar" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;">
-          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
-            <span style="font-size:11px;font-weight:700;">Task team</span>
-            <div id="modelsTeamPills" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
-            <span style="font-size:11px;font-weight:700;">Functional breakdown</span>
-            <div id="modelsFbPills" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-            <span style="font-size:11px;font-weight:700;">Types</span>
-            <label class="checklabel" style="font-size:12px;"><input type="checkbox" data-models-ext="rvt" checked> RVT</label>
-            <label class="checklabel" style="font-size:12px;"><input type="checkbox" data-models-ext="ifc" checked> IFC</label>
-            <label class="checklabel" style="font-size:12px;"><input type="checkbox" data-models-ext="nwd" checked> NWD</label>
-            <label class="checklabel" style="font-size:12px;"><input type="checkbox" data-models-ext="nwc"> NWC</label>
-            <label class="checklabel" style="font-size:12px;"><input type="checkbox" data-models-ext="pdf"> PDF</label>
-            <button type="button" class="btn btn-ghost btn-xs" id="btnModelsRefresh">Refresh WIP</button>
-            <button type="button" class="btn btn-ghost btn-xs" id="btnModelsBrowse">Browse folders</button>
-            <button type="button" class="btn btn-ghost btn-xs" id="btnModelsUp" style="display:none;">↑ Parent</button>
-            <button type="button" class="btn btn-gold btn-xs" id="btnModelsPopout">Pop out</button>
-            <span id="modelsPathLabel" style="font-size:11px;color:#666;"></span>
-          </div>
+        <div id="modelsFilterBar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;">
+          <span style="font-size:11px;font-weight:700;">Task team</span>
+          <div id="modelsTeamPills" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+          <span style="font-size:11px;font-weight:700;margin-left:8px;">Type</span>
+          <label class="checklabel" style="font-size:12px;"><input type="radio" name="modelsType" data-models-type="rvt" checked> RVT</label>
+          <label class="checklabel" style="font-size:12px;"><input type="radio" name="modelsType" data-models-type="ifc"> IFC</label>
+          <label class="checklabel" style="font-size:12px;"><input type="radio" name="modelsType" data-models-type="nwd"> NWD</label>
+          <label class="checklabel" style="font-size:12px;"><input type="radio" name="modelsType" data-models-type="pdf"> PDF</label>
+          <button type="button" class="btn btn-ghost btn-xs" id="btnModelsRefresh">Refresh WIP</button>
+          <button type="button" class="btn btn-gold btn-xs" id="btnModelsPopout">Pop out</button>
+          <span id="modelsPathLabel" style="font-size:11px;color:#666;"></span>
         </div>
-        <div style="display:grid;grid-template-columns:minmax(220px,320px) 1fr;gap:10px;min-height:420px;">
-          <div id="modelsFileList" class="card" style="padding:8px;overflow:auto;max-height:70vh;"></div>
+        <div style="display:grid;grid-template-columns:minmax(240px,300px) 1fr;gap:10px;min-height:420px;">
+          <div class="card" style="padding:8px;overflow:auto;max-height:70vh;">
+            <div style="font-size:11px;font-weight:700;margin-bottom:8px;">Functional breakdown</div>
+            <div id="modelsFbPills"></div>
+            <div id="modelsFileList" style="display:none;"></div>
+          </div>
           <div id="modelsViewerHost" class="card" style="position:relative;min-height:420px;height:70vh;overflow:hidden;background:#1a1a1a;">
-            <div id="modelsViewerEmpty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:13px;padding:16px;text-align:center;">Select a model. Production WBS View isolates Ss.</div>
+            <div id="modelsViewerEmpty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:13px;padding:16px;text-align:center;">Select a functional breakdown on the left to open its model.</div>
           </div>
         </div>
       </div>
@@ -2375,8 +2368,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.23.0";
-const APP_BUILD = "2026-08-26-models-wip-ss";
+const APP_VERSION = "3.23.1";
+const APP_BUILD = "2026-08-26-models-fb-auto";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -11978,7 +11971,12 @@ function renderProductionWbs(project){
             } else {
               inner += '<td style="padding:3px 4px;">—</td>';
             }
-            inner += '<td style="padding:3px 4px;"><button type="button" class="btn btn-ghost btn-xs btn-pp-view-model" data-pp-id="' + escapeHtml(pp.id) + '">View</button></td>';
+            var hasFile = (typeof modelsPackageHasModelFile === "function") ? modelsPackageHasModelFile(project, pp) : false;
+            var ssHit = (_modelsSsHits && pp.ss && _modelsSsHits[pp.ss] != null) ? _modelsSsHits[pp.ss] : null;
+            var badge = hasFile
+              ? (ssHit != null ? ('<span style="color:#16a34a;font-weight:700;">Ss ' + ssHit + '</span>') : '<span style="color:#16a34a;">model</span>')
+              : '<span style="color:#9ca3af;">no file</span>';
+            inner += '<td style="padding:3px 4px;white-space:nowrap;">' + badge + ' <button type="button" class="btn btn-ghost btn-xs btn-pp-view-model" data-pp-id="' + escapeHtml(pp.id) + '">Open</button></td>';
             inner += '</tr>';
           });
           if(rg.packages.length > 60){
@@ -11995,7 +11993,11 @@ function renderProductionWbs(project){
             const pkgs = (typeof getProductionPackages === "function") ? getProductionPackages(project) : [];
             const pp = pkgs.filter(function(p){ return p.id === id; })[0];
             if(!pp){ showToast("Package not found"); return; }
-            if(typeof modelsOpenForPackage === "function") modelsOpenForPackage(project, pp);
+            if(typeof modelsOpenForPackage === "function"){
+              modelsOpenForPackage(project, pp).then(function(){
+                if(typeof modelsPopOutCurrent === "function") modelsPopOutCurrent();
+              });
+            }
           };
         });
         // Ro also collapsed by default
@@ -13200,6 +13202,8 @@ let _modelsIsolateSs = "";
 let _modelsSelTeam = "";
 let _modelsSelFb = "";
 let _modelsExtOn = { rvt: true, ifc: true, nwd: true, nwc: false, pdf: false };
+let _modelsType = "rvt";
+let _modelsSsHits = {};
 
 function modelsFileExt(name){
   const n = String(name || "").toLowerCase();
@@ -13212,10 +13216,9 @@ function modelsNormExt(ext){
   return e;
 }
 function modelsEnabledExts(){
-  const on = [];
-  Object.keys(_modelsExtOn).forEach(function(k){ if(_modelsExtOn[k]) on.push(k); });
-  if(_modelsExtOn.nwd) on.push("nwc","nwf");
-  return on;
+  const t = String(_modelsType || "rvt").toLowerCase();
+  if(t === "nwd") return ["nwd","nwc","nwf"];
+  return [t];
 }
 function modelsIsViewableName(name){
   const ext = modelsNormExt(modelsFileExt(name));
@@ -13359,6 +13362,7 @@ function modelsIsolateSsOnViewer(viewer, ssCode){
     try { viewer.setGhosting(true); } catch(e){}
     viewer.isolate(ids);
     viewer.fitToView(ids);
+    try { _modelsSsHits[term] = ids.length; } catch(e){}
     try { showToast("Isolated " + ids.length + " elements for " + term + " (others ghosted)"); } catch(e){}
   };
   try {
@@ -13452,6 +13456,43 @@ async function modelsCollectWipModels(project){
   return out;
 }
 
+
+function modelsFindFileForFb(project, fbCode, teamCode){
+  const team = teamCode || _modelsSelTeam;
+  const rows = (_modelsIndex || []).filter(function(row){
+    if(!modelsIsViewableName(row.name)) return false;
+    return modelsNameMatchesFilters(row.name, team && team !== "ALL" ? team : "", fbCode);
+  });
+  rows.sort(function(a,b){
+    const ea = modelsNormExt(modelsFileExt(a.name));
+    const eb = modelsNormExt(modelsFileExt(b.name));
+    const rank = function(e){ return e === (_modelsType||"rvt") ? 0 : 1; };
+    return rank(ea) - rank(eb);
+  });
+  return rows[0] || null;
+}
+
+function modelsPackageHasModelFile(project, pp){
+  if(!pp) return false;
+  return !!modelsFindFileForFb(project, pp.fb, pp.ro || pp.role || _modelsSelTeam);
+}
+
+async function modelsAutoOpenSelected(project){
+  if(!_modelsSelFb || _modelsSelFb === "ALL"){
+    modelsSetStatus("Select a functional breakdown to open its model.");
+    return;
+  }
+  if(!_modelsIndex.length){
+    try { await modelsCollectWipModels(project); } catch(e){}
+  }
+  const hit = modelsFindFileForFb(project, _modelsSelFb, _modelsSelTeam);
+  if(!hit){
+    modelsSetStatus("No " + String(_modelsType||"rvt").toUpperCase() + " in WIP for FB " + escapeHtml(_modelsSelFb) + (_modelsSelTeam && _modelsSelTeam!=="ALL" ? (" / " + escapeHtml(_modelsSelTeam)) : "") + ".");
+    return;
+  }
+  await modelsOpenItem(project, hit.item.id, hit.name, { folderId: hit.folderId });
+}
+
 function modelsRenderPills(project){
   const teamHost = document.getElementById("modelsTeamPills");
   const fbHost = document.getElementById("modelsFbPills");
@@ -13465,19 +13506,28 @@ function modelsRenderPills(project){
     });
     teamHost.innerHTML = h;
     teamHost.querySelectorAll("[data-models-team]").forEach(function(b){
-      b.onclick = function(){ _modelsSelTeam = b.getAttribute("data-models-team"); modelsRefreshList(project); modelsRenderPills(project); };
+      b.onclick = function(){ _modelsSelTeam = b.getAttribute("data-models-team"); modelsRenderPills(project); if(_modelsSelFb && typeof modelsAutoOpenSelected==="function") modelsAutoOpenSelected(project); else modelsRefreshList(project); };
     });
   }
   if(fbHost){
-    let h = '<button type="button" class="btn btn-xs ' + (_modelsSelFb==="ALL"||!_modelsSelFb?"btn-primary":"btn-ghost") + '" data-models-fb="ALL">All</button>';
+    let h = "";
     fbs.forEach(function(fb){
       const code = fb.code || fb;
+      const label = fb.label || fb.name || code;
       const on = _modelsSelFb === code;
-      h += '<button type="button" class="btn btn-xs ' + (on?"btn-primary":"btn-ghost") + '" data-models-fb="' + escapeHtml(code) + '">' + escapeHtml(code) + '</button>';
+      const fileHit = (typeof modelsFindFileForFb === "function") ? modelsFindFileForFb(project, code) : null;
+      const mark = fileHit ? '<span style="color:#16a34a;font-weight:800;">●</span>' : '<span style="color:#d1d5db;">●</span>';
+      h += '<button type="button" class="btn btn-xs ' + (on?"btn-primary":"btn-ghost") + '" data-models-fb="' + escapeHtml(code) + '" style="display:flex;width:100%;text-align:left;justify-content:flex-start;gap:8px;margin-bottom:6px;white-space:normal;height:auto;padding:8px 10px;">' +
+        mark + '<span><strong>' + escapeHtml(code) + '</strong><br><span style="font-weight:500;opacity:.85;">' + escapeHtml(label) + '</span></span></button>';
     });
+    if(!h) h = '<p class="section-sub">No functional breakdowns in settings.</p>';
     fbHost.innerHTML = h;
     fbHost.querySelectorAll("[data-models-fb]").forEach(function(b){
-      b.onclick = function(){ _modelsSelFb = b.getAttribute("data-models-fb"); modelsRefreshList(project); modelsRenderPills(project); };
+      b.onclick = function(){
+        _modelsSelFb = b.getAttribute("data-models-fb");
+        modelsRenderPills(project);
+        if(typeof modelsAutoOpenSelected === "function") modelsAutoOpenSelected(project);
+      };
     });
   }
 }
@@ -13682,13 +13732,15 @@ function bindModelsViewerUi(project){
   };
   const po = document.getElementById("btnModelsPopout");
   if(po) po.onclick = function(){ modelsPopOutCurrent(); };
-  document.querySelectorAll("[data-models-ext]").forEach(function(cb){
-    const ext = cb.getAttribute("data-models-ext");
-    cb.checked = !!_modelsExtOn[ext];
+  document.querySelectorAll("[data-models-type]").forEach(function(cb){
+    cb.checked = cb.getAttribute("data-models-type") === (_modelsType || "rvt");
     cb.onchange = function(){
-      _modelsExtOn[ext] = !!cb.checked;
+      if(!cb.checked) return;
+      _modelsType = cb.getAttribute("data-models-type") || "rvt";
       const p = projectById(currentProjectId) || project;
-      modelsRefreshList(p);
+      modelsRenderPills(p);
+      if(_modelsSelFb) modelsAutoOpenSelected(p);
+      else modelsRefreshList(p);
     };
   });
   _modelsBound = true;
