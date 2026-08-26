@@ -1,1 +1,1 @@
-# Atana IM Tasks v3.24.0 — Phase 16 DTKG Digital Twin
+# Atana IM Tasks v3.26.0 — MVP Phases 1–5

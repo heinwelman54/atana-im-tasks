@@ -1927,10 +1927,15 @@
       </div>
       <div class="ws-view" id="wsview-planner">
         <div class="segmented" id="plannerSub" style="margin-bottom:12px;">
-          <button class="active" data-plansub="wbs">WBS</button>
+          <button class="active" data-plansub="mvp">MVP</button>
+          <button data-plansub="wbs">WBS</button>
           <button data-plansub="gantt">Gantt chart</button>
           <button data-plansub="clash">Clash schedule</button>
-          <button data-plansub="dtkg">Digital Twin</button>
+          <button data-plansub="dtkg">Digital Twin (later)</button>
+          <button data-plansub="acf">Copilot (later)</button>
+        </div>
+        <div id="plansub-mvp" style="display:none;">
+          <div id="mvpRoot"></div>
         </div>
         <div id="plansub-wbs">
         <div class="card" style="margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.08);">
@@ -1993,6 +1998,9 @@
         </div>
         <div id="plansub-dtkg" style="display:none;">
           <div id="dtkgRoot"></div>
+        </div>
+        <div id="plansub-acf" style="display:none;">
+          <div id="acfRoot"></div>
         </div>
       </div><!-- /wsview-planner -->
 
@@ -2372,8 +2380,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.24.0";
-const APP_BUILD = "2026-08-26-dtkg-p16";
+const APP_VERSION = "3.26.0";
+const APP_BUILD = "2026-08-26-mvp-p1-p5";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -12101,6 +12109,562 @@ function renderDtkgView(project){
 }
 
 
+
+/* ===================== PHASE 18 — Atana Copilot Framework (ACF) ===================== */
+const ACF_VERSION = "1.0";
+const ACF_PERSONAS = {
+  production: { id: "production", label: "Production Copilot", audience: "TTM / TTIM / IA" },
+  information: { id: "information", label: "Information Copilot", audience: "IM / TTIM" },
+  model: { id: "model", label: "Model Copilot", audience: "TTIM / Coordinators / IA" },
+  executive: { id: "executive", label: "Executive Copilot", audience: "DTL / PDM" }
+};
+
+function acfFindPackages(project, hint){
+  const list = (typeof getProductionPackages === "function") ? getProductionPackages(project) : [];
+  const q = String(hint || "").toLowerCase().trim();
+  if(!q) return list.slice(0, 40);
+  return list.filter(function(pp){
+    return String(pp.id||"").toLowerCase().indexOf(q) >= 0
+      || String(pp.ss||"").toLowerCase().indexOf(q) >= 0
+      || String(pp.name||"").toLowerCase().indexOf(q) >= 0
+      || String(pp.fb||"").toLowerCase() === q.replace(/^fb/, "")
+      || String(pp.ro||"").toLowerCase() === q;
+  });
+}
+
+function acfSkillPackageReadiness(project, pp){
+  if(!pp) return { skill: "01", title: "Package Readiness", error: "No production package selected." };
+  const stageId = project.currentStageId || "S3";
+  let dep = null, ifc = null;
+  try { if(typeof evaluatePackageDependencyReadiness === "function") dep = evaluatePackageDependencyReadiness(project, pp.id); } catch(e){}
+  try { if(typeof evaluatePackageInterfaceReadiness === "function") ifc = evaluatePackageInterfaceReadiness(project, pp.id); } catch(e){}
+  const cell = (pp.stageMaturity && pp.stageMaturity[stageId]) ? pp.stageMaturity[stageId] : null;
+  const hits = (typeof _modelsSsHits !== "undefined" && pp.ss && _modelsSsHits[pp.ss] != null) ? _modelsSsHits[pp.ss] : null;
+  const blocked = dep && dep.blocked;
+  return {
+    skill: "01", title: "Package Readiness",
+    subject: pp.id,
+    evidence: {
+      fb: pp.fb, ss: pp.ss, ro: pp.ro, status: pp.status || "not_started",
+      workstage: stageId,
+      loin: cell || pp.currentLoin || pp.targetLoin || {},
+      dependencyReadiness: dep && dep.readiness,
+      blockedDependencies: dep && dep.blocked,
+      interfaceReadiness: ifc && ifc.readiness,
+      openInterfaceIssues: ifc && ifc.openIssues,
+      modelSsHits: hits
+    },
+    answer: blocked
+      ? (pp.ss || pp.id) + " cannot progress: " + blocked + " blocking dependenc" + (blocked===1?"y":"ies") + " (PPDM)."
+      : (pp.ss || pp.id) + " is " + (pp.status || "in planning") + " at " + stageId + (dep && dep.readiness ? ("; dependency readiness " + dep.readiness) : "") + (ifc && ifc.readiness ? ("; interface readiness " + ifc.readiness) : "") + ".",
+    recommendations: blocked
+      ? ["Raise LOIN on source packages before starting " + (pp.ss||pp.id) + ".", "Do not author this system until PPDM threshold is met."]
+      : ["Keep FRRM workflow: IA author → TTIM verify → PR review → TTM approve.", "Confirm model coverage for " + (pp.ss||"Ss") + " in the viewer."]
+  };
+}
+
+function acfSkillAssetReadiness(project, fbCode){
+  const list = acfFindPackages(project, "").filter(function(p){
+    return !fbCode || String(p.fb||"").toUpperCase() === String(fbCode).toUpperCase().replace(/^FB/,"");
+  });
+  const ad = (typeof productionAdifMetrics === "function") ? productionAdifMetrics(project) : {};
+  const byStatus = {};
+  list.forEach(function(p){ const s = p.status || "not_started"; byStatus[s] = (byStatus[s]||0)+1; });
+  let blocked = 0;
+  list.slice(0, 200).forEach(function(p){
+    try {
+      const d = evaluatePackageDependencyReadiness(project, p.id);
+      if(d && d.blocked) blocked++;
+    } catch(e){}
+  });
+  return {
+    skill: "02", title: "Asset Readiness",
+    subject: fbCode || "Project",
+    evidence: {
+      packageCount: list.length, byStatus: byStatus, blockedPackages: blocked,
+      projectReadiness: ad.projectReadiness, production: ad.production,
+      dependency: ad.dependency, interfaces: ad.interfaces, delayed: ad.delayed, risks: ad.risks
+    },
+    answer: (fbCode ? ("FB " + fbCode) : "Project") + " has " + list.length + " production packages, " + blocked + " blocked by PPDM dependencies. ADIF project readiness " + (ad.projectReadiness != null ? ad.projectReadiness + "%" : "n/a") + ".",
+    recommendations: blocked
+      ? ["Clear critical dependencies on the blocked packages before forecasting the next workstage."]
+      : ["No PPDM blockers counted in this slice. Review interface readiness before the next exchange."]
+  };
+}
+
+function acfSkillInterfaceAnalysis(project, pp){
+  if(!pp) return { skill: "03", title: "Interface Analysis", error: "Select a production package or system first." };
+  let dep = null, ifc = null;
+  try { dep = evaluatePackageDependencyReadiness(project, pp.id); } catch(e){}
+  try { ifc = evaluatePackageInterfaceReadiness(project, pp.id); } catch(e){}
+  const deps = ((project.production && project.production.dependencies) || []).filter(function(d){
+    return String(d.targetPpId) === String(pp.id) || String(d.sourcePpId) === String(pp.id);
+  });
+  const ifaces = ((project.production && project.production.interfaces) || []).filter(function(d){
+    return String(d.targetPpId||d.targetPP) === String(pp.id) || String(d.sourcePpId||d.sourcePP) === String(pp.id);
+  });
+  return {
+    skill: "03", title: "Interface Analysis",
+    subject: pp.id,
+    evidence: { dependencies: deps.length, interfaces: ifaces.length, depEval: dep, ifEval: ifc },
+    answer: (pp.ss||pp.id) + " has " + deps.length + " PPDM dependenc" + (deps.length===1?"y":"ies") + " and " + ifaces.length + " DIF interface object(s)."
+      + (dep && dep.blocked ? (" " + dep.blocked + " dependency blocker(s).") : " No recorded dependency blockers.")
+      + (ifc && ifc.openIssues ? (" " + ifc.openIssues + " open interface issue(s).") : ""),
+    recommendations: [
+      "Treat PPDM as 'can I proceed?' and DIF as 'am I coordinated?' — they are not the same.",
+      ifc && ifc.openIssues ? "Close interface issues before claiming coordination complete." : "Generate interface objects on Re-sync if the count is zero."
+    ]
+  };
+}
+
+function acfSkillInformationReadiness(project, hint){
+  const ips = (project.production && project.production.informationPackages) || [];
+  const stage = project.currentStageId || "";
+  const readyShare = ips.filter(function(ip){ return /S[1-7]|SHARED/i.test(String(ip.suitability||ip.informationState||"")); });
+  const readyPub = ips.filter(function(ip){ return /A1|PUBLISH|AUTHORIS/i.test(String(ip.suitability||ip.informationState||"")); });
+  const plan = project.importedMidp || project.midpImport || project.planDeliverables || [];
+  return {
+    skill: "04", title: "Information Readiness",
+    subject: hint || stage || "IPs",
+    evidence: {
+      informationPackages: ips.length,
+      shareCandidates: readyShare.length,
+      publishCandidates: readyPub.length,
+      plannedDeliverables: Array.isArray(plan) ? plan.length : 0,
+      workstage: stage
+    },
+    answer: ips.length
+      ? (ips.length + " information packages. " + readyShare.length + " look shareable (S-codes). " + readyPub.length + " look publication-class (A-codes). Planned deliverables in import: " + (Array.isArray(plan)?plan.length:0) + ".")
+      : "No Information Package records yet (Phase 8 objects). Use MIDP import + AEIR assembly before asking publication questions.",
+    recommendations: ips.length
+      ? ["Validate naming, suitability and revision before Shared.", "Only Information Packages move Shared → Published — never Production Packages."]
+      : ["Assemble IPs by workstage + FB + task team from approved deliverables."]
+  };
+}
+
+function acfSkillModelCompliance(project, hint){
+  const mps = (project.production && project.production.modelPackages) || [];
+  const withHits = mps.filter(function(m){ return (m.elementCount || m.ssCoverage) > 0; });
+  const zero = mps.filter(function(m){ return !m.elementCount && !m.ssCoverage; });
+  const liveHits = (typeof _modelsSsHits !== "undefined") ? Object.keys(_modelsSsHits || {}) : [];
+  return {
+    skill: "05", title: "Model Compliance",
+    subject: hint || "Model packages",
+    evidence: {
+      modelPackages: mps.length,
+      withSsHits: withHits.length,
+      withoutHits: zero.length,
+      liveIsolateKeys: liveHits.length,
+      parameter: "Classification.Uniclass.Ss.Number"
+    },
+    answer: mps.length
+      ? (mps.length + " model packages. " + withHits.length + " have stored Ss isolate hits from Classification.Uniclass.Ss.Number. " + zero.length + " have no coverage record.")
+      : "No model-package verification records yet. Open a package from Production WBS, isolate Ss, then ask again.",
+    recommendations: [
+      "Verification is by FB + Ss + Pr + EF — never by Revit category or workset.",
+      "Missing Ss on elements is a classification defect, not a drawing defect."
+    ]
+  };
+}
+
+function acfDetectIntent(text, persona){
+  const q = String(text || "").toLowerCase();
+  if(/classif|model pack|loin target|unverif|clash|coverage|missing ss/.test(q) || persona === "model") {
+    if(/ready|block|depend|interface|risk/.test(q) && persona !== "model") {/* fall through */}
+    else if(/classif|model|coverage|missing ss|verif|clash|loin/.test(q) || persona === "model") return "05";
+  }
+  if(/information package|\bip\b|deliverable|s4|a1|publish|shared|suitabilit/.test(q) || persona === "information") {
+    if(/s4|a1|publish|share|missing required|suitabilit|information pack/.test(q) || persona === "information") return "04";
+  }
+  if(/interface|clash|coord|dependenc|blocking|cannot progress|can't|prevent/.test(q)) return "03";
+  if(/which fb|project readiness|forecast|highest risk|why is fb|executive|delayed/.test(q) || persona === "executive") {
+    if(/window|package|ss_/.test(q) && !/fb|project readiness|forecast/.test(q)) return "01";
+    return "02";
+  }
+  if(/ws0?3-ready|not ready|at risk|package/.test(q)) return "01";
+  if(persona === "production") return "01";
+  return "02";
+}
+
+function acfResolveSubject(project, text){
+  const q = String(text || "");
+  const ss = q.match(/Ss[_\s-]?\d{2}(?:[_\s-]\d{2}){1,3}/i);
+  if(ss){
+    const packs = acfFindPackages(project, ss[0].replace(/\s+/g, "_"));
+    return { type: "ss", value: ss[0], package: packs[0] || null, packages: packs };
+  }
+  const fb = q.match(/\bFB?\s?([0-9]{2}|ZZ|XX|SI)\b/i);
+  if(fb){
+    const code = fb[1].toUpperCase();
+    return { type: "fb", value: code, package: acfFindPackages(project, code)[0] || null, packages: acfFindPackages(project, code) };
+  }
+  const named = q.match(/window systems|wall systems|door systems|cooling|lighting/i);
+  if(named){
+    const packs = acfFindPackages(project, named[0]);
+    return { type: "name", value: named[0], package: packs[0] || null, packages: packs };
+  }
+  return { type: "project", value: project.code || project.name, package: null, packages: [] };
+}
+
+function acfAsk(project, persona, question){
+  const intent = acfDetectIntent(question, persona);
+  const sub = acfResolveSubject(project, question);
+  let result;
+  if(intent === "01") result = acfSkillPackageReadiness(project, sub.package || acfFindPackages(project, question)[0]);
+  else if(intent === "03") result = acfSkillInterfaceAnalysis(project, sub.package || acfFindPackages(project, question)[0]);
+  else if(intent === "04") result = acfSkillInformationReadiness(project, question);
+  else if(intent === "05") result = acfSkillModelCompliance(project, question);
+  else result = acfSkillAssetReadiness(project, sub.type === "fb" ? sub.value : "");
+  result.persona = persona;
+  result.question = question;
+  result.intent = intent;
+  result.subjectResolved = sub;
+  result.mode = "read-only";
+  result.reasonedFrom = ["FB", "Ss", "Production Package", "PPDM", "DIF", "LOIN", "FRRM", "DTKG"];
+  result.notReasonedFrom = ["documents-first", "free-form LLM guess"];
+  return result;
+}
+
+function acfExportConnectorSpec(){
+  return {
+    version: ACF_VERSION,
+    name: "Atana Knowledge Graph Connector",
+    architecture: ["Atana app", "Atana API / AIA", "DTKG graph", "Copilot Studio", "Azure AI", "M365 Copilot"],
+    personas: ACF_PERSONAS,
+    skills: [
+      { id: "01", name: "Package Readiness", input: "Production Package" },
+      { id: "02", name: "Asset Readiness", input: "FB" },
+      { id: "03", name: "Interface Analysis", input: "Production Package" },
+      { id: "04", name: "Information Readiness", input: "Information Package" },
+      { id: "05", name: "Model Compliance", input: "Model Package" }
+    ],
+    rule: "Never reason from documents first. Always FB → Ss → PP → Dependencies → Interfaces → LOIN → Information Packages.",
+    actions: "Phase 18 is read-only. Phase 19 may create risks, issues, reports, IPs, TIDPs, meetings."
+  };
+}
+
+function acfChipQuestions(persona){
+  if(persona === "information") return [
+    "Which information packages are ready to share?",
+    "Which A1 packages are ready for publication?",
+    "Show all S4 packages awaiting approval."
+  ];
+  if(persona === "model") return [
+    "Which model packages failed verification?",
+    "Which objects are missing Ss classification?",
+    "Show systems below target LOIN."
+  ];
+  if(persona === "executive") return [
+    "What is project readiness?",
+    "Which FB is highest risk?",
+    "Forecast WS04 completion."
+  ];
+  return [
+    "What is blocking Window Systems?",
+    "Which packages are not WS03-ready?",
+    "Which systems have unmet dependencies?",
+    "Show me all packages at risk."
+  ];
+}
+
+function renderAcfView(project){
+  const host = document.getElementById("acfRoot");
+  if(!host) return;
+  window.__acfPersona = window.__acfPersona || "production";
+  const persona = window.__acfPersona;
+  const hist = window.__acfHist || [];
+  let html = "";
+  html += '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div style="font-size:13px;font-weight:700;color:var(--purple-900);">Atana Copilot — Phase 18 (ACF)</div>';
+  html += '<p class="section-sub" style="margin:6px 0 10px;">Delivery agent, not a chatbot. Answers are traced from FB → Ss → Production Packages → PPDM / DIF → LOIN → Information Packages. <strong>Read-only</strong>.</p>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">';
+  Object.keys(ACF_PERSONAS).forEach(function(k){
+    const p = ACF_PERSONAS[k];
+    html += '<button type="button" class="btn btn-xs ' + (persona===k?'btn-primary':'btn-ghost') + '" data-acf-persona="' + k + '">' + p.label + '</button>';
+  });
+  html += '</div>';
+  html += '<div style="font-size:11px;color:#666;margin-bottom:8px;">Audience: ' + escapeHtml(ACF_PERSONAS[persona].audience) + '</div>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">';
+  acfChipQuestions(persona).forEach(function(q){
+    html += '<button type="button" class="btn btn-ghost btn-xs" data-acf-chip="' + escapeHtml(q) + '">' + escapeHtml(q) + '</button>';
+  });
+  html += '</div>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+  html += '<input id="acfAskInput" type="text" placeholder="Ask from scope — e.g. Why can\'t Ss_25_30_20 progress?" style="flex:1;min-width:220px;padding:8px 10px;border:1px solid #ddd;border-radius:8px;">';
+  html += '<button type="button" class="btn btn-gold" id="btnAcfAsk">Ask</button>';
+  html += '<button type="button" class="btn btn-ghost btn-xs" id="btnAcfSpec">Export connector spec</button>';
+  html += '</div></div>';
+  html += '<div id="acfAnswerHost"></div>';
+  if(hist.length){
+    html += '<div class="card" style="padding:10px;margin-top:10px;box-shadow:0 2px 8px rgba(0,0,0,.06);"><div style="font-size:11px;font-weight:700;margin-bottom:6px;">Session</div>';
+    hist.slice(-6).reverse().forEach(function(h){
+      html += '<div style="font-size:12px;margin-bottom:6px;"><strong>' + escapeHtml(h.question) + '</strong><br><span style="color:#444;">' + escapeHtml(h.answer||h.error||"") + '</span></div>';
+    });
+    html += '</div>';
+  }
+  host.innerHTML = html;
+
+  host.querySelectorAll("[data-acf-persona]").forEach(function(b){
+    b.onclick = function(){ window.__acfPersona = b.getAttribute("data-acf-persona"); renderAcfView(project); };
+  });
+  const run = function(q){
+    q = String(q || "").trim();
+    if(!q) return;
+    const result = acfAsk(project, window.__acfPersona, q);
+    window.__acfHist = (window.__acfHist || []).concat([result]);
+    const box = document.getElementById("acfAnswerHost");
+    if(!box) return;
+    let a = '<div class="card" style="padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+    a += '<div style="font-size:11px;font-weight:700;color:#6d28d9;">Skill ' + escapeHtml(result.skill||"") + " — " + escapeHtml(result.title||"") + ' · read-only</div>';
+    a += '<p style="font-size:14px;margin:8px 0;">' + escapeHtml(result.answer || result.error || "") + '</p>';
+    if(result.recommendations && result.recommendations.length){
+      a += '<div style="font-size:11px;font-weight:700;">Recommendations</div><ul style="margin:4px 0 8px 18px;font-size:12px;">';
+      result.recommendations.forEach(function(r){ a += '<li>' + escapeHtml(r) + '</li>'; });
+      a += '</ul>';
+    }
+    a += '<details style="font-size:11px;"><summary>Evidence (graph / PPDM / DIF / LOIN)</summary><pre style="white-space:pre-wrap;font-size:11px;">' + escapeHtml(JSON.stringify(result.evidence || result.subjectResolved || {}, null, 2)) + '</pre></details>';
+    a += '<div style="font-size:10px;color:#888;margin-top:6px;">Reasoned from ' + escapeHtml((result.reasonedFrom||[]).join(" → ")) + '</div>';
+    a += '</div>';
+    box.innerHTML = a;
+  };
+  host.querySelectorAll("[data-acf-chip]").forEach(function(b){
+    b.onclick = function(){ run(b.getAttribute("data-acf-chip")); };
+  });
+  const askBtn = document.getElementById("btnAcfAsk");
+  const inp = document.getElementById("acfAskInput");
+  if(askBtn) askBtn.onclick = function(){ run(inp && inp.value); };
+  if(inp) inp.onkeydown = function(e){ if(e.key === "Enter") run(inp.value); };
+  const spec = document.getElementById("btnAcfSpec");
+  if(spec) spec.onclick = function(){
+    const blob = new Blob([JSON.stringify(acfExportConnectorSpec(), null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "Atana-ACF-Copilot-Connector-v1.json";
+    a.click();
+    try { showToast("ACF connector spec exported — use this in Copilot Studio later"); } catch(e){}
+  };
+}
+
+
+
+/* ===================== ATANA MVP (Phases 1–5 only) ===================== */
+const MVP_PILOT_SYSTEMS = [
+  { ss: "Ss_25_10_20", name: "Wall systems", ro: "AR" },
+  { ss: "Ss_25_30_20", name: "Door systems", ro: "AR" },
+  { ss: "Ss_25_30_95", name: "Window systems", ro: "AR" },
+  { ss: "Ss_30_20_00", name: "Floor systems", ro: "AR" },
+  { ss: "Ss_30_25_00", name: "Ceiling systems", ro: "AR" }
+];
+const MVP_PILOT_DEPS = [
+  { sourceSs: "Ss_25_10_20", targetSs: "Ss_25_30_95", type: "D01", strength: "C", lod: "2", loi: "2", note: "Windows hosted on walls" },
+  { sourceSs: "Ss_25_10_20", targetSs: "Ss_25_30_20", type: "D01", strength: "C", lod: "2", loi: "2", note: "Doors hosted on walls" },
+  { sourceSs: "Ss_25_10_20", targetSs: "Ss_30_25_00", type: "D02", strength: "M", lod: "2", loi: "2", note: "Ceilings follow room/wall layout" },
+  { sourceSs: "Ss_30_20_00", targetSs: "Ss_30_25_00", type: "D02", strength: "M", lod: "2", loi: "2", note: "Ceiling planes after floor plates" }
+];
+const MVP_FB = "01";
+const MVP_FB_LABEL = "Administration Building";
+
+function mvpEnsureFb01(project){
+  if(!project.midpCatalog) project.midpCatalog = (typeof defaultMidpCatalog === "function") ? defaultMidpCatalog() : { functionalList: [] };
+  if(!Array.isArray(project.midpCatalog.functionalList)) project.midpCatalog.functionalList = [];
+  let fb = project.midpCatalog.functionalList.filter(function(x){ return String(x.code).toUpperCase() === "01" || String(x.code).toUpperCase() === "FB01"; })[0];
+  if(!fb){
+    fb = { code: "01", label: MVP_FB_LABEL, selected: true };
+    project.midpCatalog.functionalList.push(fb);
+  } else {
+    if(!fb.label || /volume|primary/i.test(fb.label)) fb.label = MVP_FB_LABEL;
+    fb.selected = true;
+  }
+  if(!project.production) project.production = normalizeProductionState(null);
+  project.production.scope = project.production.scope || {};
+  project.production.scope.fbEnabled = project.production.scope.fbEnabled || {};
+  project.production.scope.fbEnabled["01"] = true;
+  project.production.scope.fbRo = project.production.scope.fbRo || {};
+  project.production.scope.fbRo["01"] = project.production.scope.fbRo["01"] || {};
+  project.production.scope.fbRo["01"]["AR"] = true;
+  return fb;
+}
+
+function mvpSeedPilot(project){
+  mvpEnsureFb01(project);
+  if(!project.production.packages) project.production.packages = [];
+  const created = [];
+  MVP_PILOT_SYSTEMS.forEach(function(sys){
+    const existing = project.production.packages.filter(function(p){
+      return String(p.fb).toUpperCase().replace(/^FB/,"") === MVP_FB && String(p.ss) === sys.ss;
+    })[0];
+    if(existing){ created.push(existing); return; }
+    const raw = {
+      fb: MVP_FB, ss: sys.ss, name: sys.name, ro: sys.ro, phase: "NEW",
+      status: "not_started", archetype: "AR"
+    };
+    const pp = (typeof normalizeProductionPackage === "function") ? normalizeProductionPackage(raw) : raw;
+    if(pp){ project.production.packages.push(pp); created.push(pp); }
+  });
+  try { if(typeof ensureTidpRowsForProject === "function") ensureTidpRowsForProject(project, { force: false }); } catch(e){}
+  // Always add TIDP rows for pilot packages if missing
+  if(typeof normalizeTidpRow === "function"){
+    project.production.tidpRows = project.production.tidpRows || [];
+    const acts = ["Model", "Coordinate", "Verify", "Review", "Approve"];
+    const roles = { Model: "IA", Coordinate: "TTIM", Verify: "TTIM", Review: "PR", Approve: "TTM" };
+    created.forEach(function(pp){
+      acts.forEach(function(act){
+        const key = pp.id + "|AUT|" + act;
+        const has = project.production.tidpRows.some(function(r){ return String(r.ppId)===pp.id && String(r.activity)===act; });
+        if(has) return;
+        const id = (typeof nextTidpId === "function") ? nextTidpId(project) : ("TR-" + pp.id + "-" + act);
+        const row = normalizeTidpRow({
+          id: id, ppId: pp.id, fb: pp.fb, ss: pp.ss, ro: pp.ro,
+          workstage: project.currentStageId || "S3",
+          activity: act, funcRole: roles[act], category: "AUT",
+          targetLod: "3", targetLoi: "3", status: "created"
+        });
+        if(row) project.production.tidpRows.push(row);
+      });
+    });
+  }
+  project.production.dependencies = project.production.dependencies || [];
+  const bySs = {};
+  created.forEach(function(p){ bySs[p.ss] = p; });
+  MVP_PILOT_DEPS.forEach(function(rule){
+    const src = bySs[rule.sourceSs];
+    const tgt = bySs[rule.targetSs];
+    if(!src || !tgt) return;
+    const exists = project.production.dependencies.some(function(d){
+      return d.sourcePpId === src.id && d.targetPpId === tgt.id;
+    });
+    if(exists) return;
+    const id = (typeof nextDepId === "function") ? nextDepId(project) : ("DEP-" + src.id + "-" + tgt.id);
+    const dep = (typeof normalizeDependency === "function") ? normalizeDependency({
+      id: id, sourcePpId: src.id, targetPpId: tgt.id,
+      type: rule.type, strength: rule.strength,
+      requiredLod: rule.lod, requiredLoi: rule.loi, status: "active", note: rule.note
+    }) : null;
+    if(dep) project.production.dependencies.push(dep);
+  });
+  try { if(typeof saveProjects === "function") saveProjects(); } catch(e){}
+  return created;
+}
+
+function mvpPilotPackages(project){
+  return getProductionPackages(project).filter(function(p){
+    return String(p.fb).toUpperCase().replace(/^FB/,"") === MVP_FB
+      && MVP_PILOT_SYSTEMS.some(function(s){ return s.ss === p.ss; });
+  });
+}
+
+function mvpReadinessBadge(dep){
+  if(!dep) return "—";
+  if(dep.blocked) return '<span style="color:#b91c1c;font-weight:700;">blocked</span>';
+  const r = String(dep.readiness || "");
+  if(/r3|ready/i.test(r)) return '<span style="color:#15803d;font-weight:700;">' + r + '</span>';
+  return escapeHtml(r || "open");
+}
+
+function renderMvpDashboards(project){
+  const host = document.getElementById("mvpRoot");
+  if(!host) return;
+  const stageId = project.currentStageId || "S3";
+  const all = getProductionPackages(project);
+  const pilot = mvpPilotPackages(project);
+  const focus = window.__mvpFocusPp || (pilot[0] && pilot[0].id) || (all[0] && all[0].id) || "";
+  const pp = all.filter(function(p){ return p.id === focus; })[0] || pilot[0] || all[0];
+  const tidps = (pp && typeof getTidpRowsForPackage === "function") ? getTidpRowsForPackage(project, pp.id) : [];
+  const deps = ((project.production && project.production.dependencies) || []).filter(function(d){
+    return !pp || d.sourcePpId === pp.id || d.targetPpId === pp.id;
+  });
+
+  let html = "";
+  html += '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div style="font-size:13px;font-weight:700;color:var(--purple-900);">Atana MVP — Phases 1 to 5</div>';
+  html += '<p class="section-sub" style="margin:6px 0 8px;">Production structure, packages, TIDP, FRRM assignment, PPDM dependencies. Interfaces, models, information packages, graph and Copilot are out of scope for this pilot.</p>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">';
+  html += '<button type="button" class="btn btn-gold" id="btnMvpSeed">Load FB01 pilot (Walls, Doors, Windows, Floors, Ceilings)</button>';
+  html += '<span style="font-size:11px;color:#666;">Current workstage ' + escapeHtml(stageId) + ' · ' + all.length + ' packages</span>';
+  html += '</div></div>';
+
+  html += '<details class="card" style="padding:10px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.06);"><summary style="cursor:pointer;font-weight:700;font-size:12px;">MVP Playbook — FB01 Administration Building</summary>';
+  html += '<div style="font-size:12px;line-height:1.5;padding:8px 4px 4px;">';
+  html += '<p><strong>Asset</strong> FB01 Administration Building (architecture only for the pilot).</p>';
+  html += '<p><strong>Systems</strong> Wall systems Ss_25_10_20 → Door Ss_25_30_20 · Window Ss_25_30_95 · Floor Ss_30_20_00 · Ceiling Ss_30_25_00.</p>';
+  html += '<p><strong>One Production Package per FB+Ss</strong> for the whole project. Workstage is maturity, not a new package.</p>';
+  html += '<p><strong>TIDP rows</strong> on each package: Model (IA) → Coordinate (TTIM) → Verify (TTIM) → Review (PR) → Approve (TTM).</p>';
+  html += '<p><strong>PPDM</strong> Windows and doors <em>depend on</em> walls at LOD2/LOI2 — not on walls being finished. Ceilings depend on walls (layout) and floors (planes).</p>';
+  html += '<p><strong>Test</strong> 1) Seed pilot 2) Open each package dashboard 3) Confirm five TIDP rows and assigned roles 4) Confirm window package shows Walls as a dependency 5) Change workstage and confirm LOIN target moves with WMM — package id does not change.</p>';
+  html += '</div></details>';
+
+  // Production dashboard
+  html += '<div class="card" style="padding:10px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">Production dashboard</div>';
+  html += '<div style="overflow:auto;"><table class="clash-table" style="width:100%;font-size:12px;"><thead><tr>';
+  html += '<th>FB</th><th>Package</th><th>System</th><th>Status</th><th>Role</th><th>Dependencies</th><th></th></tr></thead><tbody>';
+  (pilot.length ? pilot : all.slice(0, 40)).forEach(function(p){
+    let depR = null;
+    try { depR = evaluatePackageDependencyReadiness(project, p.id); } catch(e){}
+    html += '<tr style="' + (pp && pp.id===p.id ? "background:#f5f3ff;" : "") + '">';
+    html += '<td>' + escapeHtml(p.fb) + '</td>';
+    html += '<td style="font-family:var(--mono);font-size:11px;">' + escapeHtml(p.id) + '</td>';
+    html += '<td>' + escapeHtml(p.name || p.ss) + '<br><span style="font-family:var(--mono);font-size:10px;color:#666;">' + escapeHtml(p.ss) + '</span></td>';
+    html += '<td>' + escapeHtml(p.status || "not_started") + '</td>';
+    html += '<td>' + escapeHtml(p.ro || "AR") + '</td>';
+    html += '<td>' + mvpReadinessBadge(depR) + '</td>';
+    html += '<td><button type="button" class="btn btn-ghost btn-xs" data-mvp-pp="' + escapeHtml(p.id) + '">Open</button></td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  if(pp){
+    html += '<div class="card" style="padding:10px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+    html += '<div style="font-size:12px;font-weight:700;">Package dashboard — ' + escapeHtml(pp.name || pp.ss) + '</div>';
+    html += '<p class="section-sub" style="margin:4px 0 8px;">' + escapeHtml(pp.id) + ' · WS ' + escapeHtml(stageId) + ' · LOIN target from WMM · FRRM owns the workflow</p>';
+    html += '<div style="font-size:12px;">Status <strong>' + escapeHtml(pp.status || "not_started") + '</strong> · Ro <strong>' + escapeHtml(pp.ro || "") + '</strong></div>';
+    html += '</div>';
+
+    html += '<div class="card" style="padding:10px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+    html += '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">TIDP dashboard</div>';
+    html += '<div style="overflow:auto;"><table class="clash-table" style="width:100%;font-size:12px;"><thead><tr><th>Requirement</th><th>Activity</th><th>Role</th><th>Status</th><th>WS</th><th>LOD/LOI</th></tr></thead><tbody>';
+    if(!tidps.length) html += '<tr><td colspan="6">No TIDP rows — seed the pilot or Re-sync from settings.</td></tr>';
+    tidps.forEach(function(r){
+      html += '<tr><td style="font-family:var(--mono);font-size:11px;">' + escapeHtml(r.id) + '</td>';
+      html += '<td>' + escapeHtml(r.activity || "") + '</td>';
+      html += '<td>' + escapeHtml(r.funcRole || r.ro || "") + '</td>';
+      html += '<td>' + escapeHtml(r.status || "") + '</td>';
+      html += '<td>' + escapeHtml(r.workstage || stageId) + '</td>';
+      html += '<td>' + escapeHtml((r.targetLod || "?") + "/" + (r.targetLoi || "?")) + '</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+
+    html += '<div class="card" style="padding:10px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+    html += '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">Dependency dashboard (PPDM)</div>';
+    html += '<p class="section-sub">Threshold maturity — not package completion. Source must reach required LOD/LOI before the target may proceed.</p>';
+    html += '<div style="overflow:auto;"><table class="clash-table" style="width:100%;font-size:12px;"><thead><tr><th>Source</th><th>Target</th><th>Type</th><th>LOD</th><th>LOI</th><th>Readiness</th></tr></thead><tbody>';
+    if(!deps.length) html += '<tr><td colspan="6">No PPDM rows on this package. Seed the pilot to attach Walls → Windows / Doors / Ceilings.</td></tr>';
+    deps.forEach(function(d){
+      let ev = null;
+      try { ev = evaluateDependency(d, (function(){ const m={}; all.forEach(function(p){ m[p.id]=p; }); return m; })(), stageId); } catch(e){}
+      html += '<tr><td style="font-family:var(--mono);font-size:11px;">' + escapeHtml(d.sourcePpId) + '</td>';
+      html += '<td style="font-family:var(--mono);font-size:11px;">' + escapeHtml(d.targetPpId) + '</td>';
+      html += '<td>' + escapeHtml(d.type || "") + '</td>';
+      html += '<td>' + escapeHtml(d.requiredLod || "") + '</td>';
+      html += '<td>' + escapeHtml(d.requiredLoi || "") + '</td>';
+      html += '<td>' + mvpReadinessBadge(ev || d) + (d.note ? ('<div style="font-size:10px;color:#666;">' + escapeHtml(d.note) + '</div>') : '') + '</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+
+  host.innerHTML = html;
+  const seed = document.getElementById("btnMvpSeed");
+  if(seed) seed.onclick = function(){
+    const n = mvpSeedPilot(project);
+    try { showToast("Pilot loaded — " + n.length + " FB01 packages"); } catch(e){}
+    renderMvpDashboards(project);
+  };
+  host.querySelectorAll("[data-mvp-pp]").forEach(function(b){
+    b.onclick = function(){ window.__mvpFocusPp = b.getAttribute("data-mvp-pp"); renderMvpDashboards(project); };
+  });
+}
+
+
 function renderProductionWbs(project){
   const el = document.getElementById("wbsTree");
   if(!el) return;
@@ -19103,13 +19667,19 @@ function setActiveWsView(view){
   // Planner subtabs — ONLY when main is planner; otherwise force-hide so Gantt cannot leak
   const planSub = window.__planSub || "wbs";
   document.querySelectorAll("#plannerSub button").forEach(b => b.classList.toggle("active", b.dataset.plansub === planSub));
-  ["wbs","gantt","clash","dtkg"].forEach(k => {
+  ["mvp","wbs","gantt","clash","dtkg","acf"].forEach(k => {
     const el = document.getElementById("plansub-" + k);
     if(!el) return;
     el.style.display = (main === "planner" && planSub === k) ? "block" : "none";
   });
   if(main === "planner" && planSub === "dtkg" && typeof renderDtkgView === "function"){
     try { const p = projectById(currentProjectId); if(p) renderDtkgView(p); } catch(e){ console.warn(e); }
+  }
+  if(main === "planner" && planSub === "acf" && typeof renderAcfView === "function"){
+    try { const p = projectById(currentProjectId); if(p) renderAcfView(p); } catch(e){ console.warn(e); }
+  }
+  if(main === "planner" && planSub === "mvp" && typeof renderMvpDashboards === "function"){
+    try { const p = projectById(currentProjectId); if(p) renderMvpDashboards(p); } catch(e){ console.warn(e); }
   }
   const ganttEl = document.getElementById("wbsGantt");
   if(ganttEl) ganttEl.style.display = (main === "planner" && planSub === "gantt") ? "block" : "none";
@@ -21328,7 +21898,7 @@ function renderWorkspace(){
     const pg = document.getElementById("plansub-gantt");
     if(g) g.style.display = (main === "planner" && planSub === "gantt") ? "block" : "none";
     if(pg) pg.style.display = (main === "planner" && planSub === "gantt") ? "block" : "none";
-    ["wbs","clash","dtkg"].forEach(k => {
+    ["mvp","wbs","clash","dtkg","acf"].forEach(k => {
       const el = document.getElementById("plansub-" + k);
       if(el) el.style.display = (main === "planner" && planSub === k) ? "block" : "none";
     });
