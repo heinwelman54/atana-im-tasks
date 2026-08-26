@@ -1006,7 +1006,8 @@
   .org-role-col{min-width:120px;flex:1 1 140px;background:var(--white);border:1px dashed var(--slate-100);border-radius:10px;padding:8px;}
   .org-role-col .role-title{font-size:11px;font-weight:800;color:var(--gold-700);margin-bottom:6px;}
   .org-plate{display:flex;flex-direction:column;gap:2px;padding:6px 8px;margin:0 0 6px;border-radius:8px;background:var(--purple-900);color:#f9f7e5;font-size:11px;cursor:grab;}
-  .org-plate .nm{font-weight:700;}
+  .org-plate .nm{font-weight:700;display:flex;align-items:center;gap:6px;}
+  .org-acc-tick{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:#16a34a;color:#fff;font-size:11px;font-weight:800;flex:0 0 16px;box-shadow:0 1px 2px rgba(0,0,0,0.25);}
   .org-plate .em{opacity:0.75;font-size:10px;word-break:break-all;}
   .org-plate.dragging{opacity:0.5;}
   .org-plate{position:relative;padding-right:22px;}
@@ -1730,6 +1731,16 @@
       </div>
 
       
+      <details class="card" style="margin-top:14px;" id="settingsCrmfCard">
+        <summary class="chart-card-title" style="margin-bottom:6px;cursor:pointer;list-style:none;">Methodology (CRMF)</summary>
+        <p class="section-sub" style="margin:10px 0 8px;">ATANA Core methodology package. Rules for archetypes, dependencies, interfaces, roles, workstages, LOIN and automation. Changes are configuration — not code. IM / DTL only.</p>
+        <div id="crmfSummary" style="font-size:12px;margin-bottom:10px;"></div>
+        <button type="button" class="btn btn-gold btn-block" id="btnCrmfExport" style="margin-bottom:8px;">Export methodology package</button>
+        <button type="button" class="btn btn-ghost btn-block" id="btnCrmfImport" style="margin-bottom:8px;">Import methodology package</button>
+        <input type="file" id="crmfImportInput" accept=".json,application/json" style="display:none;">
+        <button type="button" class="btn btn-ghost btn-block" id="btnCrmfReset">Reset to ATANA Core defaults</button>
+      </details>
+
       <details class="card" style="margin-top:14px;" id="settingsCustomisationCard">
         <summary class="chart-card-title" style="margin-bottom:6px;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;">
           <span>Customisation</span>
@@ -2344,8 +2355,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.21.0";
-const APP_BUILD = "2026-08-26-models-aps-viewer";
+const APP_VERSION = "3.22.1";
+const APP_BUILD = "2026-08-26-org-fuzzy-acc-tick";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -8340,6 +8351,237 @@ const DEP_SEED_RULES = [
   { sourceSsPrefix: "Ss_25_30_20", targetSsPrefix: "Ss_75", type: "D03", strength: "M", requiredLod: "3", requiredLoi: "3", note: "Doors → Access control" }
 ];
 
+
+/* ===================== PHASE 15 — CRMF =====================
+   Configuration & Rules Management Framework
+   Methodology = configuration. Application = engine.
+   Layers: Global → Organisation → Project template → Project
+   ========================================================== */
+
+const CRMF_STORE_KEY = "atanaCrmfMethodology";
+const CRMF_VERSION = "1.0";
+
+function crmfDefaultPackage(){
+  const pal = [];
+  try {
+    if(typeof PACKAGE_ARCHETYPE_LIBRARY === "object"){
+      Object.keys(PACKAGE_ARCHETYPE_LIBRARY).forEach(function(k){
+        const a = PACKAGE_ARCHETYPE_LIBRARY[k];
+        pal.push({
+          code: a.code || k,
+          name: a.name || k,
+          defaultDocs: (a.defaultDocs || []).slice(),
+          focus: a.focus || "",
+          defaultActivities: ["Plan","Model","Coordinate","Verify","Review","Approve"],
+          defaultLoin: { lod: "3", loi: "3" }
+        });
+      });
+    }
+  } catch(e){}
+
+  const wmm = {};
+  try {
+    if(typeof WORKSTAGE_MATURITY_DEFAULTS === "object"){
+      Object.keys(WORKSTAGE_MATURITY_DEFAULTS).forEach(function(k){
+        wmm[k] = Object.assign({}, WORKSTAGE_MATURITY_DEFAULTS[k]);
+      });
+    }
+  } catch(e){}
+
+  const ppdm = (typeof DEP_SEED_RULES !== "undefined" && Array.isArray(DEP_SEED_RULES))
+    ? DEP_SEED_RULES.map(function(r, i){
+        return Object.assign({ id: "PPDM-" + String(i + 1).padStart(3, "0"), enabled: true }, r);
+      })
+    : [];
+
+  const dif = ppdm.map(function(r, i){
+    return {
+      id: "DIF-" + String(i + 1).padStart(3, "0"),
+      sourceSsPrefix: r.sourceSsPrefix,
+      targetSsPrefix: r.targetSsPrefix,
+      interfaceType: (r.type === "D01" ? "IF10" : r.type === "D02" ? "IF20" : r.type === "D03" ? "IF30" : "IF10"),
+      enabled: true,
+      note: r.note || ""
+    };
+  });
+
+  const frrm = [
+    { activity: "Plan", role: "TTM", authority: "OWN" },
+    { activity: "Model", role: "IA", authority: "AUT" },
+    { activity: "Document", role: "IA", authority: "AUT" },
+    { activity: "Coordinate", role: "TTIM", authority: "VFY" },
+    { activity: "Verify", role: "TTIM", authority: "VFY" },
+    { activity: "Review", role: "PR", authority: "RVW" },
+    { activity: "Approve", role: "TTM", authority: "APR" }
+  ];
+
+  const alf = {
+    lodWeight: 40,
+    loiWeight: 35,
+    docsWeight: 25,
+    lodDefinitions: { "1": "Concept", "2": "General", "3": "Coordination", "4": "Technical", "5": "Construction" },
+    loiDefinitions: { "1": "Identity", "2": "Core", "3": "Coordination", "4": "Specification", "5": "Asset" }
+  };
+
+  const airf = [
+    { code: "AIR_30", type: "Production", description: "Produce information" },
+    { code: "AIR_40", type: "Coordination", description: "Coordinate information" },
+    { code: "AIR_50", type: "Approval", description: "Approve information" },
+    { code: "AIR_60", type: "Construction", description: "Construction information" },
+    { code: "AIR_70", type: "Asset Information", description: "AIM / handover" }
+  ];
+
+  const aeir = (typeof AEIR_WORKSTAGE !== "undefined") ? JSON.parse(JSON.stringify(AEIR_WORKSTAGE)) : {};
+
+  const arc = (typeof ARC_RULE_CATALOGUE !== "undefined")
+    ? ARC_RULE_CATALOGUE.map(function(r){ return Object.assign({ enabled: true, version: "1.0" }, r); })
+    : [];
+
+  return {
+    id: "ATANA-CORE",
+    name: "ATANA Core",
+    version: CRMF_VERSION,
+    status: "active",
+    layer: "global",
+    effectiveDate: "2026-08-26",
+    owner: "IM",
+    approved: true,
+    pal: pal,
+    ppdm: ppdm,
+    dif: dif,
+    frrm: frrm,
+    wmm: wmm,
+    alf: alf,
+    airf: airf,
+    aeir: aeir,
+    arc: arc,
+    history: [{ version: CRMF_VERSION, at: Date.now(), who: "system", note: "Seeded from platform defaults" }]
+  };
+}
+
+function crmfLoad(){
+  try {
+    const raw = localStorage.getItem(CRMF_STORE_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      if(parsed && parsed.id) return parsed;
+    }
+  } catch(e){}
+  const pack = crmfDefaultPackage();
+  crmfSave(pack);
+  return pack;
+}
+
+function crmfSave(pack){
+  try { localStorage.setItem(CRMF_STORE_KEY, JSON.stringify(pack)); } catch(e){}
+  return pack;
+}
+
+function crmfResetToDefaults(){
+  const pack = crmfDefaultPackage();
+  pack.history = (pack.history || []).concat([{ version: pack.version, at: Date.now(), who: "admin", note: "Reset to ATANA Core defaults" }]);
+  return crmfSave(pack);
+}
+
+function crmfBumpVersion(pack, note, who){
+  pack = pack || crmfLoad();
+  const parts = String(pack.version || "1.0").split(".");
+  const minor = (parseInt(parts[1] || "0", 10) || 0) + 1;
+  pack.version = (parts[0] || "1") + "." + minor;
+  pack.history = pack.history || [];
+  pack.history.push({ version: pack.version, at: Date.now(), who: who || "IM", note: note || "Updated" });
+  return crmfSave(pack);
+}
+
+function crmfCanEdit(){
+  try {
+    if(typeof psmCurrentFunctionalRole === "function"){
+      const role = psmCurrentFunctionalRole();
+      return ["IM", "DTL"].indexOf(role) >= 0;
+    }
+  } catch(e){}
+  return true; // bootstrap
+}
+
+function crmfGetPpdmRules(){
+  const pack = crmfLoad();
+  const rules = (pack.ppdm || []).filter(function(r){ return r && r.enabled !== false; });
+  if(rules.length) return rules;
+  return (typeof DEP_SEED_RULES !== "undefined") ? DEP_SEED_RULES : [];
+}
+
+function crmfGetDifRules(){
+  const pack = crmfLoad();
+  return (pack.dif || []).filter(function(r){ return r && r.enabled !== false; });
+}
+
+function crmfGetFrrm(){
+  return (crmfLoad().frrm || []).slice();
+}
+
+function crmfGetWmm(stageId){
+  const wmm = crmfLoad().wmm || {};
+  if(stageId) return wmm[stageId] || null;
+  return wmm;
+}
+
+function crmfGetPal(code){
+  const pal = crmfLoad().pal || [];
+  if(!code) return pal;
+  const c = String(code).toUpperCase();
+  return pal.filter(function(a){ return String(a.code).toUpperCase() === c; })[0] || null;
+}
+
+function crmfAttachToProject(project){
+  if(!project) return;
+  const pack = crmfLoad();
+  project.methodologyPackageId = pack.id;
+  project.methodologyVersion = pack.version;
+}
+
+function crmfExportJson(){
+  return JSON.stringify(crmfLoad(), null, 2);
+}
+
+function crmfImportJson(text){
+  const parsed = JSON.parse(text);
+  if(!parsed || !parsed.id) throw new Error("Invalid methodology package");
+  parsed.history = parsed.history || [];
+  parsed.history.push({ version: parsed.version || CRMF_VERSION, at: Date.now(), who: "import", note: "Imported package" });
+  return crmfSave(parsed);
+}
+
+function productionCrmfMetrics(){
+  const pack = crmfLoad();
+  return {
+    id: pack.id,
+    name: pack.name,
+    version: pack.version,
+    pal: (pack.pal || []).length,
+    ppdm: (pack.ppdm || []).length,
+    dif: (pack.dif || []).length,
+    frrm: (pack.frrm || []).length,
+    arc: (pack.arc || []).length
+  };
+}
+
+try {
+  if(typeof window !== "undefined"){
+    window.CRMF = {
+      load: crmfLoad,
+      save: crmfSave,
+      reset: crmfResetToDefaults,
+      export: crmfExportJson,
+      import: crmfImportJson,
+      ppdm: crmfGetPpdmRules,
+      dif: crmfGetDifRules,
+      frrm: crmfGetFrrm,
+      wmm: crmfGetWmm,
+      pal: crmfGetPal
+    };
+  }
+} catch(e){}
+
 function nextDepId(project){
   const deps = (project.production && project.production.dependencies) || [];
   let max = 0;
@@ -8511,7 +8753,8 @@ function ensureProductionDependencies(project, opts){
   let added = 0;
   Object.keys(byFb).forEach(function(fb){
     const list = byFb[fb];
-    DEP_SEED_RULES.forEach(function(rule){
+    const _ppdmRules = (typeof crmfGetPpdmRules === "function") ? crmfGetPpdmRules() : DEP_SEED_RULES;
+    _ppdmRules.forEach(function(rule){
       if(added >= MAX_NEW) return;
       const sources = list.filter(function(p){ return String(p.ss).indexOf(rule.sourceSsPrefix) === 0; });
       const targets = list.filter(function(p){ return String(p.ss).indexOf(rule.targetSsPrefix) === 0; });
@@ -11264,7 +11507,7 @@ function ensureProductionFramework(project, opts){
     systemsAll: systemsAll.length,
     systemsUsed: systems.length,
     phase: defaultPhase,
-    framework: "Phase14",
+    framework: "Phase15",
     packageCount: next.length
   };
   try { ensureTidpRowsForProject(project, { force: true }); } catch(e){ console.warn("TIDP seed", e); }
@@ -11511,7 +11754,7 @@ function renderProductionWbs(project){
 
   let htmlOut = "";
   htmlOut += '<div class="card" style="margin-bottom:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
-  htmlOut += '<div style="font-size:12px;font-weight:700;color:var(--purple-900);margin-bottom:6px;">Production WBS — Phase 14 (ADIF)</div>';
+  htmlOut += '<div style="font-size:12px;font-weight:700;color:var(--purple-900);margin-bottom:6px;">Production WBS — Phase 15 (CRMF)</div>';
   if(metrics){
     htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;font-size:11px;">';
     htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#f3f0f6;"><strong>Packages</strong> ' + packages.length + '</span>';
@@ -11612,6 +11855,15 @@ function renderProductionWbs(project){
       htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#ecfeff;">MRI ' + (ad.mri != null ? ad.mri : "—") + '</span>';
       htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#fce7f3;">IRI ' + (ad.iri != null ? ad.iri + "%" : "—") + '</span>';
       htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#fee2e2;"><strong>Risks</strong> ' + (ad.risks||0) + ' · Delayed pkgs ' + (ad.delayed||0) + '</span>';
+      htmlOut += '</div>';
+    }
+  } catch(e){}
+  try {
+    var cm = (typeof productionCrmfMetrics === "function") ? productionCrmfMetrics() : null;
+    if(cm){
+      htmlOut += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px;font-size:11px;">';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#fefce8;"><strong>CRMF</strong> ' + escapeHtml(cm.name||cm.id) + ' v' + escapeHtml(cm.version) + '</span>';
+      htmlOut += '<span style="padding:4px 8px;border-radius:8px;background:#fffbeb;">PAL ' + cm.pal + ' · PPDM ' + cm.ppdm + ' · DIF ' + cm.dif + ' · FRRM ' + cm.frrm + ' · ARC ' + cm.arc + '</span>';
       htmlOut += '</div>';
     }
   } catch(e){}
@@ -22805,6 +23057,61 @@ function bindProjectDocs(project){
 }
 
 
+
+function renderCrmfSettingsSummary(){
+  const el = document.getElementById("crmfSummary");
+  if(!el || typeof crmfLoad !== "function") return;
+  const p = crmfLoad();
+  el.innerHTML = "<strong>" + escapeHtml(p.name || p.id) + "</strong> v" + escapeHtml(p.version || "") +
+    " · PAL " + (p.pal||[]).length +
+    " · PPDM " + (p.ppdm||[]).length +
+    " · DIF " + (p.dif||[]).length +
+    " · FRRM " + (p.frrm||[]).length +
+    " · ARC " + (p.arc||[]).length +
+    "<div style='color:#888;margin-top:4px;'>Layer " + escapeHtml(p.layer||"global") +
+    (p.approved ? " · approved" : " · draft") + "</div>";
+}
+function bindCrmfSettings(){
+  renderCrmfSettingsSummary();
+  const exp = document.getElementById("btnCrmfExport");
+  if(exp) exp.onclick = function(){
+    try {
+      const blob = new Blob([crmfExportJson()], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "Atana-CRMF-" + (crmfLoad().id || "methodology") + "-v" + (crmfLoad().version || "1") + ".json";
+      a.click();
+      showToast("Methodology package exported");
+    } catch(e){ showToast("Export failed"); }
+  };
+  const inp = document.getElementById("crmfImportInput");
+  const imp = document.getElementById("btnCrmfImport");
+  if(imp && inp){
+    imp.onclick = function(){ inp.click(); };
+    inp.onchange = function(){
+      const f = inp.files && inp.files[0];
+      if(!f) return;
+      const reader = new FileReader();
+      reader.onload = function(){
+        try {
+          crmfImportJson(String(reader.result || ""));
+          renderCrmfSettingsSummary();
+          showToast("Methodology package imported");
+        } catch(e){ showToast("Import failed: " + (e.message || e)); }
+      };
+      reader.readAsText(f);
+      inp.value = "";
+    };
+  }
+  const rst = document.getElementById("btnCrmfReset");
+  if(rst) rst.onclick = function(){
+    if(!confirm("Reset methodology to ATANA Core defaults?")) return;
+    crmfResetToDefaults();
+    renderCrmfSettingsSummary();
+    showToast("Methodology reset");
+  };
+}
+
 function switchTab(tab){
   try { const fp=document.getElementById("panel-framework"); if(fp) fp.classList.remove("active"); } catch(e){}
 
@@ -22816,6 +23123,7 @@ function switchTab(tab){
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   if(tab === "settings"){
     try { bindSharePointApsConfigUi(); } catch(e){}
+    try { bindCrmfSettings(); } catch(e){}
     try { spApsFillPathForm(); } catch(e){}
   }
   if(tab === "projects"){
@@ -23637,9 +23945,17 @@ function renderProjectTeamPanel(project){
   window.__projectTeamDraft = team;
   const activeRoles = (cat.roles||[]).filter(r => r.selected !== false);
   const CRITICAL_SLOTS = new Set(["DTL","PDM","TTM","TTIM","PEER"]);
-  const byBucket = (func, disc) => team.members.filter(m => m.func===func && (disc ? m.discipline===disc : ["DTL","PDM","IM","DM"].includes(m.func)));
+  const byBucket = (func, disc) => team.members.filter(m => {
+    if(m.func!==func) return false;
+    if(!disc) return ["DTL","PDM","IM","DM"].includes(m.func);
+    return disciplineMatchesTeam(m.discipline, memberRoleBlob(m), disc, project);
+  });
   const accMembers = (project.accOrganogram && Array.isArray(project.accOrganogram.members)) ? project.accOrganogram.members : [];
-  const byAccBucket = (func, disc) => accMembers.filter(m => m.func===func && (disc ? m.discipline===disc : ["DTL","PDM","IM","DM"].includes(m.func)));
+  const byAccBucket = (func, disc) => accMembers.filter(m => {
+    if(m.func!==func) return false;
+    if(!disc) return ["DTL","PDM","IM","DM"].includes(m.func);
+    return disciplineMatchesTeam(m.discipline, memberRoleBlob(m), disc, project);
+  });
   const emailKey = (m) => String(m.email || m.name || "").toLowerCase().trim();
   const appEmailsIn = (func, disc) => new Set(byBucket(func, disc).map(emailKey).filter(Boolean));
   const plate = (m, opts) => {
@@ -23649,9 +23965,11 @@ function renderProjectTeamPanel(project){
     const cls = "org-plate" + (multi ? " multi-assigned" : "") + (ghost ? " ghost" : "");
     const drag = ghost ? "" : ` draggable="true" data-member-id="${escapeHtml(m.id)}"`;
     const rm = ghost ? "" : `<button type="button" class="org-plate-x" data-remove-member="${escapeHtml(m.id)}" title="Remove">×</button>`;
-    return `<div class="${cls}"${drag} title="${escapeHtml((ghost ? "ACC: " : "") + (m.email||m.roleName||""))}">
+    const accMatch = !ghost && accOrganogramHasMember(project, m);
+    const tick = accMatch ? `<span class="org-acc-tick" title="Matches ACC organogram">✓</span>` : "";
+    return `<div class="${cls}"${drag} title="${escapeHtml((ghost ? "ACC: " : "") + (m.email||m.roleName||""))}${accMatch ? " · matches ACC" : ""}">
       ${rm}
-      <span class="nm">${escapeHtml(m.name)}</span>
+      <span class="nm">${tick}${escapeHtml(m.name)}</span>
       <span class="em">${escapeHtml(m.func)}${m.discipline && !["DTL","PDM","IM","DM"].includes(m.func) ? " · "+escapeHtml(m.discipline) : ""}${m.email ? " · "+escapeHtml(m.email) : ""}${ghost ? " · ACC" : ""}</span>
     </div>`;
   };
@@ -24015,6 +24333,120 @@ const ACC_ROLE_CATALOG = [
   { acc: "YS - Peer Reviewer (Security Specialist)", func: "PEER", disc: "YS", code: "YS" },
   { acc: "YS - Task Team Manager (Security Specialist)", func: "TTM", disc: "YS", code: "YS" }
 ];
+
+const DISC_ALIASES = {
+  CV: ["CE","CW"], CE: ["CV","CW"], CW: ["CV","CE"],
+  FP: ["FE","FD"], FE: ["FP","FD"], FD: ["FP","FE"],
+  PH: ["PD"], PD: ["PH"],
+  EL: ["EE"], EE: ["EL"]
+};
+const DISC_KEYWORDS = [
+  { keys: ["civil water"], codes: ["CW"] },
+  { keys: ["fire detect"], codes: ["FD"] },
+  { keys: ["fire protect"], codes: ["FP","FE"] },
+  { keys: ["public health","plumbing"], codes: ["PD","PH"] },
+  { keys: ["architect"], codes: ["AR"] },
+  { keys: ["structur"], codes: ["ST"] },
+  { keys: ["civil"], codes: ["CE","CV"] },
+  { keys: ["hvac"], codes: ["MH"] },
+  { keys: ["mechanic"], codes: ["ME"] },
+  { keys: ["electr"], codes: ["EE"] },
+  { keys: ["fire"], codes: ["FE","FP"] },
+  { keys: ["secur"], codes: ["YS"] },
+  { keys: ["control","bms"], codes: ["YC"] },
+  { keys: ["process"], codes: ["PE"] },
+  { keys: ["quantity"], codes: ["QS"] },
+  { keys: ["landscape"], codes: ["LA"] }
+];
+
+function projectActiveTaskTeams(project){
+  try {
+    const cat = normalizeMidpCatalog((typeof window !== "undefined" && window.__midpCatalogDraft) || (project && project.midpCatalog) || {});
+    return (cat.roles || []).filter(function(r){ return r && r.selected !== false; });
+  } catch(e){ return []; }
+}
+
+function memberRoleBlob(m){
+  if(!m) return "";
+  return [m.primaryRole, m.roleName, m.role, m.defaultRole, m.discipline, m.disciplineRaw].filter(Boolean).join(" ");
+}
+
+function resolveDisciplineToProjectTeam(disc, label, project){
+  const teams = projectActiveTaskTeams(project);
+  const d0 = String(disc || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  let d = d0;
+  if(!d && label){
+    const m = String(label).match(/^([A-Za-z]{1,4})\b/);
+    if(m) d = m[1].toUpperCase();
+  }
+  if(!teams.length) return d;
+  const codeSet = {};
+  teams.forEach(function(t){ codeSet[String(t.code || "").toUpperCase()] = true; });
+  if(d && codeSet[d]) return d;
+  if(d && DISC_ALIASES[d]){
+    for(let i = 0; i < DISC_ALIASES[d].length; i++){
+      const a = DISC_ALIASES[d][i];
+      if(codeSet[a]) return a;
+    }
+  }
+  const blob = (String(label || "") + " " + String(disc || "")).toLowerCase();
+  for(let i = 0; i < DISC_KEYWORDS.length; i++){
+    const row = DISC_KEYWORDS[i];
+    let hit = false;
+    for(let k = 0; k < row.keys.length; k++){
+      if(blob.indexOf(row.keys[k]) >= 0){ hit = true; break; }
+    }
+    if(!hit) continue;
+    for(let c = 0; c < row.codes.length; c++){
+      if(codeSet[row.codes[c]]) return row.codes[c];
+    }
+  }
+  const tokens = blob.split(/[^a-z0-9]+/).filter(function(t){ return t.length >= 3; });
+  let best = d, bestScore = 0;
+  teams.forEach(function(t){
+    const lab = String(t.label || t.code || "").toLowerCase();
+    let score = 0;
+    tokens.forEach(function(tok){ if(lab.indexOf(tok) >= 0) score += tok.length; });
+    if(score > bestScore){ bestScore = score; best = String(t.code || "").toUpperCase(); }
+  });
+  if(bestScore >= 4) return best;
+  return d;
+}
+
+function disciplineMatchesTeam(memberDisc, memberLabel, teamCode, project){
+  const want = String(teamCode || "").toUpperCase();
+  if(!want) return true;
+  const raw = String(memberDisc || "").toUpperCase();
+  if(raw === want) return true;
+  const resolved = resolveDisciplineToProjectTeam(memberDisc, memberLabel, project);
+  return resolved === want;
+}
+
+function remapAccMembersToProjectTeams(project, members){
+  (members || []).forEach(function(m){
+    if(!m) return;
+    if(["DTL","PDM","IM","DM"].indexOf(m.func) >= 0) return;
+    const blob = memberRoleBlob(m);
+    const resolved = resolveDisciplineToProjectTeam(m.discipline, blob, project);
+    if(resolved && resolved !== String(m.discipline || "").toUpperCase()){
+      m.disciplineRaw = m.disciplineRaw || m.discipline;
+      m.discipline = resolved;
+    }
+  });
+  return members;
+}
+
+function accOrganogramHasMember(project, member){
+  const acc = (project && project.accOrganogram && project.accOrganogram.members) || [];
+  const em = String((member && (member.email || "")) || "").toLowerCase().trim();
+  const nm = String((member && member.name) || "").toLowerCase().trim();
+  if(em){
+    return acc.some(function(a){ return String(a.email || "").toLowerCase().trim() === em; });
+  }
+  if(!nm) return false;
+  return acc.some(function(a){ return String(a.name || "").toLowerCase().trim() === nm; });
+}
+
 function matchAccRoleLabel(label){
   const s = String(label || "").trim();
   if(!s) return null;
@@ -24251,6 +24683,7 @@ async function importAccOrganogram(project){
         });
       });
     });
+    try { remapAccMembersToProjectTeams(project, members); } catch(e){}
     project.accOrganogram = {
       importedAt: Date.now(),
       members,
@@ -24286,8 +24719,8 @@ function renderAccOrganogramBoard(project){
   const otherCount = members.filter(m => (m.func || "OTHER") === "OTHER").length;
   const byBucket = (func, disc) => members.filter(m => {
     if((m.func || "OTHER") !== func) return false;
-    if(disc) return (m.discipline || "") === disc;
-    return true;
+    if(!disc) return true;
+    return disciplineMatchesTeam(m.discipline, memberRoleBlob(m), disc, project);
   });
   const plate = (m) => {
     const primary = m.primaryRole || m.role || m.roleName || "—";
