@@ -2368,8 +2368,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.23.1";
-const APP_BUILD = "2026-08-26-models-fb-auto";
+const APP_VERSION = "3.23.2";
+const APP_BUILD = "2026-08-26-ss-uniclass-number";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -13350,28 +13350,118 @@ async function modelsEnsureViewer(hostEl){
   return hostEl ? arguments[0] : _modelsViewer;
 }
 
+function modelsSsSearchTerms(ssCode){
+  const raw = String(ssCode || "").trim();
+  if(!raw) return [];
+  const terms = [raw];
+  const noPref = raw.replace(/^Ss_?/i, "");
+  if(noPref && terms.indexOf(noPref) < 0) terms.push(noPref);
+  const spaced = raw.replace(/_/g, " ");
+  if(terms.indexOf(spaced) < 0) terms.push(spaced);
+  // 3-group prefix Ss_25_13_50 matches Ss_25_13_50_51
+  const parts = raw.split("_");
+  if(parts.length >= 4){
+    const g3 = parts.slice(0, 4).join("_");
+    if(terms.indexOf(g3) < 0) terms.push(g3);
+  }
+  return terms;
+}
+
+function modelsSsAttrNames(){
+  return [
+    "Classification.Uniclass.Ss.Number",
+    "Classification.Uniclass.Ss.Title",
+    "Classification.Uniclass.Ss.Description",
+    "Uniclass.Ss.Number",
+    "Uniclass Ss Number",
+    "Classification.Uniclass.Ss",
+    "Classification",
+    "Ss",
+    "Uniclass Ss",
+    "Uniclass",
+    "ATA_ZZ_Ss",
+    "ATA_Ss"
+  ];
+}
+
 function modelsIsolateSsOnViewer(viewer, ssCode){
   if(!viewer || !ssCode) return;
   const term = String(ssCode);
-  const attrs = ["Ss","Uniclass Ss","Uniclass","Classification","Classification Code","ATA_Ss","ATA_ZZ_Ss","System","System Code"];
-  const apply = function(ids){
-    if(!ids || !ids.length){
-      try { showToast("No elements with Ss " + term + " in this model"); } catch(e){}
-      return;
-    }
+  const terms = modelsSsSearchTerms(term);
+  const attrs = modelsSsAttrNames();
+  const apply = function(ids, how){
+    if(!ids || !ids.length) return false;
     try { viewer.setGhosting(true); } catch(e){}
     viewer.isolate(ids);
     viewer.fitToView(ids);
     try { _modelsSsHits[term] = ids.length; } catch(e){}
-    try { showToast("Isolated " + ids.length + " elements for " + term + " (others ghosted)"); } catch(e){}
+    try { showToast("Isolated " + ids.length + " elements for " + term + (how ? " (" + how + ")" : "")); } catch(e){}
+    return true;
   };
+  const fail = function(){
+    try { _modelsSsHits[term] = 0; } catch(e){}
+    try { showToast("No elements with " + term + " on Classification.Uniclass.Ss.Number"); } catch(e){}
+  };
+
+  const searchNext = function(i){
+    if(i >= terms.length){
+      modelsIsolateSsByBulkProps(viewer, terms, apply, fail);
+      return;
+    }
+    const q = terms[i];
+    try {
+      viewer.search(q, function(ids){
+        if(apply(ids, "Classification.Uniclass.Ss.Number")) return;
+        viewer.search(q, function(ids2){
+          if(apply(ids2, "any property")) return;
+          searchNext(i + 1);
+        }, function(){ searchNext(i + 1); });
+      }, function(){ searchNext(i + 1); }, attrs);
+    } catch(e){ searchNext(i + 1); }
+  };
+  searchNext(0);
+}
+
+function modelsIsolateSsByBulkProps(viewer, terms, apply, fail){
   try {
-    viewer.search(term, apply, function(){
-      viewer.search(term.replace(/_/g, " "), apply, function(){ apply([]); }, attrs);
-    }, attrs);
-  } catch(e){
-    try { viewer.search(term, apply, function(){ apply([]); }); } catch(e2){}
+    if(!viewer.model || typeof viewer.model.getPropertyDb !== "function"){ fail(); return; }
+  } catch(e){}
+  const tree = viewer.model && viewer.model.getInstanceTree && viewer.model.getInstanceTree();
+  if(!tree || typeof viewer.model.getBulkProperties !== "function"){ fail(); return; }
+  const dbIds = [];
+  tree.enumNodeChildren(tree.getRootId(), function(id){
+    if(tree.getChildCount(id) === 0) dbIds.push(id);
+  }, true);
+  const filt = modelsSsAttrNames();
+  viewer.model.getBulkProperties(dbIds, { propFilter: filt }, function(results){
+    const hits = [];
+    (results || []).forEach(function(r){
+      const props = r.properties || [];
+      const blob = props.map(function(p){ return String(p.displayValue || p.displayVal || p.value || ""); }).join(" | ");
+      const ok = terms.some(function(t){ return blob.indexOf(t) >= 0; });
+      if(ok) hits.push(r.dbId);
+    });
+    if(!apply(hits, "Uniclass.Ss.Number scan")) fail();
+  }, function(){ fail(); });
+}
+
+function modelsWhenViewerReady(viewer, fn){
+  if(!viewer) return;
+  let done = false;
+  const run = function(){
+    if(done) return;
+    done = true;
+    try { fn(); } catch(e){ console.warn(e); }
+  };
+  const Av = (typeof Autodesk !== "undefined" && Autodesk.Viewing) ? Autodesk.Viewing : null;
+  if(Av && viewer.model && viewer.model.isLoadDone && viewer.model.isLoadDone()){ run(); return; }
+  if(Av){
+    const ev = Av.GEOMETRY_LOADED_EVENT || "geometryLoaded";
+    const ev2 = Av.OBJECT_TREE_CREATED_EVENT || "objectTreeCreated";
+    viewer.addEventListener(ev, run, { once: true });
+    viewer.addEventListener(ev2, function(){ setTimeout(run, 200); }, { once: true });
   }
+  setTimeout(run, 8000);
 }
 
 async function modelsLoadUrn(urn, label, isolateSs, viewerOverride){
@@ -13384,7 +13474,10 @@ async function modelsLoadUrn(urn, label, isolateSs, viewerOverride){
       const viewable = doc.getRoot().getDefaultGeometry();
       if(!viewable){ reject(new Error("No viewable geometry")); return; }
       viewer.loadDocumentNode(doc, viewable).then(function(){
-        if(isolateSs) setTimeout(function(){ modelsIsolateSsOnViewer(viewer, isolateSs); }, 600);
+        if(isolateSs){
+          if(typeof modelsWhenViewerReady === "function") modelsWhenViewerReady(viewer, function(){ modelsIsolateSsOnViewer(viewer, isolateSs); });
+          else setTimeout(function(){ modelsIsolateSsOnViewer(viewer, isolateSs); }, 1500);
+        }
         try { showToast("Loaded " + (label || "model")); } catch(e){}
         resolve(true);
       }).catch(reject);
