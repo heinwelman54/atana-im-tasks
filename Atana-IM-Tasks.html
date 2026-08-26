@@ -1900,6 +1900,7 @@
       <div class="segmented" id="wsSegmented">
         <button class="active" data-wsview="imtasks">IM Tasks</button>
         <button data-wsview="planner">IM Planner</button>
+        <button data-wsview="method">How Atana Works</button>
         <button data-wsview="dpow">DPoW</button>
         <button data-wsview="midp">MIDP</button>
         <button data-wsview="prjtools">Tools</button>
@@ -2003,6 +2004,11 @@
           <div id="acfRoot"></div>
         </div>
       </div><!-- /wsview-planner -->
+
+      <div class="ws-view" id="wsview-method">
+        <div id="methodHowRoot"></div>
+        <div id="scopeWizardRoot" style="margin-top:12px;"></div>
+      </div>
 
             <div class="ws-view" id="wsview-midp">
         <div class="midp-wrap" id="midpRoot">
@@ -2380,8 +2386,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.26.0";
-const APP_BUILD = "2026-08-26-mvp-p1-p5";
+const APP_VERSION = "3.27.0";
+const APP_BUILD = "2026-08-26-p5a-ux";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -7916,6 +7922,7 @@ function normalizeProductionState(src, opts){
     systemCodes: Array.isArray(s.systemCodes) ? s.systemCodes.map(String) : null,
     packages: soft ? s.packages : (Array.isArray(s.packages) ? s.packages.map(normalizeProductionPackage).filter(Boolean) : []),
     tidpRows: soft ? (Array.isArray(s.tidpRows) ? s.tidpRows : []) : (Array.isArray(s.tidpRows) ? s.tidpRows.map(normalizeTidpRow).filter(Boolean) : []),
+    deliverableRequirements: soft ? (Array.isArray(s.deliverableRequirements) ? s.deliverableRequirements : []) : (Array.isArray(s.deliverableRequirements) ? s.deliverableRequirements.map(normalizeDeliverableRequirement).filter(Boolean) : []),
     dependencies: soft ? (Array.isArray(s.dependencies) ? s.dependencies : []) : (Array.isArray(s.dependencies) ? s.dependencies.map(normalizeDependency).filter(Boolean) : []),
     interfaces: soft ? (Array.isArray(s.interfaces) ? s.interfaces : []) : (Array.isArray(s.interfaces) ? s.interfaces.map(normalizeInterfaceObject).filter(Boolean) : []),
     interfaceIssues: soft ? (Array.isArray(s.interfaceIssues) ? s.interfaceIssues : []) : (Array.isArray(s.interfaceIssues) ? s.interfaceIssues.map(normalizeInterfaceIssue).filter(Boolean) : []),
@@ -12499,8 +12506,12 @@ function mvpSeedPilot(project){
       status: "not_started", archetype: "AR"
     };
     const pp = (typeof normalizeProductionPackage === "function") ? normalizeProductionPackage(raw) : raw;
-    if(pp){ project.production.packages.push(pp); created.push(pp); }
+    if(pp){
+      project.production.packages.push(pp);
+      created.push(pp);
+    }
   });
+  created.forEach(function(pp){ try { if(typeof ensureDrfForPackage === "function") ensureDrfForPackage(project, pp); } catch(e){} });
   try { if(typeof ensureTidpRowsForProject === "function") ensureTidpRowsForProject(project, { force: false }); } catch(e){}
   // Always add TIDP rows for pilot packages if missing
   if(typeof normalizeTidpRow === "function"){
@@ -12575,6 +12586,8 @@ function renderMvpDashboards(project){
   });
 
   let html = "";
+  html += '<div id="howAtanaRoot"></div>';
+  html += '<div id="scopeWizardRoot"></div>';
   html += '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
   html += '<div style="font-size:13px;font-weight:700;color:var(--purple-900);">Atana MVP — Phases 1 to 5</div>';
   html += '<p class="section-sub" style="margin:6px 0 8px;">Production structure, packages, TIDP, FRRM assignment, PPDM dependencies. Interfaces, models, information packages, graph and Copilot are out of scope for this pilot.</p>';
@@ -12634,6 +12647,16 @@ function renderMvpDashboards(project){
     });
     html += '</tbody></table></div></div>';
 
+    var drf = (typeof getDeliverableRequirementsForPackage === "function") ? getDeliverableRequirementsForPackage(project, pp.id, stageId) : [];
+    html += '<div class="card" style="padding:10px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+    html += '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">Deliverable requirements (DRF) — ' + escapeHtml(stageId) + '</div>';
+    html += '<p class="section-sub">What this package must produce at the current workstage. WS03 = Model, Drawing, Schedule. WS04 adds Specification.</p>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    if(!drf.length) html += '<span style="font-size:12px;color:#666;">None yet — generate packages from the scope wizard.</span>';
+    drf.forEach(function(r){
+      html += '<span style="padding:4px 10px;border-radius:999px;background:#eff6ff;border:1px solid #bfdbfe;font-size:12px;"><strong>' + escapeHtml(r.fi) + '</strong> ' + escapeHtml(r.label || "") + '</span>';
+    });
+    html += '</div></div>';
     html += '<div class="card" style="padding:10px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
     html += '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">Dependency dashboard (PPDM)</div>';
     html += '<p class="section-sub">Threshold maturity — not package completion. Source must reach required LOD/LOI before the target may proceed.</p>';
@@ -12662,6 +12685,319 @@ function renderMvpDashboards(project){
   host.querySelectorAll("[data-mvp-pp]").forEach(function(b){
     b.onclick = function(){ window.__mvpFocusPp = b.getAttribute("data-mvp-pp"); renderMvpDashboards(project); };
   });
+  try { renderHowAtanaWorks(); } catch(e){}
+  try { renderScopeWizard(project); } catch(e){}
+}
+
+
+
+/* ===================== PHASE 5A — UX ALIGNMENT + DRF ===================== */
+const ATANA_SS_LIBRARY = {
+  AR: { name: "Architecture", systems: [
+    { ss: "Ss_25_10_20", name: "Wall systems" },
+    { ss: "Ss_25_30_20", name: "Door systems" },
+    { ss: "Ss_25_30_95", name: "Window systems" },
+    { ss: "Ss_30_20_00", name: "Floor systems" },
+    { ss: "Ss_30_25_00", name: "Ceiling systems" },
+    { ss: "Ss_25_12_00", name: "Roof systems" },
+    { ss: "Ss_25_60_00", name: "Finish systems" }
+  ]},
+  ST: { name: "Structure", systems: [
+    { ss: "Ss_20_05_00", name: "Foundation systems" },
+    { ss: "Ss_20_10_00", name: "Column systems" },
+    { ss: "Ss_20_30_00", name: "Beam systems" },
+    { ss: "Ss_20_20_00", name: "Slab systems" }
+  ]},
+  ME: { name: "Mechanical", systems: [
+    { ss: "Ss_60_40_00", name: "Mechanical plant systems" },
+    { ss: "Ss_55_70_00", name: "Public health / wet systems" }
+  ]},
+  MH: { name: "HVAC", systems: [
+    { ss: "Ss_60_40_15", name: "Cooling systems" },
+    { ss: "Ss_60_40_25", name: "Heating systems" },
+    { ss: "Ss_65_40_00", name: "Ventilation systems" }
+  ]},
+  EE: { name: "Electrical", systems: [
+    { ss: "Ss_70_10_00", name: "Power systems" },
+    { ss: "Ss_70_80_00", name: "Lighting systems" }
+  ]},
+  PD: { name: "Public Health", systems: [
+    { ss: "Ss_55_30_00", name: "Drainage systems" },
+    { ss: "Ss_55_20_00", name: "Water supply systems" }
+  ]},
+  YS: { name: "Security", systems: [
+    { ss: "Ss_75_40_00", name: "Access control systems" },
+    { ss: "Ss_75_50_00", name: "CCTV systems" }
+  ]},
+  YC: { name: "Controls", systems: [
+    { ss: "Ss_75_70_00", name: "BMS / controls systems" }
+  ]},
+  FD: { name: "Fire Detection", systems: [
+    { ss: "Ss_75_30_00", name: "Fire detection systems" }
+  ]},
+  FP: { name: "Fire Protection", systems: [
+    { ss: "Ss_55_70_30", name: "Sprinkler / suppression systems" }
+  ]},
+  CV: { name: "Civil", systems: [
+    { ss: "Ss_30_10_00", name: "Earthworks systems" },
+    { ss: "Ss_50_30_00", name: "Stormwater systems" }
+  ]},
+  EV: { name: "Environmental", systems: [
+    { ss: "Ss_45_10_00", name: "Landscape environmental systems" }
+  ]},
+  HY: { name: "Hydraulic", systems: [
+    { ss: "Ss_50_50_00", name: "Hydraulic networks" }
+  ]},
+  PE: { name: "Process", systems: [
+    { ss: "Ss_40_90_00", name: "Process plant systems" }
+  ]},
+  BR: { name: "Bridges", systems: [
+    { ss: "Ss_20_80_00", name: "Bridge superstructure systems" }
+  ]},
+  LS: { name: "Landscaping", systems: [
+    { ss: "Ss_45_20_00", name: "Soft landscape systems" },
+    { ss: "Ss_45_30_00", name: "Hard landscape systems" }
+  ]}
+};
+
+const DRF_BY_STAGE = {
+  S1: ["M3"],
+  S2: ["M3", "DR"],
+  S3: ["M3", "DR", "SH"],
+  S4: ["M3", "DR", "SH", "SP"],
+  S5: ["M3", "DR", "SH", "SP"],
+  S6: ["M3", "CA"]
+};
+const DRF_LABEL = { M3: "Model", DR: "Drawing", SH: "Schedule", SP: "Specification", CA: "As-built / COBie" };
+
+function normalizeDeliverableRequirement(row){
+  if(!row || typeof row !== "object") return null;
+  const id = String(row.id || "").trim();
+  if(!id) return null;
+  return {
+    id: id,
+    ppId: String(row.ppId || ""),
+    workstage: String(row.workstage || row.stageId || "S3"),
+    fi: String(row.fi || row.form || "DR").toUpperCase(),
+    label: String(row.label || DRF_LABEL[row.fi] || row.fi || ""),
+    required: row.required !== false
+  };
+}
+
+function nextDrfId(project){
+  const list = (project.production && project.production.deliverableRequirements) || [];
+  let max = 0;
+  list.forEach(function(r){
+    const m = String(r.id || "").match(/DR-(\d+)/i);
+    if(m) max = Math.max(max, parseInt(m[1], 10));
+  });
+  return "DR-" + String(max + 1).padStart(6, "0");
+}
+
+function ensureDrfForPackage(project, pp){
+  if(!project.production) project.production = normalizeProductionState(null);
+  if(!Array.isArray(project.production.deliverableRequirements)) project.production.deliverableRequirements = [];
+  const stages = Object.keys(DRF_BY_STAGE);
+  stages.forEach(function(ws){
+    DRF_BY_STAGE[ws].forEach(function(fi){
+      const exists = project.production.deliverableRequirements.some(function(r){
+        return r.ppId === pp.id && r.workstage === ws && String(r.fi).toUpperCase() === fi;
+      });
+      if(exists) return;
+      const row = normalizeDeliverableRequirement({
+        id: nextDrfId(project), ppId: pp.id, workstage: ws, fi: fi, label: DRF_LABEL[fi], required: true
+      });
+      if(row) project.production.deliverableRequirements.push(row);
+    });
+  });
+}
+
+function getDeliverableRequirementsForPackage(project, ppId, stageId){
+  const list = (project.production && project.production.deliverableRequirements) || [];
+  return list.filter(function(r){
+    if(String(r.ppId) !== String(ppId)) return false;
+    if(stageId && String(r.workstage) !== String(stageId)) return false;
+    return true;
+  });
+}
+
+function generateProductionPackage(project, fbCode, ss, name, ro){
+  if(!project.production) project.production = normalizeProductionState(null);
+  if(!project.production.packages) project.production.packages = [];
+  const fb = String(fbCode || "").toUpperCase().replace(/^FB/, "");
+  const existing = project.production.packages.filter(function(p){
+    return String(p.fb).toUpperCase().replace(/^FB/,"") === fb && String(p.ss) === ss;
+  })[0];
+  if(existing){
+    ensureDrfForPackage(project, existing);
+    return existing;
+  }
+  const raw = { fb: fb, ss: ss, name: name || ss, ro: (ro || "AR").toUpperCase(), phase: "NEW", status: "not_started", archetype: ro || "AR" };
+  const pp = (typeof normalizeProductionPackage === "function") ? normalizeProductionPackage(raw) : raw;
+  if(pp){
+    project.production.packages.push(pp);
+    ensureDrfForPackage(project, pp);
+    try {
+      if(typeof normalizeTidpRow === "function"){
+        project.production.tidpRows = project.production.tidpRows || [];
+        ["Model","Coordinate","Verify","Review","Approve"].forEach(function(act){
+          const roles = { Model: "IA", Coordinate: "TTIM", Verify: "TTIM", Review: "PR", Approve: "TTM" };
+          if(project.production.tidpRows.some(function(r){ return r.ppId===pp.id && r.activity===act; })) return;
+          const row = normalizeTidpRow({
+            id: (typeof nextTidpId === "function") ? nextTidpId(project) : ("TR-" + pp.id + "-" + act),
+            ppId: pp.id, fb: pp.fb, ss: pp.ss, ro: pp.ro,
+            workstage: project.currentStageId || "S3",
+            activity: act, funcRole: roles[act], category: "AUT",
+            targetLod: "3", targetLoi: "3", status: "created"
+          });
+          if(row) project.production.tidpRows.push(row);
+        });
+      }
+    } catch(e){}
+  }
+  return pp;
+}
+
+function renderHowAtanaWorks(){
+  const host = document.getElementById("methodHowRoot") || document.getElementById("howAtanaRoot");
+  if(!host) return;
+  host.innerHTML = `
+    <div class="card" style="padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.08);">
+      <div class="section-title">How Atana Works</div>
+      <p class="section-sub">Scope first. Packages persist. Workstage is maturity. Information is the output of a package — not the other way around.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px;">
+        <div style="border:1px solid #e9d5ff;border-radius:12px;padding:12px;background:#faf5ff;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+          <div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#6d28d9;">1 DEFINE SCOPE</div>
+          <div style="margin-top:8px;font-size:13px;line-height:1.6;">Project<br>↓<br><strong>FB</strong> asset / facility<br>↓<br><strong>Ss</strong> system<br>↓<br><strong>Production Package</strong></div>
+        </div>
+        <div style="border:1px solid #fde68a;border-radius:12px;padding:12px;background:#fffbeb;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+          <div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#b45309;">2 PLAN DELIVERY</div>
+          <div style="margin-top:8px;font-size:13px;line-height:1.6;">Production Package<br>↓<br><strong>Workstage</strong> (maturity)<br>↓<br><strong>TIDP</strong> requirements<br>↓<br><strong>Deliverable requirements</strong></div>
+        </div>
+        <div style="border:1px solid #bbf7d0;border-radius:12px;padding:12px;background:#f0fdf4;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+          <div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#15803d;">3 VERIFY DELIVERY</div>
+          <div style="margin-top:8px;font-size:13px;line-height:1.6;"><strong>Dependencies</strong> (PPDM)<br>Interfaces <span style="opacity:.5;">(later)</span><br>Model verification <span style="opacity:.5;">(later)</span><br><strong>LOIN</strong></div>
+        </div>
+        <div style="border:1px solid #bfdbfe;border-radius:12px;padding:12px;background:#eff6ff;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+          <div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#1d4ed8;">4 EXCHANGE INFORMATION</div>
+          <div style="margin-top:8px;font-size:13px;line-height:1.6;">Deliverables<br>↓<br>Information Package <span style="opacity:.5;">(later)</span><br>↓ Shared → Published<br>↓ Exchange</div>
+        </div>
+      </div>
+      <p style="font-size:12px;margin-top:14px;color:#444;">A window system in WS03 and WS04 is <strong>one package</strong>. The workstage changes the LOIN and the deliverable requirements, not the package identity.</p>
+      <button type="button" class="btn btn-gold" id="btnHowToScope">Open scope wizard</button>
+    </div>`;
+  const b = document.getElementById("btnHowToScope");
+  if(b) b.onclick = function(){
+    window.__planSub = "mvp";
+    try { setActiveWsView("planner"); } catch(e){}
+    setTimeout(function(){
+      const el = document.getElementById("scopeWizardRoot");
+      if(el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 200);
+  };
+}
+
+function renderScopeWizard(project){
+  const host = document.getElementById("scopeWizardRoot");
+  if(!host) return;
+  const wz = window.__scopeWz || { step: 1, fb: "01", fbLabel: "Administration Building", ro: "AR", selected: {} };
+  window.__scopeWz = wz;
+  if(wz.step === 1 && !Object.keys(wz.selected).length){
+    MVP_PILOT_SYSTEMS.forEach(function(s){ wz.selected[s.ss] = true; });
+  }
+  let html = '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div style="font-size:12px;font-weight:700;margin-bottom:8px;">Scope wizard — FB → Ss → Production Package</div>';
+  html += '<div style="display:flex;gap:8px;margin-bottom:10px;font-size:11px;">';
+  [1,2,3].forEach(function(s){
+    html += '<span style="padding:4px 10px;border-radius:999px;' + (wz.step===s?'background:#5b2d8e;color:#fff;':'background:#f3f0f6;') + '"> ' + s + ' ' + (s===1?"FB":s===2?"Systems":"Generate") + '</span>';
+  });
+  html += '</div>';
+
+  if(wz.step === 1){
+    html += '<label style="font-size:11px;font-weight:700;">Functional breakdown code</label>';
+    html += '<input id="wzFb" value="' + escapeHtml(wz.fb) + '" style="display:block;width:120px;margin:4px 0 8px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;">';
+    html += '<label style="font-size:11px;font-weight:700;">Name</label>';
+    html += '<input id="wzFbLabel" value="' + escapeHtml(wz.fbLabel) + '" style="display:block;width:100%;max-width:360px;margin:4px 0 8px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;">';
+    html += '<button type="button" class="btn btn-gold btn-xs" id="wzNext1">Next — select systems</button>';
+  }
+  if(wz.step === 2){
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">';
+    Object.keys(ATANA_SS_LIBRARY).forEach(function(ro){
+      html += '<button type="button" class="btn btn-xs ' + (wz.ro===ro?'btn-primary':'btn-ghost') + '" data-wz-ro="' + ro + '">' + ro + ' ' + ATANA_SS_LIBRARY[ro].name + '</button>';
+    });
+    html += '</div>';
+    const lib = ATANA_SS_LIBRARY[wz.ro] || ATANA_SS_LIBRARY.AR;
+    html += '<div style="font-size:12px;font-weight:700;margin:6px 0;">' + escapeHtml(lib.name) + ' systems</div>';
+    lib.systems.forEach(function(sys){
+      const on = !!wz.selected[sys.ss];
+      html += '<label style="display:flex;gap:8px;align-items:center;padding:6px 0;font-size:13px;border-bottom:1px solid #f3f4f6;">';
+      html += '<input type="checkbox" data-wz-ss="' + escapeHtml(sys.ss) + '"' + (on?' checked':'') + '> ';
+      html += '<span><strong>' + escapeHtml(sys.name) + '</strong><br><span style="font-family:var(--mono);font-size:11px;color:#666;">' + escapeHtml(sys.ss) + '</span></span></label>';
+    });
+    html += '<div style="margin-top:10px;display:flex;gap:8px;"><button type="button" class="btn btn-ghost btn-xs" id="wzBack2">Back</button>';
+    html += '<button type="button" class="btn btn-gold btn-xs" id="wzNext2">Next — generate packages</button></div>';
+  }
+  if(wz.step === 3){
+    const picks = Object.keys(wz.selected).filter(function(k){ return wz.selected[k]; });
+    html += '<p class="section-sub">FB' + escapeHtml(wz.fb) + ' ' + escapeHtml(wz.fbLabel) + ' · ' + picks.length + ' systems. This creates Production Packages only (plus TIDP + deliverable requirements).</p><ul style="font-size:12px;">';
+    picks.forEach(function(ss){
+      let name = ss;
+      Object.keys(ATANA_SS_LIBRARY).forEach(function(ro){
+        ATANA_SS_LIBRARY[ro].systems.forEach(function(s){ if(s.ss===ss) name = s.name; });
+      });
+      html += '<li><code>PP-' + escapeHtml(wz.fb) + '-' + escapeHtml(ss.replace(/[^A-Za-z0-9_]/g,'_')) + '</code> — ' + escapeHtml(name) + '</li>';
+    });
+    html += '</ul><div style="display:flex;gap:8px;">';
+    html += '<button type="button" class="btn btn-ghost btn-xs" id="wzBack3">Back</button>';
+    html += '<button type="button" class="btn btn-gold" id="wzGo">Generate production packages</button></div>';
+  }
+  html += '</div>';
+  host.innerHTML = html;
+
+  const n1 = document.getElementById("wzNext1");
+  if(n1) n1.onclick = function(){
+    wz.fb = (document.getElementById("wzFb").value || "01").toUpperCase().replace(/^FB/,"");
+    wz.fbLabel = document.getElementById("wzFbLabel").value || wz.fbLabel;
+    wz.step = 2;
+    renderScopeWizard(project);
+  };
+  host.querySelectorAll("[data-wz-ro]").forEach(function(b){
+    b.onclick = function(){ wz.ro = b.getAttribute("data-wz-ro"); renderScopeWizard(project); };
+  });
+  host.querySelectorAll("[data-wz-ss]").forEach(function(cb){
+    cb.onchange = function(){ wz.selected[cb.getAttribute("data-wz-ss")] = cb.checked; };
+  });
+  const b2 = document.getElementById("wzBack2"); if(b2) b2.onclick = function(){ wz.step = 1; renderScopeWizard(project); };
+  const n2 = document.getElementById("wzNext2"); if(n2) n2.onclick = function(){ wz.step = 3; renderScopeWizard(project); };
+  const b3 = document.getElementById("wzBack3"); if(b3) b3.onclick = function(){ wz.step = 2; renderScopeWizard(project); };
+  const go = document.getElementById("wzGo");
+  if(go) go.onclick = function(){
+    if(typeof mvpEnsureFb01 === "function" && wz.fb === "01") mvpEnsureFb01(project);
+    else {
+      project.midpCatalog = project.midpCatalog || { functionalList: [] };
+      project.midpCatalog.functionalList = project.midpCatalog.functionalList || [];
+      if(!project.midpCatalog.functionalList.some(function(x){ return String(x.code).toUpperCase().replace(/^FB/,"") === wz.fb; })){
+        project.midpCatalog.functionalList.push({ code: wz.fb, label: wz.fbLabel, selected: true });
+      }
+    }
+    const picks = Object.keys(wz.selected).filter(function(k){ return wz.selected[k]; });
+    let n = 0;
+    picks.forEach(function(ss){
+      let name = ss, ro = wz.ro;
+      Object.keys(ATANA_SS_LIBRARY).forEach(function(r){
+        ATANA_SS_LIBRARY[r].systems.forEach(function(s){ if(s.ss===ss){ name = s.name; ro = r; } });
+      });
+      if(generateProductionPackage(project, wz.fb, ss, name, ro)) n++;
+    });
+    try { if(typeof saveProjects === "function") saveProjects(); } catch(e){}
+    try { showToast("Created / confirmed " + n + " production packages"); } catch(e){}
+    if(typeof renderMvpDashboards === "function") renderMvpDashboards(project);
+  };
+}
+
+function renderMethodView(project){
+  renderHowAtanaWorks();
+  if(typeof renderScopeWizard === "function") renderScopeWizard(project);
 }
 
 
@@ -19634,7 +19970,7 @@ let currentWsView = "imtasks";
 
 function setActiveWsView(view){
   // Map legacy names
-  const map = { tasks: "imtasks", progress: "imtasks", wbs: "planner", gantt: "planner", clash: "planner", tools: "prjtools", documents: "prjdocs" };
+  const map = { tasks: "imtasks", progress: "imtasks", wbs: "planner", gantt: "planner", clash: "planner", tools: "prjtools", documents: "prjdocs", how: "method", method: "method" };
   const main = map[view] || view || "imtasks";
   currentWsView = main;
   if(view === "progress") window.__imSub = "progress";
@@ -19680,6 +20016,9 @@ function setActiveWsView(view){
   }
   if(main === "planner" && planSub === "mvp" && typeof renderMvpDashboards === "function"){
     try { const p = projectById(currentProjectId); if(p) renderMvpDashboards(p); } catch(e){ console.warn(e); }
+  }
+  if(main === "method" && typeof renderMethodView === "function"){
+    try { const p = projectById(currentProjectId); if(p) renderMethodView(p); } catch(e){ console.warn(e); }
   }
   const ganttEl = document.getElementById("wbsGantt");
   if(ganttEl) ganttEl.style.display = (main === "planner" && planSub === "gantt") ? "block" : "none";

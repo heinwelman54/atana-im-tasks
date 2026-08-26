@@ -1,1 +1,1 @@
-# Atana IM Tasks v3.26.0 — MVP Phases 1–5
+# Atana IM Tasks v3.27.0 — Phase 5A UX alignment + DRF
