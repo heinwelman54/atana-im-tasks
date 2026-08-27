@@ -2006,8 +2006,15 @@
       </div><!-- /wsview-planner -->
 
       <div class="ws-view" id="wsview-method">
-        <div id="methodHowRoot"></div>
-        <div id="scopeWizardRoot" style="margin-top:12px;"></div>
+        <div style="display:flex;gap:12px;align-items:flex-start;">
+          <nav id="psdNav" style="flex:0 0 200px;position:sticky;top:8px;"></nav>
+          <div style="flex:1;min-width:0;">
+            <div id="psdScopeDash"></div>
+            <div id="methodHowRoot"></div>
+            <div id="scopeWizardRoot" style="margin-top:12px;"></div>
+            <div id="verifyExchangeRootAlias"></div>
+          </div>
+        </div>
       </div>
 
             <div class="ws-view" id="wsview-midp">
@@ -2386,8 +2393,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.28.2";
-const APP_BUILD = "2026-08-27-method-dashboards";
+const APP_VERSION = "3.29.0";
+const APP_BUILD = "2026-08-27-psdf";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -13138,88 +13145,191 @@ function renderVerifyExchangeDashboards(project){
   });
 }
 
+function psdFbList(project){
+  const list = ((project.midpCatalog && project.midpCatalog.functionalList) || []).slice();
+  if(!list.length){
+    return [{ code: "01", label: "Administration Building", selected: true }];
+  }
+  return list;
+}
+function renderPsdNav(project){
+  const host = document.getElementById("psdNav");
+  if(!host) return;
+  const view = window.__psdView || "scope";
+  const items = [
+    ["scope", "PROJECT / Scope", "FB · Systems"],
+    ["wizard", "Scope wizard", "Create FB + systems"],
+    ["how", "Methodology", "How Atana works"],
+    ["production", "Production", "Packages · TIDP"],
+    ["verify", "Verification", "Deps · Interfaces · Model"],
+    ["information", "Information", "DRF · IP · Exchange"]
+  ];
+  let html = '<div class="card" style="padding:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#6d28d9;margin-bottom:8px;">PROJECT</div>';
+  items.forEach(function(it){
+    const on = view === it[0];
+    html += '<button type="button" data-psd="' + it[0] + '" class="btn btn-block ' + (on?"btn-gold":"btn-ghost") + '" style="text-align:left;margin-bottom:6px;padding:8px 10px;">';
+    html += '<div style="font-size:12px;font-weight:700;">' + it[1] + '</div>';
+    html += '<div style="font-size:10px;opacity:.8;">' + it[2] + '</div></button>';
+  });
+  html += '</div>';
+  host.innerHTML = html;
+  host.querySelectorAll("[data-psd]").forEach(function(b){
+    b.onclick = function(){
+      window.__psdView = b.getAttribute("data-psd");
+      renderMethodView(project);
+    };
+  });
+}
+function renderAssetScopeDashboard(project){
+  const host = document.getElementById("psdScopeDash");
+  if(!host) return;
+  if((window.__psdView || "scope") !== "scope"){ host.innerHTML = ""; return; }
+  const fbs = psdFbList(project);
+  const packs = getProductionPackages(project);
+  const tidp = (project.production && project.production.tidpRows) || [];
+  const deps = (project.production && project.production.dependencies) || [];
+  const ifaces = (project.production && project.production.interfaces) || [];
+  let html = '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div class="section-title">Asset scope</div>';
+  html += '<p class="section-sub">You choose FBs and systems. Atana generates packages, TIDPs and deliverable requirements.</p>';
+  fbs.forEach(function(fb){
+    const code = String(fb.code||"").toUpperCase().replace(/^FB/,"");
+    const pps = packs.filter(function(p){ return String(p.fb).toUpperCase().replace(/^FB/,"") === code; });
+    const tr = tidp.filter(function(r){ return pps.some(function(p){ return p.id === r.ppId; }); });
+    const dp = deps.filter(function(d){ return pps.some(function(p){ return p.id === d.sourcePpId || p.id === d.targetPpId; }); });
+    const iff = ifaces.filter(function(i){ return pps.some(function(p){ return p.id === i.sourcePpId || p.id === i.targetPpId; }); });
+    html += '<div style="padding:10px;border:1px solid #e9d5ff;border-radius:10px;margin-bottom:8px;">';
+    html += '<div style="font-weight:700;">FB' + escapeHtml(code) + ' ' + escapeHtml(fb.label||"") + '</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(5,minmax(52px,1fr));gap:6px;margin-top:8px;text-align:center;font-size:11px;">';
+    [["Systems", pps.length],["Packages", pps.length],["TIDP", tr.length],["Deps", dp.length],["Interfaces", iff.length]].forEach(function(c){
+      html += '<div style="background:#faf5ff;border-radius:8px;padding:6px;"><div style="color:#666;">' + c[0] + '</div><div style="font-size:16px;font-weight:800;color:#5b2d8e;">' + c[1] + '</div></div>';
+    });
+    html += '</div>';
+    if(pps.length){
+      html += '<div style="margin-top:8px;font-size:12px;">' + pps.map(function(p){ return escapeHtml(p.name||p.ss); }).join(" · ") + '</div>';
+    }
+    html += '</div>';
+  });
+  html += '<button type="button" class="btn btn-gold" id="psdGoWizard">Define / extend scope</button></div>';
+  host.innerHTML = html;
+  const b = document.getElementById("psdGoWizard");
+  if(b) b.onclick = function(){ window.__psdView = "wizard"; renderMethodView(project); };
+}
 function renderScopeWizard(project){
   const host = document.getElementById("scopeWizardRoot");
   if(!host) return;
-  const wz = window.__scopeWz || { step: 1, fb: "01", fbLabel: "Administration Building", ro: "AR", selected: {} };
+  if((window.__psdView || "scope") !== "wizard"){ host.innerHTML = ""; return; }
+  const wz = window.__scopeWz || { step: 1, pack: "buildings", fb: "01", fbLabel: "Administration Building", ro: "AR", selected: {} };
   window.__scopeWz = wz;
-  if(wz.step === 1 && !Object.keys(wz.selected).length){
+  if(wz.step === 1 && !Object.keys(wz.selected).length && typeof MVP_PILOT_SYSTEMS !== "undefined"){
     MVP_PILOT_SYSTEMS.forEach(function(s){ wz.selected[s.ss] = true; });
   }
+  const steps = ["Project","Assets (FB)","Library","Systems","Packages","Plan"];
   let html = '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
-  html += '<div style="font-size:12px;font-weight:700;margin-bottom:8px;">Scope wizard — FB → Ss → Production Package</div>';
-  html += '<div style="display:flex;gap:8px;margin-bottom:10px;font-size:11px;">';
-  [1,2,3].forEach(function(s){
-    html += '<span style="padding:4px 10px;border-radius:999px;' + (wz.step===s?'background:#5b2d8e;color:#fff;':'background:#f3f0f6;') + '"> ' + s + ' ' + (s===1?"FB":s===2?"Systems":"Generate") + '</span>';
+  html += '<div style="font-size:12px;font-weight:700;margin-bottom:8px;">Project setup — the team selects systems; Atana generates packages</div>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">';
+  steps.forEach(function(label, idx){
+    const s = idx + 1;
+    html += '<span style="padding:4px 8px;border-radius:999px;font-size:11px;' + (wz.step===s?'background:#5b2d8e;color:#fff;':'background:#f3f0f6;') + '">' + s + ' ' + label + '</span>';
   });
   html += '</div>';
 
   if(wz.step === 1){
-    html += '<label style="font-size:11px;font-weight:700;">Functional breakdown code</label>';
-    html += '<input id="wzFb" value="' + escapeHtml(wz.fb) + '" style="display:block;width:120px;margin:4px 0 8px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;">';
-    html += '<label style="font-size:11px;font-weight:700;">Name</label>';
-    html += '<input id="wzFbLabel" value="' + escapeHtml(wz.fbLabel) + '" style="display:block;width:100%;max-width:360px;margin:4px 0 8px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;">';
-    html += '<button type="button" class="btn btn-gold btn-xs" id="wzNext1">Next — select systems</button>';
+    html += '<label style="font-size:11px;font-weight:700;">Project name</label>';
+    html += '<input id="wzName" value="' + escapeHtml(project.name||"") + '" style="display:block;width:100%;max-width:420px;margin:4px 0 8px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;">';
+    html += '<label style="font-size:11px;font-weight:700;">Project number</label>';
+    html += '<input id="wzCode" value="' + escapeHtml(project.code||"") + '" style="display:block;width:200px;margin:4px 0 8px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;">';
+    html += '<label style="font-size:11px;font-weight:700;">Project type</label>';
+    html += '<input id="wzType" value="' + escapeHtml(project.projectType||"Building") + '" style="display:block;width:200px;margin:4px 0 8px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;">';
+    html += '<p class="section-sub">Methodology version: Atana v1 (PAL / WMM / ALF / DRF).</p>';
+    html += '<button type="button" class="btn btn-gold btn-xs" id="wzNext">Next — define assets</button>';
   }
   if(wz.step === 2){
+    html += '<label style="font-size:11px;font-weight:700;">FB code</label>';
+    html += '<input id="wzFb" value="' + escapeHtml(wz.fb) + '" style="display:block;width:100px;margin:4px 0 8px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;">';
+    html += '<label style="font-size:11px;font-weight:700;">Asset name</label>';
+    html += '<input id="wzFbLabel" value="' + escapeHtml(wz.fbLabel) + '" style="display:block;width:100%;max-width:360px;margin:4px 0 8px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;">';
+    html += '<p class="section-sub">Examples: FB01 Administration Building · FB02 Warehouse · FBZZ Shared Infrastructure</p>';
+    html += '<button type="button" class="btn btn-ghost btn-xs" id="wzBack">Back</button> ';
+    html += '<button type="button" class="btn btn-gold btn-xs" id="wzNext">Next — scope library</button>';
+  }
+  if(wz.step === 3){
+    ["buildings","industrial","rail","energy","water"].forEach(function(pk){
+      html += '<button type="button" class="btn btn-xs ' + (wz.pack===pk?'btn-gold':'btn-ghost') + '" data-wz-pack="' + pk + '" style="margin:0 6px 6px 0;">' + pk + '</button>';
+    });
+    html += '<p class="section-sub">Buildings is live. Other packs are reserved for future methodology versions.</p>';
+    html += '<button type="button" class="btn btn-ghost btn-xs" id="wzBack">Back</button> ';
+    html += '<button type="button" class="btn btn-gold btn-xs" id="wzNext">Next — select systems</button>';
+  }
+  if(wz.step === 4){
     html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">';
     Object.keys(ATANA_SS_LIBRARY).forEach(function(ro){
       html += '<button type="button" class="btn btn-xs ' + (wz.ro===ro?'btn-primary':'btn-ghost') + '" data-wz-ro="' + ro + '">' + ro + ' ' + ATANA_SS_LIBRARY[ro].name + '</button>';
     });
     html += '</div>';
     const lib = ATANA_SS_LIBRARY[wz.ro] || ATANA_SS_LIBRARY.AR;
-    html += '<div style="font-size:12px;font-weight:700;margin:6px 0;">' + escapeHtml(lib.name) + ' systems</div>';
+    html += '<div style="font-size:12px;font-weight:700;">' + escapeHtml(lib.name) + ' — tick what applies on this FB</div>';
     lib.systems.forEach(function(sys){
-      const on = !!wz.selected[sys.ss];
       html += '<label style="display:flex;gap:8px;align-items:center;padding:6px 0;font-size:13px;border-bottom:1px solid #f3f4f6;">';
-      html += '<input type="checkbox" data-wz-ss="' + escapeHtml(sys.ss) + '"' + (on?' checked':'') + '> ';
-      html += '<span><strong>' + escapeHtml(sys.name) + '</strong><br><span style="font-family:var(--mono);font-size:11px;color:#666;">' + escapeHtml(sys.ss) + '</span></span></label>';
+      html += '<input type="checkbox" data-wz-ss="' + escapeHtml(sys.ss) + '"' + (wz.selected[sys.ss]?' checked':'') + '> ';
+      html += '<span><strong>' + escapeHtml(sys.name) + '</strong> <span style="font-family:var(--mono);font-size:11px;color:#666;">' + escapeHtml(sys.ss) + '</span></span></label>';
     });
-    html += '<div style="margin-top:10px;display:flex;gap:8px;"><button type="button" class="btn btn-ghost btn-xs" id="wzBack2">Back</button>';
-    html += '<button type="button" class="btn btn-gold btn-xs" id="wzNext2">Next — generate packages</button></div>';
+    html += '<div style="margin-top:10px;"><button type="button" class="btn btn-ghost btn-xs" id="wzBack">Back</button> ';
+    html += '<button type="button" class="btn btn-gold btn-xs" id="wzNext">Next — preview packages</button></div>';
   }
-  if(wz.step === 3){
+  if(wz.step === 5){
     const picks = Object.keys(wz.selected).filter(function(k){ return wz.selected[k]; });
-    html += '<p class="section-sub">FB' + escapeHtml(wz.fb) + ' ' + escapeHtml(wz.fbLabel) + ' · ' + picks.length + ' systems. This creates Production Packages only (plus TIDP + deliverable requirements).</p><ul style="font-size:12px;">';
+    html += '<p class="section-sub">FB' + escapeHtml(wz.fb) + ' ' + escapeHtml(wz.fbLabel) + ' → ' + picks.length + ' production packages</p><ul style="font-size:12px;">';
     picks.forEach(function(ss){
       let name = ss;
       Object.keys(ATANA_SS_LIBRARY).forEach(function(ro){
         ATANA_SS_LIBRARY[ro].systems.forEach(function(s){ if(s.ss===ss) name = s.name; });
       });
-      html += '<li><code>PP-' + escapeHtml(wz.fb) + '-' + escapeHtml(ss.replace(/[^A-Za-z0-9_]/g,'_')) + '</code> — ' + escapeHtml(name) + '</li>';
+      html += '<li><code>PP-FB' + escapeHtml(wz.fb) + '-' + escapeHtml(name.replace(/\s+/g,'-')) + '</code></li>';
     });
-    html += '</ul><div style="display:flex;gap:8px;">';
-    html += '<button type="button" class="btn btn-ghost btn-xs" id="wzBack3">Back</button>';
-    html += '<button type="button" class="btn btn-gold" id="wzGo">Generate production packages</button></div>';
+    html += '</ul><button type="button" class="btn btn-ghost btn-xs" id="wzBack">Back</button> ';
+    html += '<button type="button" class="btn btn-gold btn-xs" id="wzNext">Generate plan</button>';
+  }
+  if(wz.step === 6){
+    html += '<p class="section-sub">Creates packages plus TIDP activities, LOIN targets and DRF outputs from PAL / WMM / DRF. Does not create every interface in the project.</p>';
+    html += '<button type="button" class="btn btn-ghost btn-xs" id="wzBack">Back</button> ';
+    html += '<button type="button" class="btn btn-gold" id="wzGo">Generate production structure</button>';
   }
   html += '</div>';
   host.innerHTML = html;
 
-  const n1 = document.getElementById("wzNext1");
-  if(n1) n1.onclick = function(){
-    wz.fb = (document.getElementById("wzFb").value || "01").toUpperCase().replace(/^FB/,"");
-    wz.fbLabel = document.getElementById("wzFbLabel").value || wz.fbLabel;
-    wz.step = 2;
-    renderScopeWizard(project);
-  };
+  function readFields(){
+    const n = document.getElementById("wzName"); if(n) project.name = n.value;
+    const c = document.getElementById("wzCode"); if(c) project.code = c.value;
+    const t = document.getElementById("wzType"); if(t) project.projectType = t.value;
+    const fb = document.getElementById("wzFb"); if(fb) wz.fb = (fb.value||"01").toUpperCase().replace(/^FB/,"");
+    const fl = document.getElementById("wzFbLabel"); if(fl) wz.fbLabel = fl.value || wz.fbLabel;
+  }
+  const next = document.getElementById("wzNext");
+  if(next) next.onclick = function(){ readFields(); wz.step = Math.min(6, wz.step + 1); renderScopeWizard(project); };
+  const back = document.getElementById("wzBack");
+  if(back) back.onclick = function(){ wz.step = Math.max(1, wz.step - 1); renderScopeWizard(project); };
+  host.querySelectorAll("[data-wz-pack]").forEach(function(b){
+    b.onclick = function(){ wz.pack = b.getAttribute("data-wz-pack"); renderScopeWizard(project); };
+  });
   host.querySelectorAll("[data-wz-ro]").forEach(function(b){
     b.onclick = function(){ wz.ro = b.getAttribute("data-wz-ro"); renderScopeWizard(project); };
   });
   host.querySelectorAll("[data-wz-ss]").forEach(function(cb){
     cb.onchange = function(){ wz.selected[cb.getAttribute("data-wz-ss")] = cb.checked; };
   });
-  const b2 = document.getElementById("wzBack2"); if(b2) b2.onclick = function(){ wz.step = 1; renderScopeWizard(project); };
-  const n2 = document.getElementById("wzNext2"); if(n2) n2.onclick = function(){ wz.step = 3; renderScopeWizard(project); };
-  const b3 = document.getElementById("wzBack3"); if(b3) b3.onclick = function(){ wz.step = 2; renderScopeWizard(project); };
   const go = document.getElementById("wzGo");
   if(go) go.onclick = function(){
-    if(typeof mvpEnsureFb01 === "function" && wz.fb === "01") mvpEnsureFb01(project);
-    else {
-      project.midpCatalog = project.midpCatalog || { functionalList: [] };
-      project.midpCatalog.functionalList = project.midpCatalog.functionalList || [];
-      if(!project.midpCatalog.functionalList.some(function(x){ return String(x.code).toUpperCase().replace(/^FB/,"") === wz.fb; })){
-        project.midpCatalog.functionalList.push({ code: wz.fb, label: wz.fbLabel, selected: true });
-      }
+    readFields();
+    project.midpCatalog = project.midpCatalog || { functionalList: [] };
+    project.midpCatalog.functionalList = project.midpCatalog.functionalList || [];
+    if(!project.midpCatalog.functionalList.some(function(x){ return String(x.code).toUpperCase().replace(/^FB/,"") === wz.fb; })){
+      project.midpCatalog.functionalList.push({ code: wz.fb, label: wz.fbLabel, selected: true });
+    } else {
+      project.midpCatalog.functionalList.forEach(function(x){
+        if(String(x.code).toUpperCase().replace(/^FB/,"") === wz.fb) x.label = wz.fbLabel;
+      });
     }
     const picks = Object.keys(wz.selected).filter(function(k){ return wz.selected[k]; });
     let n = 0;
@@ -13230,17 +13340,26 @@ function renderScopeWizard(project){
       });
       if(generateProductionPackage(project, wz.fb, ss, name, ro)) n++;
     });
-    try { if(typeof saveProjects === "function") saveProjects(); } catch(e){}
-    try { showToast("Created / confirmed " + n + " production packages"); } catch(e){}
-    if(typeof renderMvpDashboards === "function") renderMvpDashboards(project);
+    try { if(typeof ensureProductionDependencies === "function") ensureProductionDependencies(project, { force: false }); } catch(e){}
+    try { if(typeof saveProjects === "function") saveProjects(); else if(typeof saveData === "function") saveData(); } catch(e){}
+    try { showToast("Generated " + n + " production packages for FB" + wz.fb); } catch(e){}
+    window.__psdView = "scope";
+    renderMethodView(project);
   };
 }
 
 function renderMethodView(project){
-  renderHowAtanaWorks(project);
-  if(typeof renderScopeWizard === "function") renderScopeWizard(project);
+  const view = window.__psdView || "scope";
+  renderPsdNav(project);
+  renderAssetScopeDashboard(project);
+  const how = document.getElementById("methodHowRoot");
+  const wiz = document.getElementById("scopeWizardRoot");
+  if(view === "how" || view === "verify" || view === "information" || view === "production"){
+    if(typeof renderHowAtanaWorks === "function") renderHowAtanaWorks(project);
+  } else if(how) how.innerHTML = "";
+  if(view === "wizard") renderScopeWizard(project);
+  else if(wiz) wiz.innerHTML = "";
 }
-
 
 function renderProductionWbs(project){
   const el = document.getElementById("wbsTree");
