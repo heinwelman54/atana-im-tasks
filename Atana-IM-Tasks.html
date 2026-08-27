@@ -2395,8 +2395,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.31.0";
-const APP_BUILD = "2026-08-27-workbench";
+const APP_VERSION = "3.31.1";
+const APP_BUILD = "2026-08-27-mywork-roles";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -13278,19 +13278,42 @@ function renderMyWorkDashboard(project){
   const host = document.getElementById("psdMyWork");
   if(!host) return;
   if((window.__psdView || "work") !== "work"){ host.innerHTML = ""; return; }
-  const role = currentFuncRoleCode(project);
+  const roleRaw = currentFuncRoleCode(project);
+  const role = String(roleRaw || "IM").toUpperCase();
   const packs = getProductionPackages(project).slice(0, 40);
   const tidp = (project.production && project.production.tidpRows) || [];
   const issues = ((project.production && project.production.interfaceIssues) || []).filter(function(i){ return String(i.status||"open") !== "closed"; });
-  const mineTidp = tidp.filter(function(r){ return String(r.funcRole||"").toUpperCase() === role; });
+  const ifaces = (project.production && project.production.interfaces) || [];
+  const openIf = ifaces.filter(function(i){ const s=String(i.status||"IFS00"); return s==="IFS00"||s==="IFS10"||s==="IFS20"; });
+  const mineTidp = tidp.filter(function(r){ return String(r.funcRole||"").toUpperCase() === role || String(r.funcRole||"").toUpperCase().indexOf(role) >= 0; });
   const pendingVerify = tidp.filter(function(r){ return String(r.activity||"").toLowerCase() === "verify" && String(r.status||"") !== "closed"; });
   const pendingReview = tidp.filter(function(r){ return String(r.activity||"").toLowerCase() === "review" && String(r.status||"") !== "closed"; });
   const pendingAppr = tidp.filter(function(r){ return String(r.activity||"").toLowerCase() === "approve" && String(r.status||"") !== "closed"; });
+  let assetReady = 0;
+  if(packs.length && typeof mvpPackageHealth === "function"){
+    const sum = packs.reduce(function(a,p){ return a + (mvpPackageHealth(project,p).readiness.prod || 0); }, 0);
+    assetReady = Math.round(sum / packs.length);
+  }
+  const isIA = /IA|AUTHOR|INFORMATION AUTHOR/.test(role);
+  const isTTIM = /TTIM|INFORMATION MANAGER/.test(role) && !/LEAD|IM/.test(role) || role === "TTIM";
+  const isTTM = /TTM|TASK TEAM MANAGER/.test(role);
+  let metrics = [["Packages", packs.length],["My TIDPs", mineTidp.length],["Open issues", issues.length],["Verify", pendingVerify.length],["Review", pendingReview.length],["Approve", pendingAppr.length]];
+  let homeNote = "What needs attention on this project.";
+  if(isIA){
+    metrics = [["Packages assigned", packs.length],["Open TIDPs", mineTidp.length || tidp.filter(function(r){ return String(r.activity||"").toLowerCase()==="model"; }).length],["Verification failures", pendingVerify.length]];
+    homeNote = "IA — model and classify the systems you own.";
+  } else if(isTTM){
+    metrics = [["Awaiting approval", pendingAppr.length],["Asset readiness", assetReady + "%"],["Open issues", issues.length]];
+    homeNote = "TTM — approve packages when health is green.";
+  } else if(isTTIM || role === "IM" || /INFORMATION MANAGER|INFORMATION LEAD/.test(role)){
+    metrics = [["Awaiting verification", pendingVerify.length],["Open interfaces", openIf.length],["Open issues", issues.length]];
+    homeNote = "TTIM / IM — coordinate, verify, close issues.";
+  }
   let html = '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
   html += '<div class="section-title">My Work</div>';
-  html += '<p class="section-sub">Role ' + escapeHtml(role) + ' — what needs attention on this project.</p>';
+  html += '<p class="section-sub">Role ' + escapeHtml(roleRaw) + ' — ' + homeNote + '</p>';
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;text-align:center;">';
-  [["Packages", packs.length],["My TIDPs", mineTidp.length],["Open issues", issues.length],["Verify", pendingVerify.length],["Review", pendingReview.length],["Approve", pendingAppr.length]].forEach(function(c){
+  metrics.forEach(function(c){
     html += '<div style="background:#faf5ff;border-radius:10px;padding:10px;"><div style="font-size:11px;color:#666;">' + c[0] + '</div><div style="font-size:22px;font-weight:800;color:#5b2d8e;">' + c[1] + '</div></div>';
   });
   html += '</div>';
