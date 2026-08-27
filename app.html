@@ -2386,8 +2386,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.27.0";
-const APP_BUILD = "2026-08-26-p5a-ux";
+const APP_VERSION = "3.28.0";
+const APP_BUILD = "2026-08-27-verify-exchange";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -7923,6 +7923,7 @@ function normalizeProductionState(src, opts){
     packages: soft ? s.packages : (Array.isArray(s.packages) ? s.packages.map(normalizeProductionPackage).filter(Boolean) : []),
     tidpRows: soft ? (Array.isArray(s.tidpRows) ? s.tidpRows : []) : (Array.isArray(s.tidpRows) ? s.tidpRows.map(normalizeTidpRow).filter(Boolean) : []),
     deliverableRequirements: soft ? (Array.isArray(s.deliverableRequirements) ? s.deliverableRequirements : []) : (Array.isArray(s.deliverableRequirements) ? s.deliverableRequirements.map(normalizeDeliverableRequirement).filter(Boolean) : []),
+    deliverables: soft ? (Array.isArray(s.deliverables) ? s.deliverables : []) : (Array.isArray(s.deliverables) ? s.deliverables.slice() : []),
     dependencies: soft ? (Array.isArray(s.dependencies) ? s.dependencies : []) : (Array.isArray(s.dependencies) ? s.dependencies.map(normalizeDependency).filter(Boolean) : []),
     interfaces: soft ? (Array.isArray(s.interfaces) ? s.interfaces : []) : (Array.isArray(s.interfaces) ? s.interfaces.map(normalizeInterfaceObject).filter(Boolean) : []),
     interfaceIssues: soft ? (Array.isArray(s.interfaceIssues) ? s.interfaceIssues : []) : (Array.isArray(s.interfaceIssues) ? s.interfaceIssues.map(normalizeInterfaceIssue).filter(Boolean) : []),
@@ -12685,7 +12686,7 @@ function renderMvpDashboards(project){
   host.querySelectorAll("[data-mvp-pp]").forEach(function(b){
     b.onclick = function(){ window.__mvpFocusPp = b.getAttribute("data-mvp-pp"); renderMvpDashboards(project); };
   });
-  try { renderHowAtanaWorks(); } catch(e){}
+  try { renderHowAtanaWorks(project); } catch(e){}
   try { renderScopeWizard(project); } catch(e){}
 }
 
@@ -12858,43 +12859,169 @@ function generateProductionPackage(project, fbCode, ss, name, ro){
   return pp;
 }
 
-function renderHowAtanaWorks(){
+
+function mvpEnsureInterfacesForFb(project, fb){
+  if(!project.production) project.production = normalizeProductionState(null);
+  project.production.interfaces = project.production.interfaces || [];
+  const packs = getProductionPackages(project).filter(function(p){
+    return String(p.fb).toUpperCase().replace(/^FB/,"") === String(fb||"").toUpperCase().replace(/^FB/,"");
+  }).slice(0, 24);
+  const deps = (project.production.dependencies || []).filter(function(d){
+    return packs.some(function(p){ return p.id === d.sourcePpId || p.id === d.targetPpId; });
+  });
+  const have = {};
+  project.production.interfaces.forEach(function(ifo){ have[ifo.sourcePpId + "↔" + ifo.targetPpId] = true; });
+  let n = 0;
+  deps.forEach(function(d){
+    const key = d.sourcePpId + "↔" + d.targetPpId;
+    if(have[key]) return;
+    have[key] = true;
+    const tgt = packs.filter(function(p){ return p.id === d.targetPpId; })[0];
+    const ifo = (typeof normalizeInterfaceObject === "function") ? normalizeInterfaceObject({
+      id: (typeof nextInterfaceId === "function") ? nextInterfaceId(project) : ("IF-" + key),
+      fb: fb, sourcePpId: d.sourcePpId, targetPpId: d.targetPpId,
+      type: d.type === "D02" ? "IF20" : "IF10",
+      ownerPpId: d.targetPpId, ownerRo: tgt && tgt.ro,
+      requiredLod: d.requiredLod || "2", requiredLoi: d.requiredLoi || "2",
+      status: "IFS00", readiness: "IR0"
+    }) : null;
+    if(ifo){ project.production.interfaces.push(ifo); n++; }
+  });
+  return n;
+}
+
+function mvpEnsureDeliverablesAndIp(project, pp){
+  if(!pp) return;
+  if(!project.production) project.production = normalizeProductionState(null);
+  project.production.deliverables = project.production.deliverables || [];
+  const stage = project.currentStageId || "S3";
+  const reqs = (typeof getDeliverableRequirementsForPackage === "function")
+    ? getDeliverableRequirementsForPackage(project, pp.id, stage) : [];
+  reqs.forEach(function(dr){
+    const exists = project.production.deliverables.some(function(d){ return d.drId === dr.id; });
+    if(exists) return;
+    project.production.deliverables.push({
+      id: "DEL-" + dr.id,
+      drId: dr.id,
+      ppId: pp.id,
+      fi: dr.fi,
+      label: dr.label,
+      name: (pp.ss || "package") + " " + (dr.label || dr.fi) + " " + stage,
+      workstage: stage,
+      status: "required"
+    });
+  });
+  project.production.informationPackages = project.production.informationPackages || [];
+  const ipKey = "IP-" + (pp.fb||"") + "-" + (pp.ro||"AR") + "-" + stage;
+  let ip = project.production.informationPackages.filter(function(x){ return x.id === ipKey; })[0];
+  if(!ip && typeof normalizeInformationPackage === "function"){
+    ip = normalizeInformationPackage({
+      id: ipKey, workstage: stage, fb: pp.fb, ro: pp.ro,
+      packageType: "Design", suitability: stage === "S5" || stage === "S6" ? "A1" : "S1",
+      informationState: "WIP", status: "IPS00"
+    });
+    if(ip) project.production.informationPackages.push(ip);
+  }
+  return ip;
+}
+
+function renderHowAtanaWorks(project){
   const host = document.getElementById("methodHowRoot") || document.getElementById("howAtanaRoot");
   if(!host) return;
   host.innerHTML = `
     <div class="card" style="padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.08);">
       <div class="section-title">How Atana Works</div>
-      <p class="section-sub">Scope first. Packages persist. Workstage is maturity. Information is the output of a package — not the other way around.</p>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px;">
+      <p class="section-sub">One line from scope to exchange. Workstage changes maturity and required outputs — not the package identity.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:12px;">
         <div style="border:1px solid #e9d5ff;border-radius:12px;padding:12px;background:#faf5ff;box-shadow:0 2px 8px rgba(0,0,0,.06);">
           <div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#6d28d9;">1 DEFINE SCOPE</div>
-          <div style="margin-top:8px;font-size:13px;line-height:1.6;">Project<br>↓<br><strong>FB</strong> asset / facility<br>↓<br><strong>Ss</strong> system<br>↓<br><strong>Production Package</strong></div>
+          <div style="margin-top:8px;font-size:13px;line-height:1.55;">Project<br>↓ FB<br>↓ Systems (Ss)<br>↓ <strong>Production Package</strong></div>
         </div>
         <div style="border:1px solid #fde68a;border-radius:12px;padding:12px;background:#fffbeb;box-shadow:0 2px 8px rgba(0,0,0,.06);">
-          <div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#b45309;">2 PLAN DELIVERY</div>
-          <div style="margin-top:8px;font-size:13px;line-height:1.6;">Production Package<br>↓<br><strong>Workstage</strong> (maturity)<br>↓<br><strong>TIDP</strong> requirements<br>↓<br><strong>Deliverable requirements</strong></div>
+          <div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#b45309;">2 PLAN PRODUCTION</div>
+          <div style="margin-top:8px;font-size:13px;line-height:1.55;">Production Package<br>↓ Workstage<br>↓ TIDP requirements<br>↓ <strong>Deliverable requirements</strong></div>
         </div>
         <div style="border:1px solid #bbf7d0;border-radius:12px;padding:12px;background:#f0fdf4;box-shadow:0 2px 8px rgba(0,0,0,.06);">
           <div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#15803d;">3 VERIFY DELIVERY</div>
-          <div style="margin-top:8px;font-size:13px;line-height:1.6;"><strong>Dependencies</strong> (PPDM)<br>Interfaces <span style="opacity:.5;">(later)</span><br>Model verification <span style="opacity:.5;">(later)</span><br><strong>LOIN</strong></div>
+          <div style="margin-top:8px;font-size:13px;line-height:1.55;"><strong>Dependencies</strong> — can I proceed?<br><strong>Interfaces</strong> — am I coordinated?<br><strong>Model verification</strong> — does the model prove the Ss?<br><strong>LOIN</strong> — required maturity?<br>↓ Package approved</div>
         </div>
         <div style="border:1px solid #bfdbfe;border-radius:12px;padding:12px;background:#eff6ff;box-shadow:0 2px 8px rgba(0,0,0,.06);">
           <div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#1d4ed8;">4 EXCHANGE INFORMATION</div>
-          <div style="margin-top:8px;font-size:13px;line-height:1.6;">Deliverables<br>↓<br>Information Package <span style="opacity:.5;">(later)</span><br>↓ Shared → Published<br>↓ Exchange</div>
+          <div style="margin-top:8px;font-size:13px;line-height:1.55;">Deliverable requirements<br>↓ Deliverables<br>↓ <strong>Information Package</strong><br>↓ Shared → Published<br>↓ Exchange event</div>
         </div>
       </div>
-      <p style="font-size:12px;margin-top:14px;color:#444;">A window system in WS03 and WS04 is <strong>one package</strong>. The workstage changes the LOIN and the deliverable requirements, not the package identity.</p>
+      <p style="font-size:12px;margin-top:12px;color:#444;">Windows in WS03 and WS04 are the same package. Requirements and LOIN change. The package does not.</p>
       <button type="button" class="btn btn-gold" id="btnHowToScope">Open scope wizard</button>
-    </div>`;
+    </div>
+    <div id="verifyExchangeRoot" style="margin-top:12px;"></div>`;
   const b = document.getElementById("btnHowToScope");
   if(b) b.onclick = function(){
-    window.__planSub = "mvp";
-    try { setActiveWsView("planner"); } catch(e){}
-    setTimeout(function(){
-      const el = document.getElementById("scopeWizardRoot");
-      if(el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 200);
+    const el = document.getElementById("scopeWizardRoot");
+    if(el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+  if(project) renderVerifyExchangeDashboards(project);
+}
+
+function renderVerifyExchangeDashboards(project){
+  const host = document.getElementById("verifyExchangeRoot");
+  if(!host || !project) return;
+  const stage = project.currentStageId || "S3";
+  const packs = (typeof mvpPilotPackages === "function" ? mvpPilotPackages(project) : []).slice(0, 12);
+  const list = packs.length ? packs : getProductionPackages(project).slice(0, 12);
+  const focusId = window.__mvpFocusPp || (list[0] && list[0].id);
+  const pp = list.filter(function(p){ return p.id === focusId; })[0] || list[0];
+  if(pp){
+    mvpEnsureInterfacesForFb(project, pp.fb);
+    mvpEnsureDeliverablesAndIp(project, pp);
+    if(typeof ensureDrfForPackage === "function") ensureDrfForPackage(project, pp);
+  }
+  const ifaces = ((project.production && project.production.interfaces) || []).filter(function(ifo){
+    return !pp || ifo.sourcePpId === pp.id || ifo.targetPpId === pp.id;
+  }).slice(0, 20);
+  const dels = ((project.production && project.production.deliverables) || []).filter(function(d){ return pp && d.ppId === pp.id; });
+  const ips = ((project.production && project.production.informationPackages) || []).filter(function(ip){
+    return pp && String(ip.fb).toUpperCase() === String(pp.fb).toUpperCase();
+  }).slice(0, 8);
+  const ssHits = (typeof _modelsSsHits !== "undefined" && pp && pp.ss) ? _modelsSsHits[pp.ss] : null;
+  let depR = null;
+  try { if(pp) depR = evaluatePackageDependencyReadiness(project, pp.id); } catch(e){}
+
+  let html = '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div style="font-size:12px;font-weight:700;">Verify + Exchange — ' + escapeHtml(pp ? (pp.name||pp.ss) : "select a package on MVP") + '</div>';
+  html += '<p class="section-sub">Capped to the pilot / current package so the browser stays light.</p>';
+  if(pp){
+    html += '<div style="font-size:12px;margin-bottom:8px;">' + escapeHtml(pp.id) + ' · WS ' + escapeHtml(stage) + '</div>';
+  }
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;">';
+
+  html += '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;">';
+  html += '<div style="font-size:11px;font-weight:800;">Dependencies — can I proceed?</div>';
+  html += '<p style="font-size:12px;margin:6px 0;">' + (depR && depR.blocked ? ('<span style="color:#b91c1c;font-weight:700;">No — ' + depR.blocked + ' blocker(s)</span>') : '<span style="color:#15803d;font-weight:700;">Threshold OK or none recorded</span>') + '</p></div>';
+
+  html += '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;">';
+  html += '<div style="font-size:11px;font-weight:800;">Interfaces — am I coordinated?</div>';
+  if(!ifaces.length) html += '<p style="font-size:12px;">None yet. Seed the FB01 pilot so Walls ↔ Windows is created from PPDM.</p>';
+  ifaces.forEach(function(ifo){
+    html += '<div style="font-size:11px;font-family:var(--mono);padding:4px 0;border-bottom:1px solid #f3f4f6;">' + escapeHtml(ifo.id) + ' · ' + escapeHtml(ifo.type) + '<br>' + escapeHtml(ifo.sourcePpId) + ' ↔ ' + escapeHtml(ifo.targetPpId) + '</div>';
+  });
+  html += '</div>';
+
+  html += '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;">';
+  html += '<div style="font-size:11px;font-weight:800;">Model verification — does the model prove Ss?</div>';
+  html += '<p style="font-size:12px;">Parameter <code>Classification.Uniclass.Ss.Number</code></p>';
+  html += '<p style="font-size:12px;">' + (ssHits != null ? ('<strong>' + ssHits + '</strong> elements isolated for ' + escapeHtml(pp && pp.ss || "")) : 'Open Models → isolate this Ss to record coverage.') + '</p></div>';
+
+  html += '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;">';
+  html += '<div style="font-size:11px;font-weight:800;">Exchange — DRF → Deliverable → IP</div>';
+  dels.forEach(function(d){
+    html += '<div style="font-size:12px;padding:3px 0;">' + escapeHtml(d.fi) + ' · ' + escapeHtml(d.name) + ' <span style="color:#666;">(' + escapeHtml(d.status) + ')</span></div>';
+  });
+  if(!dels.length) html += '<p style="font-size:12px;">No deliverable rows — generate packages so DRF exists.</p>';
+  ips.forEach(function(ip){
+    html += '<div style="margin-top:6px;padding:6px 8px;background:#eff6ff;border-radius:8px;font-size:12px;"><strong>' + escapeHtml(ip.id) + '</strong><br>' + escapeHtml(ip.informationState || "WIP") + ' · ' + escapeHtml(ip.suitability || "") + '</div>';
+  });
+  html += '</div></div></div>';
+  host.innerHTML = html;
 }
 
 function renderScopeWizard(project){
@@ -12996,7 +13123,7 @@ function renderScopeWizard(project){
 }
 
 function renderMethodView(project){
-  renderHowAtanaWorks();
+  renderHowAtanaWorks(project);
   if(typeof renderScopeWizard === "function") renderScopeWizard(project);
 }
 
@@ -18420,49 +18547,104 @@ function slimAccRecord(f){
 
 
 
-function slimDataForStorage(d){
+function estimateStorageBytes(obj){
+  try { return JSON.stringify(obj || {}).length; } catch(e){ return 0; }
+}
+function slimProjectForStorage(p, level){
+  level = level || 0;
+  const q = Object.assign({}, p);
+  if(Array.isArray(q.accDeliverablesCache) && q.accDeliverablesCache.length){
+    q.accDeliverablesCount = q.accDeliverablesCache.length;
+  }
+  q.accDeliverablesCache = [];
+  q._modelsIndex = undefined;
+  if(level >= 1){
+    if(q.projectImage && String(q.projectImage).length > 120000) q.projectImage = "";
+    if(q.projectIcon && String(q.projectIcon).length > 60000) q.projectIcon = "";
+  }
+  if(level >= 2){
+    q.projectImage = "";
+    q.projectIcon = "";
+    q.accOrganogram = q.accOrganogram && typeof q.accOrganogram === "object"
+      ? { members: (q.accOrganogram.members || []).slice(0, 80) }
+      : q.accOrganogram;
+  }
+  if(q.production && typeof q.production === "object"){
+    const prod = Object.assign({}, q.production);
+    prod.modelObjects = [];
+    prod.searchSets = [];
+    prod.clashRules = [];
+    prod.arcEventHistory = [];
+    prod.arcAuditLog = [];
+    prod.psmAuditLog = [];
+    if(level >= 2){
+      prod.verificationRecords = [];
+      prod.interfaceIssues = [];
+      prod.interfacePackages = [];
+    }
+    if(level >= 3){
+      prod.interfaces = [];
+      prod.informationPackages = [];
+      prod.exchangeEvents = [];
+      prod.modelPackages = [];
+    }
+    q.production = prod;
+  }
+  if(level >= 2 && q.dpow && q.dpow.items && q.dpow.items.length > 400){
+    q.dpow = Object.assign({}, q.dpow, { items: q.dpow.items.slice(0, 400) });
+  }
+  if(level >= 3 && q.midp && q.midp.rows && q.midp.rows.length > 200){
+    q.midp = Object.assign({}, q.midp, { rows: q.midp.rows.slice(0, 200) });
+  }
+  return q;
+}
+function slimDataForStorage(d, level){
   if(!d || typeof d !== "object") return d;
   const out = Object.assign({}, d);
-  out.projects = (d.projects || []).map(p => {
-    const q = Object.assign({}, p);
-    // ACC file lists live in IndexedDB — never put them in localStorage
-    if(Array.isArray(q.accDeliverablesCache) && q.accDeliverablesCache.length){
-      q.accDeliverablesCount = q.accDeliverablesCache.length;
-    }
-    q.accDeliverablesCache = [];
-    return q;
-  });
+  out.projects = (d.projects || []).map(function(p){ return slimProjectForStorage(p, level || 0); });
   return out;
 }
-function saveData(d){
-  const payload = slimDataForStorage(d || DATA);
-  const json = JSON.stringify(payload);
+async function clearAtanaBrowserCaches(){
   try {
-    localStorage.setItem(STORAGE_KEY, json);
-  } catch(e){
-    // Quota exceeded — drop ACC caches and retry
-    console.warn("saveData quota", e);
-    try {
-      (payload.projects || []).forEach(p => {
-        if(p.accDeliverablesCache && p.accDeliverablesCache.length > 500){
-          p.accDeliverablesCache = p.accDeliverablesCache.slice(0, 500);
-        } else if(p.accDeliverablesCache){
-          p.accDeliverablesCache = [];
-          p.accDeliverablesSyncedAt = null;
-        }
-      });
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-      showToast("Storage almost full — ACC cache trimmed. Prefer a narrower root folder or PDF-only file types for faster sync.");
-    } catch(e2){
-      try {
-        (payload.projects || []).forEach(p => { p.accDeliverablesCache = []; p.accDeliverablesSyncedAt = null; });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-        showToast("Storage quota exceeded — FORMA file cache cleared. Re-import ACC log.");
-      } catch(e3){
-        showToast("Could not save: browser storage full");
-        console.error(e3);
-      }
+    if(typeof indexedDB !== "undefined" && indexedDB.deleteDatabase){
+      indexedDB.deleteDatabase(ACC_IDB_NAME);
     }
+  } catch(e){}
+  (DATA.projects || []).forEach(function(p){
+    p.accDeliverablesCache = [];
+    p.accDeliverablesSyncedAt = null;
+    if(p.projectImage && String(p.projectImage).length > 80000) p.projectImage = "";
+  });
+  saveData(DATA);
+  try { showToast("Local caches cleared. Sign in to FORMA and sync again if needed."); } catch(e){}
+}
+function saveData(d){
+  const src = d || DATA;
+  let lastErr = null;
+  for(let level = 0; level <= 3; level++){
+    try {
+      const payload = slimDataForStorage(src, level);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      if(level === 1) showToast("Saved — large images were omitted to fit browser storage.");
+      if(level === 2) showToast("Saved — images and heavy lists trimmed (storage was full).");
+      if(level === 3) showToast("Saved after emergency trim. Use Settings → Clear local caches.");
+      return true;
+    } catch(e){
+      lastErr = e;
+      console.warn("saveData quota level", level, e);
+    }
+  }
+  try {
+    const fallback = { projects: (src.projects||[]).map(function(p){
+      return { id: p.id, name: p.name, code: p.code, currentStageId: p.currentStageId, startDate: p.startDate, endDate: p.endDate };
+    }), team: src.team || [], settings: src.settings || {} };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(fallback));
+    showToast("Storage full — only project names were saved. Export a project JSON, then Clear local caches.");
+    return false;
+  } catch(e3){
+    showToast("Could not save: browser storage full. Settings → Clear local caches, or export the project JSON first.");
+    console.error(lastErr || e3);
+    return false;
   }
 }
 let DATA = loadData();
@@ -28158,6 +28340,10 @@ function wireTaskListImportExport(){
       inp.value = "";
     });
   }
+  bind("btnClearLocalCaches", () => {
+    if(!confirm("Clear FORMA/ACC file cache and oversized images from this browser? Projects stay. You will need to sync FORMA again.")) return;
+    if(typeof clearAtanaBrowserCaches === "function") clearAtanaBrowserCaches();
+  });
   // Settings: import single project JSON
   bind("settingsImportProjectBtn", () => {
     let inp = document.getElementById("settingsImportProjectInput");

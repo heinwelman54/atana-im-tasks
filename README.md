@@ -1,1 +1,1 @@
-# Atana IM Tasks v3.27.0 — Phase 5A UX alignment + DRF
+# Atana IM Tasks v3.28.0 — Verify + Exchange complete on methodology page
