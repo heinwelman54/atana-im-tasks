@@ -2393,8 +2393,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.29.0";
-const APP_BUILD = "2026-08-27-psdf";
+const APP_VERSION = "3.30.0";
+const APP_BUILD = "2026-08-27-5c-verify-ops";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -12935,7 +12935,7 @@ function mvpEnsureDeliverablesAndIp(project, pp){
 function renderHowAtanaWorks(project){
   const host = document.getElementById("methodHowRoot") || document.getElementById("howAtanaRoot");
   if(!host) return;
-  const flow = ["PROJECT","FUNCTIONAL BREAKDOWN (FB)","SYSTEMS (Ss)","PRODUCTION PACKAGES","TIDP REQUIREMENTS","DEPENDENCIES","INTERFACES","MODEL VERIFICATION","LOIN VERIFICATION","DELIVERABLE REQUIREMENTS","DELIVERABLES","INFORMATION PACKAGE","SHARED","PUBLISHED","EXCHANGE EVENT"];
+  const flow = ["PROJECT","FUNCTIONAL BREAKDOWN (FB)","SYSTEMS (Ss)","PRODUCTION PACKAGES","TIDP REQUIREMENTS","DEPENDENCIES","INTERFACES","ISSUES","MODEL VERIFICATION","LOIN VERIFICATION","APPROVAL","DELIVERABLE REQUIREMENTS","DELIVERABLES","INFORMATION PACKAGE","SHARED","PUBLISHED","EXCHANGE EVENT"];
   let spine = "";
   flow.forEach(function(label, idx){
     spine += '<div style="display:flex;flex-direction:column;align-items:center;">';
@@ -12958,7 +12958,7 @@ function renderHowAtanaWorks(project){
         </div>
         <div style="border-radius:12px;padding:12px;background:#f0fdf4;border:1px solid #bbf7d0;box-shadow:0 2px 8px rgba(0,0,0,.06);">
           <div style="font-size:11px;font-weight:800;color:#15803d;">3 VERIFY DELIVERY</div>
-          <div style="font-size:13px;line-height:1.55;margin-top:8px;">Dependencies (can I proceed?) → Interfaces (am I coordinated?) → Model (does the model prove FB/Ss/Pr/EF?) → LOIN → Approval</div>
+          <div style="font-size:13px;line-height:1.55;margin-top:8px;">Dependencies → Interfaces → Issues → Model verification → LOIN → Approval gate</div>
         </div>
         <div style="border-radius:12px;padding:12px;background:#fff7ed;border:1px solid #fed7aa;box-shadow:0 2px 8px rgba(0,0,0,.06);">
           <div style="font-size:11px;font-weight:800;color:#c2410c;">4 PRODUCE INFORMATION</div>
@@ -12997,6 +12997,70 @@ function acfSetIpState(project, ipId, state){
     at: new Date().toISOString()
   });
   try { if(typeof saveProjects === "function") saveProjects(); else if(typeof saveData === "function") saveData(); } catch(e){}
+}
+
+
+function mvpPackageHealth(project, pp){
+  const out = { color: "green", label: "Healthy", deps: "ready", interfaces: "closed", issues: 0, verify: "open", readiness: { prod: 70, dep: "R2", iface: "R1", loin: 50 } };
+  if(!pp) return out;
+  let blocked = 0;
+  try {
+    const r = evaluatePackageDependencyReadiness(project, pp.id);
+    if(r && r.blocked) blocked = Number(r.blocked) || 0;
+  } catch(e){}
+  const ifaces = ((project.production && project.production.interfaces) || []).filter(function(i){ return i.sourcePpId===pp.id || i.targetPpId===pp.id; });
+  const openIf = ifaces.filter(function(i){ const s = String(i.status||"IFS00"); return s==="IFS00"||s==="IFS10"||s==="IFS20"; });
+  const issues = ((project.production && project.production.interfaceIssues) || []).filter(function(iss){
+    if(String(iss.status||"open") === "closed") return false;
+    if(iss.ppId && iss.ppId === pp.id) return true;
+    return ifaces.some(function(i){ return i.id === iss.interfaceId; });
+  });
+  const mp = ((project.production && project.production.modelPackages) || []).filter(function(m){ return m.ppId === pp.id; })[0];
+  const hits = (typeof _modelsSsHits !== "undefined" && pp.ss) ? Number(_modelsSsHits[pp.ss]||0) : 0;
+  const approved = String(pp.status||"").toLowerCase() === "approved" || pp.approved === true;
+  out.issues = issues.length;
+  out.deps = blocked ? "blocked" : "ready";
+  out.interfaces = openIf.length ? (openIf.length + " open") : "closed";
+  out.verify = hits > 0 ? "partial" : "not_verified";
+  if(mp && mp.verificationStatus) out.verify = mp.verificationStatus;
+  out.readiness.dep = blocked ? "R0" : "R3";
+  out.readiness.iface = openIf.length ? "R1" : "R3";
+  out.readiness.loin = hits > 0 ? 75 : 40;
+  out.readiness.prod = Math.max(0, 90 - blocked*25 - openIf.length*8 - issues.length*10 + (approved?10:0));
+  if(blocked || issues.some(function(i){ return i.severity === "critical"; })){
+    out.color = "red"; out.label = "Critical";
+  } else if(openIf.length || issues.length || out.verify === "not_verified"){
+    out.color = "amber"; out.label = "Open issues";
+  } else {
+    out.color = "green"; out.label = approved ? "Approved" : "Ready for approval";
+  }
+  out.approved = approved;
+  out.canApprove = out.color !== "red";
+  return out;
+}
+function mvpAddIssue(project, pp, title){
+  project.production = project.production || normalizeProductionState(null);
+  project.production.interfaceIssues = project.production.interfaceIssues || [];
+  const id = (typeof nextInterfaceIssueId === "function") ? nextInterfaceIssueId(project) : ("ISS-" + Date.now());
+  const row = normalizeInterfaceIssue({
+    id: id, ppId: pp.id, title: title || "Coordination issue",
+    status: "open", severity: "medium", ownerRo: pp.ro || ""
+  });
+  if(row){
+    row.ppId = pp.id;
+    project.production.interfaceIssues.push(row);
+  }
+  try { if(typeof saveData === "function") saveData(); } catch(e){}
+  return row;
+}
+function mvpApprovePackage(project, pp){
+  const h = mvpPackageHealth(project, pp);
+  if(!h.canApprove) return false;
+  pp.status = "approved";
+  pp.approved = true;
+  pp.approvedAt = Date.now();
+  try { if(typeof saveData === "function") saveData(); } catch(e){}
+  return true;
 }
 
 function mvpPpName(project, ppId){
@@ -13069,6 +13133,32 @@ function renderVerifyExchangeDashboards(project){
     html += '<button type="button" class="btn btn-xs ' + (on ? "btn-gold" : "btn-ghost") + '" data-mvp-pp="' + escapeHtml(p.id) + '">' + escapeHtml(p.name || p.ss) + '</button>';
   });
   html += '</div>';
+
+  const health = mvpPackageHealth(project, pp);
+  const healthCol = health.color === "green" ? "#15803d" : (health.color === "red" ? "#b91c1c" : "#b45309");
+  html += '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div style="font-size:13px;font-weight:700;">Verification dashboard · package health</div>';
+  html += '<div style="display:flex;align-items:center;gap:10px;margin:8px 0;"><span style="width:14px;height:14px;border-radius:50%;background:' + healthCol + ';display:inline-block;"></span><strong>' + escapeHtml(health.label) + '</strong> · ' + escapeHtml(stage) + '</div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;text-align:center;font-size:11px;">';
+  [["Prod %", health.readiness.prod],["Dep", health.readiness.dep],["Interface", health.readiness.iface],["LOIN %", health.readiness.loin],["Issues", health.issues]].forEach(function(c){
+    html += '<div style="background:#f8fafc;border-radius:8px;padding:6px;"><div style="color:#666;">' + c[0] + '</div><div style="font-size:16px;font-weight:800;color:#5b2d8e;">' + c[1] + '</div></div>';
+  });
+  html += '</div>';
+  html += '<p style="font-size:12px;margin-top:8px;">Deps ' + escapeHtml(health.deps) + ' · Interfaces ' + escapeHtml(health.interfaces) + ' · Model ' + escapeHtml(health.verify) + '</p>';
+  html += '<div style="margin-top:8px;"><button type="button" class="btn btn-gold btn-xs" id="btnApprovePkg"' + (health.canApprove?'':' disabled') + '>' + (health.approved ? "Package approved" : "Approval gate") + '</button>';
+  html += ' <span style="font-size:11px;color:#666;">Deliverables should wait until the package is approved.</span></div></div>';
+
+  const pkgIssues = ((project.production && project.production.interfaceIssues) || []).filter(function(iss){
+    return iss.ppId === pp.id || String(iss.title||"").length;
+  }).filter(function(iss){ return !iss.ppId || iss.ppId === pp.id; }).slice(0, 20);
+  html += '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div style="font-size:13px;font-weight:700;">Issues — what must be fixed?</div>';
+  if(!pkgIssues.length) html += '<p style="font-size:12px;">No open coordination issues on this package.</p>';
+  pkgIssues.forEach(function(iss){
+    html += '<div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid #f3f4f6;"><span>' + escapeHtml(iss.id) + ' · ' + escapeHtml(iss.title) + '</span><span style="font-size:11px;color:#666;">' + escapeHtml(iss.status) + '</span></div>';
+  });
+  html += '<div style="margin-top:8px;display:flex;gap:6px;"><input id="newIssueTitle" placeholder="Clash / missing info / classification…" style="flex:1;padding:6px 8px;border:1px solid #ddd;border-radius:8px;font-size:12px;">';
+  html += '<button type="button" class="btn btn-ghost btn-xs" id="btnAddIssue">Add issue</button></div></div>';
 
   html += '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
   html += '<div style="font-size:13px;font-weight:700;">Interface dashboard — am I coordinated?</div>';
@@ -13143,6 +13233,18 @@ function renderVerifyExchangeDashboards(project){
       renderVerifyExchangeDashboards(project);
     };
   });
+  const addI = document.getElementById("btnAddIssue");
+  if(addI) addI.onclick = function(){
+    const t = (document.getElementById("newIssueTitle") && document.getElementById("newIssueTitle").value) || "Coordination issue";
+    mvpAddIssue(project, pp, t);
+    renderVerifyExchangeDashboards(project);
+  };
+  const ap = document.getElementById("btnApprovePkg");
+  if(ap) ap.onclick = function(){
+    if(mvpApprovePackage(project, pp)) showToast("Package approved — produce information");
+    else showToast("Cannot approve while health is critical");
+    renderVerifyExchangeDashboards(project);
+  };
 }
 
 function psdFbList(project){

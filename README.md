@@ -1,1 +1,1 @@
-# Atana IM Tasks v3.29.0 — Phase 5B project bootstrapping
+# Atana IM Tasks v3.30.0 — Phase 5C coordination & verification ops
