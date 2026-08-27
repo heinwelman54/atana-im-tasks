@@ -2386,8 +2386,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.28.1";
-const APP_BUILD = "2026-08-27-method-v1";
+const APP_VERSION = "3.28.2";
+const APP_BUILD = "2026-08-27-method-dashboards";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -12992,78 +12992,144 @@ function acfSetIpState(project, ipId, state){
   try { if(typeof saveProjects === "function") saveProjects(); else if(typeof saveData === "function") saveData(); } catch(e){}
 }
 
+function mvpPpName(project, ppId){
+  const packs = getProductionPackages(project);
+  const p = packs.filter(function(x){ return x.id === ppId; })[0];
+  return p ? (p.name || p.ss || p.id) : (ppId || "");
+}
+function mvpEnsureModelPackage(project, pp){
+  if(!pp || !project.production) return null;
+  project.production.modelPackages = project.production.modelPackages || [];
+  const id = "MP-" + (pp.fb || "") + "-" + String(pp.ss || "").replace(/[^A-Za-z0-9_]/g, "_");
+  let mp = project.production.modelPackages.filter(function(m){ return m.id === id || m.ppId === pp.id; })[0];
+  const hits = (typeof _modelsSsHits !== "undefined" && pp.ss) ? Number(_modelsSsHits[pp.ss] || 0) : 0;
+  const coverage = hits > 0 ? Math.min(100, 40 + hits * 8) : 0;
+  const classPct = hits > 0 ? Math.min(100, 30 + hits * 10) : 0;
+  const loinPct = pp.currentLod ? Math.min(100, Number(pp.currentLod) * 20) : (project.currentStageId === "S3" ? 50 : 0);
+  if(!mp && typeof normalizeModelPackage === "function"){
+    mp = normalizeModelPackage({
+      id: id, ppId: pp.id, fb: pp.fb, ss: pp.ss, ownerRo: pp.ro,
+      targetLoin: project.currentStageId || "S3", currentLoin: "",
+      verificationStatus: hits > 0 ? "partial" : "not_verified",
+      readinessStatus: coverage >= 80 ? "ready" : "open"
+    });
+    if(mp) project.production.modelPackages.push(mp);
+  }
+  if(mp){
+    mp._coverage = coverage;
+    mp._classPct = classPct;
+    mp._loinPct = loinPct;
+    mp._hits = hits;
+    mp.verificationStatus = hits > 0 ? (coverage >= 80 ? "verified" : "partial") : "not_verified";
+  }
+  return mp;
+}
 function renderVerifyExchangeDashboards(project){
   const host = document.getElementById("verifyExchangeRoot");
   if(!host || !project) return;
   const stage = project.currentStageId || "S3";
   const packs = (typeof mvpPilotPackages === "function" ? mvpPilotPackages(project) : []).slice(0, 12);
   const list = packs.length ? packs : getProductionPackages(project).slice(0, 12);
-  const focusId = window.__mvpFocusPp || (list[0] && list[0].id);
-  const pp = list.filter(function(p){ return p.id === focusId; })[0] || list[0];
-  if(pp){
-    mvpEnsureInterfacesForFb(project, pp.fb);
-    mvpEnsureDeliverablesAndIp(project, pp);
-    if(typeof ensureDrfForPackage === "function") ensureDrfForPackage(project, pp);
+  if(!list.length){
+    host.innerHTML = '<div class="card" style="padding:12px;">Load the FB01 pilot or run the scope wizard so packages exist.</div>';
+    return;
   }
+  if(!window.__mvpFocusPp || !list.some(function(p){ return p.id === window.__mvpFocusPp; })){
+    window.__mvpFocusPp = list[0].id;
+  }
+  const pp = list.filter(function(p){ return p.id === window.__mvpFocusPp; })[0] || list[0];
+  mvpEnsureInterfacesForFb(project, pp.fb);
+  mvpEnsureDeliverablesAndIp(project, pp);
+  if(typeof ensureDrfForPackage === "function") ensureDrfForPackage(project, pp);
+  const mp = mvpEnsureModelPackage(project, pp);
+
   const ifaces = ((project.production && project.production.interfaces) || []).filter(function(ifo){
-    return !pp || ifo.sourcePpId === pp.id || ifo.targetPpId === pp.id;
+    return ifo.sourcePpId === pp.id || ifo.targetPpId === pp.id;
   }).slice(0, 20);
-  const dels = ((project.production && project.production.deliverables) || []).filter(function(d){ return pp && d.ppId === pp.id; });
-  const drf = (pp && typeof getDeliverableRequirementsForPackage === "function") ? getDeliverableRequirementsForPackage(project, pp.id, stage) : [];
+  const openIf = ifaces.filter(function(ifo){ return String(ifo.status||"IFS00") === "IFS00" || String(ifo.status) === "IFS10" || String(ifo.status) === "IFS20"; });
+  const coord = !ifaces.length ? "No interfaces" : (openIf.length ? "Open" : "Coordinated");
+  const dels = ((project.production && project.production.deliverables) || []).filter(function(d){ return d.ppId === pp.id; });
+  const drf = (typeof getDeliverableRequirementsForPackage === "function") ? getDeliverableRequirementsForPackage(project, pp.id, stage) : [];
   const ips = ((project.production && project.production.informationPackages) || []).filter(function(ip){
-    return pp && String(ip.fb).toUpperCase() === String(pp.fb).toUpperCase();
+    return String(ip.fb).toUpperCase() === String(pp.fb).toUpperCase();
   }).slice(0, 8);
-  const ssHits = (typeof _modelsSsHits !== "undefined" && pp && pp.ss) ? _modelsSsHits[pp.ss] : null;
   let depR = null;
-  try { if(pp) depR = evaluatePackageDependencyReadiness(project, pp.id); } catch(e){}
+  try { depR = evaluatePackageDependencyReadiness(project, pp.id); } catch(e){}
 
-  let html = "";
+  let html = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">';
+  list.forEach(function(p){
+    const on = p.id === pp.id;
+    html += '<button type="button" class="btn btn-xs ' + (on ? "btn-gold" : "btn-ghost") + '" data-mvp-pp="' + escapeHtml(p.id) + '">' + escapeHtml(p.name || p.ss) + '</button>';
+  });
+  html += '</div>';
+
   html += '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
-  html += '<div style="font-size:13px;font-weight:700;">3 Verify delivery</div>';
-  html += '<p class="section-sub">' + escapeHtml(pp ? (pp.name||pp.ss||pp.id) : "Load the FB01 pilot first") + ' · ' + escapeHtml(stage) + '</p>';
-  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;">';
-  html += '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;"><div style="font-size:11px;font-weight:800;">Dependencies</div><div style="font-size:12px;margin-top:6px;">Can I proceed?</div><p style="font-size:13px;">' + (depR && depR.blocked ? '<span style="color:#b91c1c;font-weight:700;">No</span>' : '<span style="color:#15803d;font-weight:700;">Yes / no blockers recorded</span>') + '</p></div>';
-  html += '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;"><div style="font-size:11px;font-weight:800;">Interface dashboard</div><div style="font-size:12px;margin-top:6px;">Am I coordinated?</div>';
-  if(!ifaces.length) html += '<p style="font-size:12px;">Seed FB01 so Walls ↔ Windows is created from PPDM.</p>';
+  html += '<div style="font-size:13px;font-weight:700;">Interface dashboard — am I coordinated?</div>';
+  html += '<p class="section-sub">' + escapeHtml(pp.name||pp.ss) + ' · open ' + openIf.length + '/' + ifaces.length + ' · ' + coord + '</p>';
+  if(!ifaces.length) html += '<p style="font-size:12px;">No interface objects for this package yet. Dependencies on the same FB generate them.</p>';
   ifaces.forEach(function(ifo){
-    html += '<div style="font-size:11px;padding:4px 0;border-bottom:1px solid #f3f4f6;">' + escapeHtml(ifo.type) + ' · ' + escapeHtml((ifo.sourcePpId||"").slice(-24)) + ' ↔ ' + escapeHtml((ifo.targetPpId||"").slice(-24)) + '</div>';
+    const other = ifo.sourcePpId === pp.id ? ifo.targetPpId : ifo.sourcePpId;
+    const ok = String(ifo.status||"") === "IFS40" || String(ifo.status||"") === "IFS30";
+    html += '<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:6px 0;border-bottom:1px solid #f3f4f6;">';
+    html += '<span>' + (ok ? "✔" : "⚠") + ' ' + escapeHtml(mvpPpName(project, other)) + '</span>';
+    html += '<span style="font-size:11px;color:#666;">' + escapeHtml(ifo.type) + '</span></div>';
   });
   html += '</div>';
-  html += '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;"><div style="font-size:11px;font-weight:800;">Model verification</div><div style="font-size:12px;margin-top:6px;">Does the model prove FB + Ss (+ Pr / EF)?</div><p style="font-size:12px;"><code>Classification.Uniclass.Ss.Number</code></p><p style="font-size:13px;">' + (ssHits != null ? ('<strong>' + ssHits + '</strong> elements for ' + escapeHtml(pp.ss||"")) : 'Isolate this Ss in Models to record coverage.') + '</p></div>';
-  html += '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;"><div style="font-size:11px;font-weight:800;">LOIN verification</div><div style="font-size:12px;margin-top:6px;">Has the package reached target maturity?</div><p style="font-size:12px;">Target follows WMM for ' + escapeHtml(stage) + ' (LOD / LOI / documentation need).</p></div>';
-  html += '</div></div>';
 
   html += '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
-  html += '<div style="font-size:13px;font-weight:700;">4 Produce information</div>';
-  html += '<p class="section-sub">Package → Deliverable requirements → Deliverables</p>';
-  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">';
+  html += '<div style="font-size:13px;font-weight:700;">Model verification — does the model prove the package?</div>';
+  html += '<p class="section-sub">Production Package → Model Package → Classification (FB / Ss / Pr / EF) → LOIN</p>';
+  html += '<div style="display:grid;grid-template-columns:repeat(4,minmax(70px,1fr));gap:8px;text-align:center;">';
+  const cells = [
+    ["Classification %", mp ? mp._classPct : 0],
+    ["LOIN %", mp ? mp._loinPct : 0],
+    ["Coverage %", mp ? mp._coverage : 0],
+    ["Ss hits", mp ? mp._hits : 0]
+  ];
+  cells.forEach(function(c){
+    html += '<div style="background:#f8fafc;border-radius:10px;padding:8px;"><div style="font-size:11px;color:#666;">' + c[0] + '</div><div style="font-size:20px;font-weight:800;color:#5b2d8e;">' + c[1] + '</div></div>';
+  });
+  html += '</div>';
+  html += '<p style="font-size:12px;margin-top:8px;">Status: <strong>' + escapeHtml(mp && mp.verificationStatus || "not_verified") + '</strong>. Isolate Ss in Models to raise coverage. Expected system: <code>' + escapeHtml(pp.ss||"") + '</code></p></div>';
+
+  html += '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div style="font-size:13px;font-weight:700;">Deliverable requirements — ' + escapeHtml(pp.name||pp.ss) + ' · ' + escapeHtml(stage) + '</div>';
+  html += '<p class="section-sub">Package → required outputs → actual deliverables</p>';
+  if(!drf.length) html += '<p style="font-size:12px;">No DRF rows. Generate packages from the wizard.</p>';
   drf.forEach(function(r){
-    html += '<span style="padding:4px 10px;border-radius:999px;background:#fff7ed;border:1px solid #fed7aa;font-size:12px;"><strong>' + escapeHtml(r.fi) + '</strong> ' + escapeHtml(r.label||"") + '</span>';
-  });
-  if(!drf.length) html += '<span style="font-size:12px;color:#666;">Generate packages to create DRF rows.</span>';
-  html += '</div>';
-  dels.forEach(function(d){
-    html += '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #f3f4f6;">' + escapeHtml(d.fi) + ' · ' + escapeHtml(d.name) + ' · ' + escapeHtml(d.status) + '</div>';
+    const del = dels.filter(function(d){ return d.drId === r.id || String(d.fi).toUpperCase() === String(r.fi).toUpperCase(); })[0];
+    const missing = !del || del.status === "required";
+    html += '<div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid #f3f4f6;">';
+    html += '<span>' + (missing ? "⚠ " : "✔ ") + escapeHtml(r.label || r.fi) + ' <span style="color:#888;">(' + escapeHtml(r.fi) + ')</span></span>';
+    html += '<span style="font-size:11px;color:#666;">' + (missing ? "Missing" : "Required output listed") + '</span></div>';
   });
   html += '</div>';
 
   html += '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
-  html += '<div style="font-size:13px;font-weight:700;">5 Exchange information</div>';
-  html += '<p class="section-sub">Information package is the container that moves. Shared and Published are CDE states. Transmit is an action.</p>';
-  if(!ips.length) html += '<p style="font-size:12px;">No IP yet — open a production package on MVP.</p>';
+  html += '<div style="font-size:13px;font-weight:700;">Information package dashboard</div>';
+  html += '<p class="section-sub">Deliverables → IP → Shared → Published → Exchange event</p>';
+  if(!ips.length) html += '<p style="font-size:12px;">No information package for this FB.</p>';
   ips.forEach(function(ip){
-    const st = String(ip.informationState || "WIP").toUpperCase();
-    html += '<div style="padding:8px;border:1px solid #dbeafe;border-radius:10px;margin-bottom:8px;">';
-    html += '<div style="font-size:12px;font-weight:700;">' + escapeHtml(ip.id) + '</div>';
-    html += '<div style="font-size:12px;margin:4px 0;">State <strong>' + escapeHtml(st) + '</strong> · Suitability ' + escapeHtml(ip.suitability || "") + '</div>';
-    html += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+    const reqN = drf.length || 0;
+    const haveN = dels.filter(function(d){ return d.status !== "required"; }).length;
+    const listed = dels.length;
+    const passed = reqN > 0 && listed >= reqN;
+    html += '<div style="padding:10px;border:1px solid #dbeafe;border-radius:10px;margin-bottom:8px;">';
+    html += '<div style="font-weight:700;font-size:13px;">' + escapeHtml(ip.id) + '</div>';
+    html += '<div style="font-size:12px;margin:4px 0;">State <strong>' + escapeHtml(ip.informationState || "WIP") + '</strong> · Suitability ' + escapeHtml(ip.suitability || "") + '</div>';
+    html += '<div style="font-size:12px;">Deliverables ' + listed + '/' + (reqN || listed || 0) + ' · Validation ' + (passed ? "Passed" : "Open") + '</div>';
+    html += '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">';
     html += '<button type="button" class="btn btn-ghost btn-xs" data-ip-state="WIP" data-ip="' + escapeHtml(ip.id) + '">WIP</button>';
     html += '<button type="button" class="btn btn-ghost btn-xs" data-ip-state="SHARED" data-ip="' + escapeHtml(ip.id) + '">Share</button>';
     html += '<button type="button" class="btn btn-gold btn-xs" data-ip-state="PUBLISHED" data-ip="' + escapeHtml(ip.id) + '">Publish</button>';
     html += '</div></div>';
   });
   html += '</div>';
+
   host.innerHTML = html;
+  host.querySelectorAll("[data-mvp-pp]").forEach(function(b){
+    b.onclick = function(){ window.__mvpFocusPp = b.getAttribute("data-mvp-pp"); renderVerifyExchangeDashboards(project); };
+  });
   host.querySelectorAll("[data-ip-state]").forEach(function(btn){
     btn.onclick = function(){
       acfSetIpState(project, btn.getAttribute("data-ip"), btn.getAttribute("data-ip-state"));
