@@ -2009,6 +2009,8 @@
         <div style="display:flex;gap:12px;align-items:flex-start;">
           <nav id="psdNav" style="flex:0 0 200px;position:sticky;top:8px;"></nav>
           <div style="flex:1;min-width:0;">
+            <div id="psdMyWork"></div>
+            <div id="psdWorkbench"></div>
             <div id="psdScopeDash"></div>
             <div id="methodHowRoot"></div>
             <div id="scopeWizardRoot" style="margin-top:12px;"></div>
@@ -2393,8 +2395,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.30.0";
-const APP_BUILD = "2026-08-27-5c-verify-ops";
+const APP_VERSION = "3.31.0";
+const APP_BUILD = "2026-08-27-workbench";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -13254,11 +13256,137 @@ function psdFbList(project){
   }
   return list;
 }
+
+function currentFuncRoleCode(project){
+  try {
+    if(typeof currentRoleCode === "function") return currentRoleCode();
+  } catch(e){}
+  return (window.__whoRole || project.currentFuncRole || "IM").toString().toUpperCase();
+}
+function renderPackageTimeline(stageId){
+  const cur = String(stageId || "S3").toUpperCase();
+  const stages = ["S1","S2","S3","S4","S5","S6"];
+  let html = '<div style="display:flex;gap:4px;margin:8px 0;">';
+  stages.forEach(function(s){
+    const on = s === cur;
+    html += '<div style="flex:1;text-align:center;padding:6px 2px;border-radius:8px;font-size:11px;font-weight:700;' + (on?'background:#5b2d8e;color:#fff;':'background:#f3f0f6;color:#555;') + '">' + s + '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+function renderMyWorkDashboard(project){
+  const host = document.getElementById("psdMyWork");
+  if(!host) return;
+  if((window.__psdView || "work") !== "work"){ host.innerHTML = ""; return; }
+  const role = currentFuncRoleCode(project);
+  const packs = getProductionPackages(project).slice(0, 40);
+  const tidp = (project.production && project.production.tidpRows) || [];
+  const issues = ((project.production && project.production.interfaceIssues) || []).filter(function(i){ return String(i.status||"open") !== "closed"; });
+  const mineTidp = tidp.filter(function(r){ return String(r.funcRole||"").toUpperCase() === role; });
+  const pendingVerify = tidp.filter(function(r){ return String(r.activity||"").toLowerCase() === "verify" && String(r.status||"") !== "closed"; });
+  const pendingReview = tidp.filter(function(r){ return String(r.activity||"").toLowerCase() === "review" && String(r.status||"") !== "closed"; });
+  const pendingAppr = tidp.filter(function(r){ return String(r.activity||"").toLowerCase() === "approve" && String(r.status||"") !== "closed"; });
+  let html = '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div class="section-title">My Work</div>';
+  html += '<p class="section-sub">Role ' + escapeHtml(role) + ' — what needs attention on this project.</p>';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;text-align:center;">';
+  [["Packages", packs.length],["My TIDPs", mineTidp.length],["Open issues", issues.length],["Verify", pendingVerify.length],["Review", pendingReview.length],["Approve", pendingAppr.length]].forEach(function(c){
+    html += '<div style="background:#faf5ff;border-radius:10px;padding:10px;"><div style="font-size:11px;color:#666;">' + c[0] + '</div><div style="font-size:22px;font-weight:800;color:#5b2d8e;">' + c[1] + '</div></div>';
+  });
+  html += '</div>';
+  html += '<div style="margin-top:12px;font-size:12px;font-weight:700;">Packages</div>';
+  packs.slice(0, 12).forEach(function(p){
+    const h = (typeof mvpPackageHealth === "function") ? mvpPackageHealth(project, p) : { label: "", color: "amber", readiness: { prod: 0 } };
+    html += '<button type="button" class="btn btn-block btn-ghost" data-open-pp="' + escapeHtml(p.id) + '" style="text-align:left;margin-top:6px;">';
+    html += '<strong>' + escapeHtml(p.name||p.ss) + '</strong> · ' + escapeHtml(h.label) + ' · ' + escapeHtml(String(h.readiness.prod)) + '%</button>';
+  });
+  html += '</div>';
+  host.innerHTML = html;
+  host.querySelectorAll("[data-open-pp]").forEach(function(b){
+    b.onclick = function(){
+      window.__mvpFocusPp = b.getAttribute("data-open-pp");
+      window.__psdView = "bench";
+      renderMethodView(project);
+    };
+  });
+}
+function renderPackageWorkbench(project){
+  const host = document.getElementById("psdWorkbench");
+  if(!host) return;
+  if((window.__psdView || "") !== "bench"){ host.innerHTML = ""; return; }
+  const packs = (typeof mvpPilotPackages === "function" && mvpPilotPackages(project).length) ? mvpPilotPackages(project) : getProductionPackages(project).slice(0, 16);
+  if(!packs.length){ host.innerHTML = '<div class="card" style="padding:12px;">Generate scope first.</div>'; return; }
+  const pp = packs.filter(function(p){ return p.id === window.__mvpFocusPp; })[0] || packs[0];
+  window.__mvpFocusPp = pp.id;
+  mvpEnsureInterfacesForFb(project, pp.fb);
+  mvpEnsureDeliverablesAndIp(project, pp);
+  if(typeof ensureDrfForPackage === "function") ensureDrfForPackage(project, pp);
+  if(typeof mvpEnsureModelPackage === "function") mvpEnsureModelPackage(project, pp);
+  const h = mvpPackageHealth(project, pp);
+  const stage = project.currentStageId || "S3";
+  const tidp = ((project.production && project.production.tidpRows) || []).filter(function(r){ return r.ppId === pp.id; });
+  const drf = getDeliverableRequirementsForPackage(project, pp.id, stage);
+  const dels = ((project.production && project.production.deliverables) || []).filter(function(d){ return d.ppId === pp.id; });
+  const ips = ((project.production && project.production.informationPackages) || []).filter(function(ip){ return String(ip.fb).toUpperCase() === String(pp.fb).toUpperCase(); });
+  const ifaces = ((project.production && project.production.interfaces) || []).filter(function(i){ return i.sourcePpId===pp.id || i.targetPpId===pp.id; });
+  let depLine = "None recorded";
+  try {
+    const r = evaluatePackageDependencyReadiness(project, pp.id);
+    depLine = r && r.blocked ? "Blocked" : "Ready";
+  } catch(e){}
+
+  let html = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">';
+  packs.forEach(function(p){
+    html += '<button type="button" class="btn btn-xs ' + (p.id===pp.id?'btn-gold':'btn-ghost') + '" data-wb-pp="' + escapeHtml(p.id) + '">' + escapeHtml(p.name||p.ss) + '</button>';
+  });
+  html += '</div>';
+  html += '<div class="card" style="padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div class="section-title">' + escapeHtml(pp.id) + '</div>';
+  html += '<div style="font-size:18px;font-weight:800;">' + escapeHtml(pp.name || pp.ss) + '</div>';
+  html += renderPackageTimeline(stage);
+  const col = h.color==="green"?"#15803d":(h.color==="red"?"#b91c1c":"#b45309");
+  html += '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;margin:8px 0;"><span>Health <strong style="color:' + col + ';">' + escapeHtml(h.label) + '</strong></span><span>Readiness <strong>' + h.readiness.prod + '%</strong></span><span>Status <strong>' + escapeHtml(pp.status||"in progress") + '</strong></span></div>';
+
+  html += '<div style="font-size:12px;font-weight:800;margin:12px 0 6px;letter-spacing:.04em;">PLANNING</div>';
+  const acts = ["Plan","Model","Coordinate","Verify","Review","Approve"];
+  acts.forEach(function(a){
+    const row = tidp.filter(function(r){ return String(r.activity||"").toLowerCase() === a.toLowerCase(); })[0];
+    const st = row ? String(row.status||"created") : "";
+    const mark = !row ? "○" : (st === "closed" || st === "approved" ? "✔" : "⚠");
+    html += '<div style="font-size:13px;padding:3px 0;">' + mark + ' ' + a + (row ? ' <span style="color:#888;font-size:11px;">' + escapeHtml(row.funcRole||"") + '</span>' : "") + '</div>';
+  });
+
+  html += '<div style="font-size:12px;font-weight:800;margin:12px 0 6px;letter-spacing:.04em;">VERIFICATION</div>';
+  html += '<div style="font-size:13px;">Dependencies: ' + escapeHtml(depLine) + '</div>';
+  html += '<div style="font-size:13px;">Interfaces: ' + ifaces.length + '</div>';
+  html += '<div style="font-size:13px;">Issues: ' + h.issues + ' open</div>';
+  html += '<div style="font-size:13px;">Model / LOIN: ' + escapeHtml(h.verify) + ' · ' + h.readiness.loin + '%</div>';
+
+  html += '<div style="font-size:12px;font-weight:800;margin:12px 0 6px;letter-spacing:.04em;">INFORMATION</div>';
+  drf.forEach(function(r){
+    const del = dels.filter(function(d){ return String(d.fi).toUpperCase()===String(r.fi).toUpperCase(); })[0];
+    html += '<div style="font-size:13px;">' + ((!del || del.status==="required")?"⚠ ":"✔ ") + escapeHtml(r.label||r.fi) + '</div>';
+  });
+
+  html += '<div style="font-size:12px;font-weight:800;margin:12px 0 6px;letter-spacing:.04em;">EXCHANGE</div>';
+  if(!ips.length) html += '<div style="font-size:13px;">No information package yet.</div>';
+  ips.forEach(function(ip){
+    html += '<div style="font-size:13px;"><strong>' + escapeHtml(ip.id) + '</strong> · ' + escapeHtml(ip.informationState||"WIP") + ' · ' + escapeHtml(ip.suitability||"") + '</div>';
+  });
+  html += '</div>';
+  host.innerHTML = html;
+  host.querySelectorAll("[data-wb-pp]").forEach(function(b){
+    b.onclick = function(){ window.__mvpFocusPp = b.getAttribute("data-wb-pp"); renderPackageWorkbench(project); };
+  });
+}
+
 function renderPsdNav(project){
   const host = document.getElementById("psdNav");
   if(!host) return;
   const view = window.__psdView || "scope";
   const items = [
+    ["work", "My Work", "Today · role"],
+    ["bench", "Package workbench", "One package"],
     ["scope", "PROJECT / Scope", "FB · Systems"],
     ["wizard", "Scope wizard", "Create FB + systems"],
     ["how", "Methodology", "How Atana works"],
@@ -13451,8 +13579,11 @@ function renderScopeWizard(project){
 }
 
 function renderMethodView(project){
-  const view = window.__psdView || "scope";
+  if(!window.__psdView) window.__psdView = "work";
+  const view = window.__psdView;
   renderPsdNav(project);
+  renderMyWorkDashboard(project);
+  renderPackageWorkbench(project);
   renderAssetScopeDashboard(project);
   const how = document.getElementById("methodHowRoot");
   const wiz = document.getElementById("scopeWizardRoot");
