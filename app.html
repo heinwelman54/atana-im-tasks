@@ -2396,8 +2396,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.36.0";
-const APP_BUILD = "2026-08-28-governance";
+const APP_VERSION = "3.37.0";
+const APP_BUILD = "2026-08-28-containers";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -3020,6 +3020,48 @@ const DGE_DISCIPLINES = {
   IM: { name: "INFORMATION MANAGEMENT", driver: "document", uses: "document" },
   ZZ: { name: "GENERAL / MULTI-DISCIPLINARY", driver: "document", uses: "document" }
 };
+const ATANA_CONTAINERS = {
+  DRAWING:      { code: "DRAWING", form: "DR", series: 1000, label: "Drawing" },
+  MODEL:        { code: "MODEL", form: "M3", series: 0, label: "Model" },
+  REPORT:       { code: "REPORT", form: "RP", series: 0, label: "Report" },
+  CALCULATION:  { code: "CALCULATION", form: "CA", series: 0, label: "Calculation" },
+  SCHEDULE:     { code: "SCHEDULE", form: "SH", series: 5000, label: "Schedule" },
+  SPECIFICATION:{ code: "SPECIFICATION", form: "SP", series: 0, label: "Specification" },
+  DATASHEET:    { code: "DATASHEET", form: "DS", series: 0, label: "Data sheet" },
+  REGISTER:     { code: "REGISTER", form: "RG", series: 0, label: "Register" },
+  SCHEMATIC:    { code: "SCHEMATIC", form: "SC", series: 6000, label: "Schematic" }
+};
+const DGE_TYPE_CONTAINER = {
+  PLAN: "DRAWING", LAYOUT: "DRAWING", ELEVATION: "DRAWING", SECTION: "DRAWING", DETAIL: "DRAWING",
+  SCHEDULE: "SCHEDULE", SCHEMATIC: "SCHEMATIC", REPORT: "REPORT", CALCULATION: "CALCULATION",
+  SPECIFICATION: "SPECIFICATION", "DATA SHEET": "DATASHEET", MATRIX: "REGISTER", REGISTER: "REGISTER", MODEL: "MODEL"
+};
+function dgeContainerCode(type, formHint){
+  const t = String(type || "").toUpperCase();
+  if(DGE_TYPE_CONTAINER[t]) return DGE_TYPE_CONTAINER[t];
+  const f = String(formHint || "").toUpperCase();
+  if(f === "DR") return "DRAWING";
+  if(f === "M3") return "MODEL";
+  if(f === "RP") return "REPORT";
+  if(f === "CA") return "CALCULATION";
+  if(f === "SH") return "SCHEDULE";
+  if(f === "SP") return "SPECIFICATION";
+  if(f === "DS") return "DATASHEET";
+  if(f === "RG") return "REGISTER";
+  if(f === "SC") return "SCHEMATIC";
+  return "DRAWING";
+}
+function dgeContainerMeta(project, type, formHint){
+  const code = dgeContainerCode(type, formHint);
+  const base = ATANA_CONTAINERS[code] || ATANA_CONTAINERS.DRAWING;
+  const ov = project && project.dge && project.dge.containerForms && project.dge.containerForms[code];
+  return {
+    container: code,
+    form: (ov && ov.form) || base.form,
+    series: (ov && ov.series != null) ? ov.series : base.series,
+    label: base.label
+  };
+}
 const DGE_TYPE_FORM = {
   PLAN: { form: "DR", series: 1000 },
   LAYOUT: { form: "DR", series: 1000 },
@@ -3301,9 +3343,11 @@ function dgeGenericTemplates(project, role, model){
 function dgeItem(type, opts){
   opts = opts || {};
   const meta = DGE_TYPE_FORM[type] || DGE_TYPE_FORM.LAYOUT;
+  const ctn = dgeContainerMeta(null, type, opts.form || meta.form);
   return {
-    form: opts.form || meta.form,
-    series: opts.series != null ? opts.series : meta.series,
+    container: opts.container || ctn.container,
+    form: opts.form || ctn.form || meta.form,
+    series: opts.series != null ? opts.series : (ctn.series != null ? ctn.series : meta.series),
     scope: opts.scope || "general",
     desc: opts.desc,
     type: type,
@@ -4248,7 +4292,7 @@ function render(){
                 const safeDesc = String(t.desc||"").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
                 return `<div class="tpl-item ${disabled?'disabled':''}" style="display:flex;align-items:flex-start;gap:6px;">
                           <input type="checkbox" ${disabled?"":"checked"} onchange="toggleTemplate('${role.code}','${safeDesc}')" />
-                          <span class="mono" style="color:#a8a29e;width:22px;flex-shrink:0">${esc(t.form||"DR")}</span>
+                          <span class="mono" style="color:#a8a29e;width:22px;flex-shrink:0">${esc(t.form||"DR")}</span><span class="mono" style="color:#9ca3af;font-size:10px;width:52px;flex-shrink:0">${esc(t.container||dgeContainerCode(t.type,t.form))}</span>
                           <span class="desc" style="flex:1">${t.packageTitle ? `<span class="mono" style="color:#7c3aed;font-size:10px;margin-right:6px;">${esc(t.packageTitle)}</span>` : ""}${esc(String(t.desc||"").replace(/\{LEVEL\}/g,"[SPATIAL]").replace(/\{SPATIAL\}/g,"[SPATIAL]"))}${t.stageRule ? ` <span class="mono" style="color:#78716c;font-size:10px;">${esc(t.stageRule)}</span>` : ""}</span>
                           ${isCustom ? `<button type="button" class="btn btn-ghost btn-xs" onclick="editCustomTemplate('${role.code}',${ti-base.length})">Edit</button>` : `<button type="button" class="btn btn-ghost btn-xs" onclick="editTemplateNote('${role.code}','${safeDesc}')">Edit</button>`}
                         </div>`;
@@ -4441,7 +4485,7 @@ function generate(){
             const key = isoNumber+"|"+stage;
             if(existingKeys.has(key)) return;
             existingKeys.add(key);
-            newRows.push({rowId: isoNumber+"|"+stage+"|"+Math.random().toString(36).slice(2,7), stage, role:role.code, form:t.form, number, status, revision, date, functional:func.code, spatial:lvl.code, description, isoNumber, packageId: t.packageId || "", packageTitle: t.packageTitle || "", packageType: t.packageType || "", stageRule: t.stageRule || "", lod: t.lod || "", loi: t.loi || "", suitability: t.suitability || "", mandatory: !!t.mandatory, genStatus: t.genStatus || (t.mandatory ? "MANDATORY" : "OPTIONAL"), generatedBy: t.system || t.asset || t.packageTitle || role.code, triggeredBy: t.packageId || "", generatedFrom: (typeof lvl !== "undefined" && lvl && lvl.label) ? lvl.label : (spatial || ""), precedence: "SYSTEM"});
+            newRows.push({rowId: isoNumber+"|"+stage+"|"+Math.random().toString(36).slice(2,7), stage, role:role.code, form:t.form, number, status, revision, date, functional:func.code, spatial:lvl.code, description, isoNumber, container: t.container || dgeContainerCode(t.type, t.form), packageId: t.packageId || "", packageTitle: t.packageTitle || "", packageType: t.packageType || "", stageRule: t.stageRule || "", lod: t.lod || "", loi: t.loi || "", suitability: t.suitability || "", mandatory: !!t.mandatory, genStatus: t.genStatus || (t.mandatory ? "MANDATORY" : "OPTIONAL"), generatedBy: t.system || t.asset || t.packageTitle || role.code, triggeredBy: t.packageId || "", generatedFrom: (typeof lvl !== "undefined" && lvl && lvl.label) ? lvl.label : (spatial || ""), precedence: "SYSTEM"});
           });
         } else {
           const spatial = t.scope === "site" ? "SI" : "XX";
@@ -4458,7 +4502,7 @@ function generate(){
           const key = isoNumber+"|"+stage;
           if(existingKeys.has(key)) return;
           existingKeys.add(key);
-          newRows.push({rowId: isoNumber+"|"+stage+"|"+Math.random().toString(36).slice(2,7), stage, role:role.code, form:t.form, number, status, revision, date, functional:func.code, spatial, description, isoNumber, packageId: t.packageId || "", packageTitle: t.packageTitle || "", packageType: t.packageType || "", stageRule: t.stageRule || "", lod: t.lod || "", loi: t.loi || "", suitability: t.suitability || "", mandatory: !!t.mandatory, genStatus: t.genStatus || (t.mandatory ? "MANDATORY" : "OPTIONAL"), generatedBy: t.system || t.asset || t.packageTitle || role.code, triggeredBy: t.packageId || "", generatedFrom: (typeof lvl !== "undefined" && lvl && lvl.label) ? lvl.label : (spatial || ""), precedence: "SYSTEM"});
+          newRows.push({rowId: isoNumber+"|"+stage+"|"+Math.random().toString(36).slice(2,7), stage, role:role.code, form:t.form, number, status, revision, date, functional:func.code, spatial, description, isoNumber, container: t.container || dgeContainerCode(t.type, t.form), packageId: t.packageId || "", packageTitle: t.packageTitle || "", packageType: t.packageType || "", stageRule: t.stageRule || "", lod: t.lod || "", loi: t.loi || "", suitability: t.suitability || "", mandatory: !!t.mandatory, genStatus: t.genStatus || (t.mandatory ? "MANDATORY" : "OPTIONAL"), generatedBy: t.system || t.asset || t.packageTitle || role.code, triggeredBy: t.packageId || "", generatedFrom: (typeof lvl !== "undefined" && lvl && lvl.label) ? lvl.label : (spatial || ""), precedence: "SYSTEM"});
         }
       });
     });

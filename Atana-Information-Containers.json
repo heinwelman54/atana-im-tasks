@@ -1,0 +1,25 @@
+{
+  "title": "Atana Information Container Framework",
+  "version": "1.0",
+  "containers": {
+    "DRAWING": "DR",
+    "MODEL": "M3",
+    "REPORT": "RP",
+    "CALCULATION": "CA",
+    "SCHEDULE": "SH",
+    "SPECIFICATION": "SP",
+    "DATASHEET": "DS",
+    "REGISTER": "RG",
+    "SCHEMATIC": "SC"
+  },
+  "rule": "Deliverable type is not the container. SECTION is a deliverable type stored in a DRAWING container.",
+  "example": {
+    "deliverable": "HVAC LAYOUT - GROUND FLOOR",
+    "type": "LAYOUT",
+    "container": "DRAWING",
+    "form": "DR",
+    "taskTeam": "ME",
+    "system": "HVAC",
+    "spatial": "GROUND FLOOR"
+  }
+}

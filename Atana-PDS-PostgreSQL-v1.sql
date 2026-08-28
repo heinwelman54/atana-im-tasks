@@ -590,3 +590,14 @@ CREATE TABLE IF NOT EXISTS CatalogueEntries (
   Owner TEXT,
   Approved TEXT
 );
+
+CREATE TABLE IF NOT EXISTS InformationContainers (
+  Container_Code TEXT PRIMARY KEY,
+  Form_Code TEXT,
+  Default_Series INTEGER,
+  Label TEXT
+);
+CREATE TABLE IF NOT EXISTS DeliverableTypeMap (
+  Deliverable_Type TEXT PRIMARY KEY,
+  Container_Code TEXT REFERENCES InformationContainers(Container_Code)
+);
