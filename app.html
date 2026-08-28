@@ -2028,6 +2028,7 @@
             <div class="stage-picker" id="midpDocsStagePicker" title="Work stage"></div>
             <span style="width:1px;height:22px;background:#e2e8f0;"></span>
             <div class="midp-view-tabs" id="midpDocsViewTabs">
+              <button type="button" class="btn btn-xs btn-ghost" data-docs-tab="generated">Generated MIDP</button>
               <button type="button" class="btn btn-xs btn-ghost" data-docs-tab="imported">Imported plan</button>
               <button type="button" class="btn btn-xs btn-ghost" data-docs-tab="acc">FORMA</button>
               <button type="button" class="btn btn-xs btn-ghost" data-docs-tab="compare">Comparison</button>
@@ -2396,8 +2397,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.38.0";
-const APP_BUILD = "2026-08-28-ir-framework";
+const APP_VERSION = "3.39.0";
+const APP_BUILD = "2026-08-28-generated-midp-tab";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -4503,10 +4504,74 @@ function getNumber(roleCode, series, templateIdx, functional, spatial, form, des
   return num;
 }
 
+function dgeWorkflowRoles(roleCode){
+  const ro = String(roleCode || "").toUpperCase();
+  return {
+    author: ro + " - INFORMATION AUTHOR",
+    peer: ro + " - PEER REVIEWER",
+    ttim: ro + " - TASK TEAM INFORMATION MANAGER",
+    ttm: ro + " - TASK TEAM MANAGER",
+    visible: ["IM", "PDM", "DM", "DTL"]
+  };
+}
+function renderGeneratedMidpTab(project, list){
+  if(!list) return;
+  const rows = (project && project.generatedMidp && project.generatedMidp.length)
+    ? project.generatedMidp
+    : ((typeof state !== "undefined" && state.rows) ? state.rows : []);
+  if(!rows.length){
+    list.innerHTML = '<div class="card" style="padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.08);"><p class="section-sub">No generated MIDP yet. Use <strong>How Atana Works → Project setup</strong> or the MIDP Generator, then return here.</p><button type="button" class="btn btn-gold btn-xs" id="genMidpNow">Generate now</button></div>';
+    const b = document.getElementById("genMidpNow");
+    if(b) b.onclick = function(){
+      try { if(typeof generate === "function") generate(); } catch(e){ console.warn(e); }
+      try { if(typeof persistMidpToProject === "function") persistMidpToProject(); } catch(e){}
+      renderGeneratedMidpTab(projectById(currentProjectId) || project, list);
+    };
+    return;
+  }
+  const byRole = {};
+  rows.forEach(function(r){
+    const k = r.role || r.taskTeam || "ZZ";
+    if(!byRole[k]) byRole[k] = [];
+    byRole[k].push(r);
+  });
+  let html = '<div class="card" style="padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);"><div style="font-size:13px;font-weight:800;color:#5b2d8e;">Generated MIDP · ' + rows.length + ' containers</div>';
+  html += '<p class="section-sub">Engine output — not the imported plan. Workflow: WIP → Peer review → Shared → TTM approval → Published.</p>';
+  Object.keys(byRole).sort().forEach(function(ro){
+    const wf = dgeWorkflowRoles(ro);
+    html += '<div style="margin:10px 0 6px;font-size:12px;font-weight:800;">' + escapeHtml(ro) + ' · IA ' + escapeHtml(wf.author) + '</div>';
+    html += '<div style="overflow:auto;"><table class="data-table" style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr>';
+    ["Container","Form","Number","Description","Spatial","Package","IR","Status","Author"].forEach(function(h){
+      html += '<th style="text-align:left;padding:4px 6px;border-bottom:1px solid #e5e7eb;">' + h + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+    byRole[ro].forEach(function(r){
+      html += '<tr>';
+      html += '<td style="padding:3px 6px;">' + escapeHtml(r.container || "") + '</td>';
+      html += '<td style="padding:3px 6px;">' + escapeHtml(r.form || "") + '</td>';
+      html += '<td style="padding:3px 6px;" class="mono">' + escapeHtml(r.isoNumber || r.number || "") + '</td>';
+      html += '<td style="padding:3px 6px;">' + escapeHtml(r.description || "") + '</td>';
+      html += '<td style="padding:3px 6px;">' + escapeHtml(r.spatial || "") + '</td>';
+      html += '<td style="padding:3px 6px;">' + escapeHtml(r.packageTitle || "") + '</td>';
+      html += '<td style="padding:3px 6px;">' + escapeHtml(r.irLevel || "") + '</td>';
+      html += '<td style="padding:3px 6px;">' + escapeHtml(r.wfState || "WIP") + '</td>';
+      html += '<td style="padding:3px 6px;">' + escapeHtml(r.wfAuthor || wf.author) + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+  });
+  html += '</div>';
+  list.innerHTML = html;
+}
+
 function generate(){
-  const project = document.getElementById("project").value.toUpperCase();
-  const originator = document.getElementById("originator").value.toUpperCase();
-  const revision = document.getElementById("revision").value.toUpperCase() || "P01";
+  const live = (typeof projectById === "function") ? projectById(currentProjectId) : null;
+  const projectEl = document.getElementById("project");
+  const origEl = document.getElementById("originator");
+  const revEl = document.getElementById("revision");
+  const project = ((projectEl && projectEl.value) || (live && (live.projectNumber || live.code)) || "PRXXXX").toString().toUpperCase();
+  const originator = ((origEl && origEl.value) || (live && (live.originator || "ATA")) || "ATA").toString().toUpperCase();
+  const revision = ((revEl && revEl.value) || "P01").toString().toUpperCase() || "P01";
   const stage = state.stage, status = state.status;
   const date = state.stageDates[stage] || "";
 
@@ -4565,9 +4630,22 @@ function generate(){
     });
   });
 
+  newRows.forEach(function(r){
+    const wf = dgeWorkflowRoles(r.role);
+    r.wfState = r.wfState || "WIP";
+    r.wfAuthor = wf.author;
+    r.wfPeer = wf.peer;
+    r.wfTtim = wf.ttim;
+    r.wfTtm = wf.ttm;
+  });
   state.rows = state.rows.concat(newRows);
   state.filterStage = stage;
-  render();
+  if(live){
+    live.generatedMidp = state.rows.slice();
+    try { persistMidpToProject(); } catch(e){}
+    try { if(typeof saveProjects === "function") saveProjects(); else if(typeof saveData === "function") saveData(); } catch(e){}
+  }
+  if(typeof render === "function") render();
 }
 
 function clearAll(){
@@ -7665,6 +7743,10 @@ function renderAccDocsTracking(project){
   const filters = document.getElementById("midp-docs-filters");
   const summary = document.getElementById("midp-docs-summary");
   if(!list) return;
+  if((window.__docsViewTab || "") === "generated"){
+    if(typeof renderGeneratedMidpTab === "function") renderGeneratedMidpTab(project, list);
+    return;
+  }
   // Hydrate ACC cache from IndexedDB if memory empty
   if(project && (!project.accDeliverablesCache || !project.accDeliverablesCache.length)){
     ensureAccCacheLoaded(project).then(files => {
@@ -14751,7 +14833,7 @@ function renderScopeWizard(project){
     try { if(typeof persistMidpToProject === "function") persistMidpToProject(); } catch(e){}
     try { if(typeof saveProjects === "function") saveProjects(); else if(typeof saveData === "function") saveData(); } catch(e){}
     try { showToast("MIDP generated from project setup"); } catch(e){}
-    window.__psdView = "how";
+    window.__psdView = "how"; window.__docsViewTab = "generated";
     if(typeof renderMethodView === "function") renderMethodView(project);
   };
 }
