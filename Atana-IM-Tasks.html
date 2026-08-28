@@ -2397,8 +2397,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.39.0";
-const APP_BUILD = "2026-08-28-generated-midp-tab";
+const APP_VERSION = "3.39.1";
+const APP_BUILD = "2026-08-28-gen-midp-fix";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -4486,17 +4486,17 @@ function toggleTemplate(role, desc){
   render();
 }
 
-function getNumber(roleCode, series, templateIdx, functional, spatial, form, desc){
-  // Stable number for same template + attributes when regenerating
-  const regKey = [roleCode, templateIdx, functional, spatial, form || "", String(desc||"")].join("|");
+function getNumber(roleCode, series, templateIdx, functional, spatial, form, desc, originator){
+  const orig = String(originator || (typeof document !== "undefined" && document.getElementById("originator") && document.getElementById("originator").value) || "ATA").toUpperCase();
+  const regKey = [orig, roleCode, templateIdx, functional, spatial, form || "", String(desc||"")].join("|");
   if(state.numberRegistry[regKey]) return state.numberRegistry[regKey];
   const project = (typeof projectById === "function" && typeof currentProjectId !== "undefined") ? projectById(currentProjectId) : null;
   const cat = (window.__midpCatalogDraft) || (project && project.midpCatalog) || (typeof defaultMidpCatalog==="function" ? defaultMidpCatalog() : {});
   const band = resolveDocumentSeries(desc, form, series);
   const start = documentSeriesStart(band, cat);
   const step = documentSeriesStep(band, cat);
-  // Continue sequence within role + series band (do NOT restart when functional/spatial changes)
-  const counterKey = [roleCode, band, form || ""].join("|");
+  // Restart sequence when originator, discipline, functional, spatial or form changes
+  const counterKey = [orig, roleCode, functional || "", spatial || "", form || "", band].join("|");
   if(!(counterKey in state.numberCounters)) state.numberCounters[counterKey] = start;
   else state.numberCounters[counterKey] = Number(state.numberCounters[counterKey]) + step;
   const num = String(state.numberCounters[counterKey]).padStart(4,"0");
@@ -4516,52 +4516,93 @@ function dgeWorkflowRoles(roleCode){
 }
 function renderGeneratedMidpTab(project, list){
   if(!list) return;
-  const rows = (project && project.generatedMidp && project.generatedMidp.length)
+  try { bindDocsViewTabs(project); } catch(e){}
+  const rowsAll = (project && project.generatedMidp && project.generatedMidp.length)
     ? project.generatedMidp
     : ((typeof state !== "undefined" && state.rows) ? state.rows : []);
-  if(!rows.length){
-    list.innerHTML = '<div class="card" style="padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.08);"><p class="section-sub">No generated MIDP yet. Use <strong>How Atana Works → Project setup</strong> or the MIDP Generator, then return here.</p><button type="button" class="btn btn-gold btn-xs" id="genMidpNow">Generate now</button></div>';
+  const removed = (project && project.generatedRemoved) ? project.generatedRemoved : {};
+  if(!window.__genMidpOpen) window.__genMidpOpen = {};
+  if(!rowsAll.length){
+    list.innerHTML = '<div class="card" style="padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.08);"><p class="section-sub">No generated MIDP yet. Use Project setup or Generate now.</p><button type="button" class="btn btn-gold btn-xs" id="genMidpNow">Generate now</button></div>';
     const b = document.getElementById("genMidpNow");
     if(b) b.onclick = function(){
-      try { if(typeof generate === "function") generate(); } catch(e){ console.warn(e); }
-      try { if(typeof persistMidpToProject === "function") persistMidpToProject(); } catch(e){}
+      try { if(typeof generate === "function") generate(); } catch(err){ console.warn(err); }
+      try { if(typeof persistMidpToProject === "function") persistMidpToProject(); } catch(err){}
       renderGeneratedMidpTab(projectById(currentProjectId) || project, list);
     };
     return;
   }
   const byRole = {};
-  rows.forEach(function(r){
+  rowsAll.forEach(function(r){
     const k = r.role || r.taskTeam || "ZZ";
     if(!byRole[k]) byRole[k] = [];
     byRole[k].push(r);
   });
-  let html = '<div class="card" style="padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);"><div style="font-size:13px;font-weight:800;color:#5b2d8e;">Generated MIDP · ' + rows.length + ' containers</div>';
-  html += '<p class="section-sub">Engine output — not the imported plan. Workflow: WIP → Peer review → Shared → TTM approval → Published.</p>';
-  Object.keys(byRole).sort().forEach(function(ro){
+  const roles = Object.keys(byRole).sort();
+  if(!Object.keys(window.__genMidpOpen).length) window.__genMidpOpen[roles[0]] = true;
+  let html = '<div class="card" style="padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div style="font-size:13px;font-weight:800;color:#5b2d8e;">Generated MIDP · ' + rowsAll.length + ' containers</div>';
+  html += '<p class="section-sub">Tick to keep. Untick removes from this generated plan (does not change imported plan). Sequence restarts per originator + FB + spatial + form + discipline.</p>';
+  html += '<div style="margin-bottom:8px;"><button type="button" class="btn btn-ghost btn-xs" id="genCollapseAll">Collapse all</button> <button type="button" class="btn btn-ghost btn-xs" id="genExpandAll">Expand all</button> <button type="button" class="btn btn-gold btn-xs" id="genMidpNow">Re-generate</button></div>';
+  roles.forEach(function(ro){
     const wf = dgeWorkflowRoles(ro);
-    html += '<div style="margin:10px 0 6px;font-size:12px;font-weight:800;">' + escapeHtml(ro) + ' · IA ' + escapeHtml(wf.author) + '</div>';
-    html += '<div style="overflow:auto;"><table class="data-table" style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr>';
-    ["Container","Form","Number","Description","Spatial","Package","IR","Status","Author"].forEach(function(h){
-      html += '<th style="text-align:left;padding:4px 6px;border-bottom:1px solid #e5e7eb;">' + h + '</th>';
-    });
-    html += '</tr></thead><tbody>';
-    byRole[ro].forEach(function(r){
-      html += '<tr>';
-      html += '<td style="padding:3px 6px;">' + escapeHtml(r.container || "") + '</td>';
-      html += '<td style="padding:3px 6px;">' + escapeHtml(r.form || "") + '</td>';
-      html += '<td style="padding:3px 6px;" class="mono">' + escapeHtml(r.isoNumber || r.number || "") + '</td>';
-      html += '<td style="padding:3px 6px;">' + escapeHtml(r.description || "") + '</td>';
-      html += '<td style="padding:3px 6px;">' + escapeHtml(r.spatial || "") + '</td>';
-      html += '<td style="padding:3px 6px;">' + escapeHtml(r.packageTitle || "") + '</td>';
-      html += '<td style="padding:3px 6px;">' + escapeHtml(r.irLevel || "") + '</td>';
-      html += '<td style="padding:3px 6px;">' + escapeHtml(r.wfState || "WIP") + '</td>';
-      html += '<td style="padding:3px 6px;">' + escapeHtml(r.wfAuthor || wf.author) + '</td>';
-      html += '</tr>';
-    });
-    html += '</tbody></table></div>';
+    const open = !!window.__genMidpOpen[ro];
+    const live = byRole[ro].filter(function(r){ return !removed[r.isoNumber || r.description]; });
+    html += '<div class="border-frame" style="margin:8px 0;padding:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+    html += '<button type="button" class="btn btn-ghost btn-xs gen-tt-toggle" data-ro="' + escapeHtml(ro) + '" style="width:100%;text-align:left;font-weight:800;">' + (open ? "▾ " : "▸ ") + escapeHtml(ro) + " · " + live.length + " / " + byRole[ro].length + " · " + escapeHtml(wf.author) + '</button>';
+    if(open){
+      html += '<div style="overflow:auto;margin-top:6px;"><table class="data-table" style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr>';
+      ["Keep","Container","Form","Number","Description","FB","Spatial","Package","IR"].forEach(function(h){
+        html += '<th style="text-align:left;padding:4px 6px;border-bottom:1px solid #e5e7eb;">' + h + '</th>';
+      });
+      html += '</tr></thead><tbody>';
+      byRole[ro].forEach(function(r){
+        const key = r.isoNumber || (r.role + "|" + r.description + "|" + r.spatial);
+        const on = !removed[key] && !removed[r.isoNumber];
+        html += '<tr style="' + (on ? "" : "opacity:.45;") + '">';
+        html += '<td style="padding:3px 6px;"><input type="checkbox" class="gen-keep" data-key="' + escapeHtml(key) + '" ' + (on ? "checked" : "") + '></td>';
+        html += '<td style="padding:3px 6px;">' + escapeHtml(r.container || "") + '</td>';
+        html += '<td style="padding:3px 6px;">' + escapeHtml(r.form || "") + '</td>';
+        html += '<td style="padding:3px 6px;" class="mono">' + escapeHtml(r.isoNumber || r.number || "") + '</td>';
+        html += '<td style="padding:3px 6px;">' + escapeHtml(r.description || "") + '</td>';
+        html += '<td style="padding:3px 6px;">' + escapeHtml(r.functional || "") + '</td>';
+        html += '<td style="padding:3px 6px;">' + escapeHtml(r.spatial || "") + '</td>';
+        html += '<td style="padding:3px 6px;">' + escapeHtml(r.packageTitle || "") + '</td>';
+        html += '<td style="padding:3px 6px;">' + escapeHtml(r.irLevel || "") + '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+    html += '</div>';
   });
   html += '</div>';
   list.innerHTML = html;
+  list.querySelectorAll(".gen-tt-toggle").forEach(function(btn){
+    btn.onclick = function(){
+      const ro = btn.getAttribute("data-ro");
+      window.__genMidpOpen[ro] = !window.__genMidpOpen[ro];
+      renderGeneratedMidpTab(project, list);
+    };
+  });
+  list.querySelectorAll(".gen-keep").forEach(function(cb){
+    cb.onchange = function(){
+      const p = projectById(currentProjectId) || project;
+      if(!p.generatedRemoved) p.generatedRemoved = {};
+      const key = cb.getAttribute("data-key");
+      if(cb.checked) delete p.generatedRemoved[key];
+      else p.generatedRemoved[key] = true;
+      try { if(typeof saveProjects === "function") saveProjects(); else if(typeof saveData === "function") saveData(); } catch(e){}
+    };
+  });
+  const ca = document.getElementById("genCollapseAll");
+  if(ca) ca.onclick = function(){ roles.forEach(function(r){ window.__genMidpOpen[r] = false; }); renderGeneratedMidpTab(project, list); };
+  const ea = document.getElementById("genExpandAll");
+  if(ea) ea.onclick = function(){ roles.forEach(function(r){ window.__genMidpOpen[r] = true; }); renderGeneratedMidpTab(project, list); };
+  const gn = document.getElementById("genMidpNow");
+  if(gn) gn.onclick = function(){
+    try { if(typeof generate === "function"){ state.numberRegistry = {}; state.numberCounters = {}; generate(); } } catch(e){ console.warn(e); }
+    renderGeneratedMidpTab(projectById(currentProjectId) || project, list);
+  };
 }
 
 function generate(){
@@ -4600,7 +4641,7 @@ function generate(){
             const description = (typeof dgeExpandDesc === "function")
               ? dgeExpandDesc(t.desc, lvl.label, stage, t.system, t.asset)
               : t.desc.replace("{LEVEL}", lvl.label).replace("{STAGE}", stage);
-            const number = getNumber(role.code, t.series, tIdx, func.code, lvl.code, t.form, description);
+            const number = getNumber(role.code, t.series, tIdx, func.code, lvl.code, t.form, description, originator);
             const _ord = (typeof getNamingOrder === "function") ? getNamingOrder(projectById(currentProjectId)||{}) : null;
             const _map = { project, originator, func: func.code, spatial: lvl.code, form: t.form, role: role.code, number };
             const isoNumber = _ord && _ord.length ? _ord.map(k => _map[k]).join("-") : `${project}-${originator}-${func.code}-${lvl.code}-${t.form}-${role.code}-${number}`;
@@ -4617,7 +4658,7 @@ function generate(){
           const description = (typeof dgeExpandDesc === "function")
             ? dgeExpandDesc(t.desc, spatialLabel, stage, t.system, t.asset)
             : t.desc.replace("{STAGE}", stage);
-          const number = getNumber(role.code, t.series, tIdx, func.code, spatial, t.form, description);
+          const number = getNumber(role.code, t.series, tIdx, func.code, spatial, t.form, description, originator);
           const _ord2 = (typeof getNamingOrder === "function") ? getNamingOrder(projectById(currentProjectId)||{}) : null;
           const _map2 = { project, originator, func: func.code, spatial, form: t.form, role: role.code, number };
           const isoNumber = _ord2 && _ord2.length ? _ord2.map(k => _map2[k]).join("-") : `${project}-${originator}-${func.code}-${spatial}-${t.form}-${role.code}-${number}`;
@@ -7743,6 +7784,7 @@ function renderAccDocsTracking(project){
   const filters = document.getElementById("midp-docs-filters");
   const summary = document.getElementById("midp-docs-summary");
   if(!list) return;
+  try { bindDocsViewTabs(project); } catch(e){}
   if((window.__docsViewTab || "") === "generated"){
     if(typeof renderGeneratedMidpTab === "function") renderGeneratedMidpTab(project, list);
     return;
