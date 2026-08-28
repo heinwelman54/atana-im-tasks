@@ -2075,7 +2075,7 @@
         <div id="toolsub-gen">
 <div id="midp-sub-gen">
           <div class="midp-title">MIDP Generator</div>
-          <div class="midp-sub">Master Information Delivery Plan · linked to this project. Catalogue fields are set under <strong>Edit project</strong>.</div>
+          <div class="midp-sub">DGE v1 · titles use project Spatial Breakdown labels and document series. Systems come from production packages when present, otherwise discipline defaults. Catalogue under <strong>Edit project</strong>.</div>
 
           <div class="midp-link-banner">
             <p><strong>MIDP Tool</strong> — register is stored on this project. Project code, originator, functional / spatial codes and disciplines are managed in Edit project; here you only select which are active for generation.</p>
@@ -2395,8 +2395,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.31.1";
-const APP_BUILD = "2026-08-27-mywork-roles";
+const APP_VERSION = "3.32.0";
+const APP_BUILD = "2026-08-28-dge-v1";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -2986,11 +2986,329 @@ function documentSeriesStep(seriesCode, catalog){
 }
 
 const DEFAULT_ROLES = [
-  ["ST","Structural"], ["AR","Architecture"], ["EE","Electrical"], ["CV","Civil"], ["YS","Security Specialist"],
-  ["FP","Fire Protection"], ["PE","Process Engineer"], ["ME","Mechanical"], ["PD","Public Health"], ["FD","Fire Detection"],
-  ["YC","Data Centre Systems"],
+  ["AR","Architecture"], ["ID","Interior Design"],
+  ["ST","Structural"],
+  ["ME","Mechanical"], ["EE","Electrical"], ["HE","Hydraulic"], ["PD","Public Health"],
+  ["FD","Fire Detection"], ["FP","Fire Protection"], ["YS","Security Specialist"],
+  ["CV","Civil"], ["CW","Civil Water"], ["HD","Drainage"], ["LA","Landscaping"], ["HB","Bridges"],
+  ["EV","Environmental"], ["PE","Process Engineer"], ["YC","Controls Engineer"],
   ["IM","Information Management"], ["ZZ","General / Multi-Disciplinary"],
 ];
+
+/* ===================== ATANA DGE v1 — Deliverable Generation Engine ===================== */
+const DGE_VERSION = "1.0";
+const DGE_DISCIPLINES = {
+  AR: { name: "ARCHITECTURE", driver: "spatial", uses: "space" },
+  ID: { name: "INTERIOR DESIGN", driver: "spatial", uses: "space" },
+  ST: { name: "STRUCTURAL", driver: "spatial", uses: "asset" },
+  EE: { name: "ELECTRICAL", driver: "system", uses: "system" },
+  ME: { name: "MECHANICAL", driver: "system", uses: "system" },
+  HE: { name: "HYDRAULIC", driver: "system", uses: "system" },
+  PD: { name: "PUBLIC HEALTH", driver: "system", uses: "system" },
+  FD: { name: "FIRE DETECTION", driver: "system", uses: "system" },
+  FP: { name: "FIRE PROTECTION", driver: "system", uses: "system" },
+  YS: { name: "SECURITY SPECIALIST", driver: "system", uses: "system" },
+  CV: { name: "CIVIL", driver: "site", uses: "asset" },
+  CW: { name: "CIVIL WATER", driver: "site", uses: "asset" },
+  HD: { name: "DRAINAGE", driver: "site", uses: "asset" },
+  LA: { name: "LANDSCAPING", driver: "site", uses: "asset" },
+  HB: { name: "BRIDGES", driver: "site", uses: "asset" },
+  EV: { name: "ENVIRONMENTAL", driver: "document", uses: "document" },
+  PE: { name: "PROCESS ENGINEER", driver: "document", uses: "document" },
+  YC: { name: "CONTROLS ENGINEER", driver: "document", uses: "document" },
+  IM: { name: "INFORMATION MANAGEMENT", driver: "document", uses: "document" },
+  ZZ: { name: "GENERAL / MULTI-DISCIPLINARY", driver: "document", uses: "document" }
+};
+const DGE_TYPE_FORM = {
+  PLAN: { form: "DR", series: 1000 },
+  LAYOUT: { form: "DR", series: 1000 },
+  ELEVATION: { form: "DR", series: 2000 },
+  SECTION: { form: "DR", series: 3000 },
+  DETAIL: { form: "DR", series: 4000 },
+  SCHEDULE: { form: "SH", series: 5000 },
+  SCHEMATIC: { form: "SC", series: 6000 },
+  REPORT: { form: "RP", series: 0 },
+  CALCULATION: { form: "RP", series: 0 },
+  SPECIFICATION: { form: "SP", series: 0 },
+  "DATA SHEET": { form: "DS", series: 0 },
+  MATRIX: { form: "RG", series: 0 },
+  REGISTER: { form: "RG", series: 0 }
+};
+const DGE_DEFAULT_SYSTEMS = {
+  ME: ["HVAC"],
+  EE: ["LIGHTING", "POWER", "WIREWAYS"],
+  FD: ["FIRE DETECTION", "FIRE ALARM"],
+  FP: ["FIRE PROTECTION", "FIRE WATER RETICULATION"],
+  YS: ["CCTV", "ACCESS CONTROL"],
+  HE: ["WATER RETICULATION", "SOIL AND WASTE", "HOT WATER"],
+  PD: ["WATER RETICULATION", "SOIL AND WASTE", "HOT WATER"]
+};
+const DGE_DEFAULT_ASSETS = {
+  ST: ["CONCRETE", "FOUNDATION", "STRUCTURAL STEEL", "STAIR", "PLATFORM"],
+  CV: ["ROAD", "STORMWATER"],
+  CW: ["WATER RETICULATION", "BULK WATER", "WATER STORAGE", "PUMP STATION"],
+  HD: ["STORMWATER", "SEWER", "UNDERGROUND DRAINAGE", "ATTENUATION"],
+  LA: ["LANDSCAPE"],
+  HB: ["BRIDGE"]
+};
+const DGE_OPTIONAL = {
+  FD: ["VESDA", "ASPIRATING DETECTION", "BEAM DETECTION"]
+};
+const DGE_SS_SYSTEM = [
+  { re: /60_40|HVAC|COOLING|HEATING|VENTIL/i, system: "HVAC", role: "ME" },
+  { re: /70_80|LIGHT/i, system: "LIGHTING", role: "EE" },
+  { re: /70_10|POWER/i, system: "POWER", role: "EE" },
+  { re: /70_30|WIREWAY|CABLE/i, system: "WIREWAYS", role: "EE" },
+  { re: /75_30|FIRE DET/i, system: "FIRE DETECTION", role: "FD" },
+  { re: /55_70_30|SPRINK|FIRE PROT/i, system: "FIRE PROTECTION", role: "FP" },
+  { re: /75_50|CCTV/i, system: "CCTV", role: "YS" },
+  { re: /75_40|ACCESS/i, system: "ACCESS CONTROL", role: "YS" },
+  { re: /55_20|WATER SUPPLY/i, system: "WATER RETICULATION", role: "HE" },
+  { re: /55_30|DRAIN/i, system: "SOIL AND WASTE", role: "HE" },
+  { re: /50_30|STORM/i, system: "STORMWATER", role: "HD" }
+];
+
+function normalizeDgeState(src){
+  const s = src && typeof src === "object" ? src : {};
+  return {
+    engine: s.engine !== false,
+    systems: (s.systems && typeof s.systems === "object") ? s.systems : {},
+    assets: (s.assets && typeof s.assets === "object") ? s.assets : {},
+    optional: (s.optional && typeof s.optional === "object") ? s.optional : {}
+  };
+}
+function dgeItem(type, opts){
+  opts = opts || {};
+  const meta = DGE_TYPE_FORM[type] || DGE_TYPE_FORM.LAYOUT;
+  return {
+    form: opts.form || meta.form,
+    series: opts.series != null ? opts.series : meta.series,
+    scope: opts.scope || "general",
+    desc: opts.desc,
+    type: type,
+    system: opts.system || "",
+    asset: opts.asset || "",
+    optional: !!opts.optional
+  };
+}
+function dgeTitle(driver, subject, deliverable, withSpatial){
+  const sub = String(subject || "").toUpperCase().trim();
+  const del = String(deliverable || "").toUpperCase().trim();
+  if(driver === "spatial") return withSpatial ? ("{SPATIAL} " + del) : del;
+  if(driver === "system" || driver === "site"){
+    if(withSpatial) return sub + " " + del + " - {SPATIAL}";
+    return sub + " " + del;
+  }
+  return (sub + " " + del).trim();
+}
+function dgeSystemsForRole(project, role){
+  const dge = normalizeDgeState(project && project.dge);
+  if(Array.isArray(dge.systems[role]) && dge.systems[role].length){
+    return dge.systems[role].map(function(x){ return String(x).toUpperCase(); });
+  }
+  const found = [];
+  const packs = (project && project.production && project.production.packages) || [];
+  packs.forEach(function(p){
+    const ss = String(p.ss || p.name || "");
+    DGE_SS_SYSTEM.forEach(function(m){
+      if(m.role === role && m.re.test(ss) && found.indexOf(m.system) < 0) found.push(m.system);
+    });
+    if(String(p.ro || "").toUpperCase() === role && p.name){
+      const n = String(p.name).toUpperCase().replace(/\s+SYSTEMS?$/,"").trim();
+      if(n && found.indexOf(n) < 0) found.push(n);
+    }
+  });
+  if(found.length) return found;
+  return (DGE_DEFAULT_SYSTEMS[role] || []).slice();
+}
+function dgeAssetsForRole(project, role){
+  const dge = normalizeDgeState(project && project.dge);
+  if(Array.isArray(dge.assets[role]) && dge.assets[role].length){
+    return dge.assets[role].map(function(x){ return String(x).toUpperCase(); });
+  }
+  return (DGE_DEFAULT_ASSETS[role] || []).slice();
+}
+function dgeOptionalOn(project, role, name){
+  const dge = normalizeDgeState(project && project.dge);
+  const bag = dge.optional[role] || {};
+  return !!(bag[name] || bag[String(name).toUpperCase()]);
+}
+function dgeBuildTemplates(project, roleCode){
+  const role = String(roleCode || "").toUpperCase();
+  const spec = DGE_DISCIPLINES[role];
+  const out = [];
+  function add(type, opts){
+    const row = dgeItem(type, opts);
+    if(row.desc) out.push(row);
+  }
+  if(!spec){
+    return ((typeof TEMPLATES !== "undefined" && TEMPLATES[role]) || []).slice();
+  }
+
+  if(role === "AR" || role === "ID"){
+    ["PLAN","CEILING PLAN","FLOOR FINISHES PLAN","OVERALL GA PLAN"].forEach(function(d){
+      add("PLAN", { scope: "level", desc: dgeTitle("spatial", "", d, true) });
+    });
+    add("ELEVATION", { scope: "general", desc: "ELEVATIONS" });
+    add("SECTION", { scope: "general", desc: "SECTIONS" });
+    add("DETAIL", { scope: "general", desc: "TYPICAL DETAILS" });
+    add("SCHEDULE", { scope: "general", desc: "DOOR SCHEDULE" });
+    add("SCHEDULE", { scope: "general", desc: "WINDOW SCHEDULE" });
+    add("SCHEDULE", { scope: "general", desc: "FINISH SCHEDULE" });
+    if(role === "AR") add("SCHEDULE", { scope: "general", desc: "SANWARE SCHEDULE" });
+  }
+
+  if(role === "ST"){
+    const assets = dgeAssetsForRole(project, "ST");
+    if(assets.indexOf("CONCRETE") >= 0){
+      add("LAYOUT", { scope: "level", desc: dgeTitle("spatial", "", "CONCRETE LAYOUT", true), asset: "CONCRETE" });
+      add("LAYOUT", { scope: "level", desc: dgeTitle("spatial", "", "REINFORCEMENT LAYOUT", true), asset: "CONCRETE", series: 5000, form: "DR" });
+    }
+    if(assets.indexOf("FOUNDATION") >= 0){
+      add("LAYOUT", { scope: "general", desc: "FOUNDATION LAYOUT", asset: "FOUNDATION" });
+      add("DETAIL", { scope: "general", desc: "FOUNDATION DETAILS", asset: "FOUNDATION" });
+      add("LAYOUT", { scope: "general", desc: "FOUNDATION REINFORCEMENT", asset: "FOUNDATION", series: 5000 });
+    }
+    if(assets.indexOf("STRUCTURAL STEEL") >= 0){
+      add("LAYOUT", { scope: "level", desc: dgeTitle("spatial", "", "STRUCTURAL STEEL LAYOUT", true), asset: "STRUCTURAL STEEL" });
+      add("SECTION", { scope: "general", desc: "STRUCTURAL STEEL SECTIONS", asset: "STRUCTURAL STEEL" });
+      add("DETAIL", { scope: "general", desc: "STRUCTURAL STEEL DETAILS", asset: "STRUCTURAL STEEL" });
+      add("SCHEDULE", { scope: "general", desc: "STRUCTURAL STEEL SCHEDULE", asset: "STRUCTURAL STEEL" });
+    }
+    if(assets.indexOf("STAIR") >= 0){
+      add("LAYOUT", { scope: "level", desc: dgeTitle("spatial", "", "STAIR LAYOUT", true), asset: "STAIR" });
+      add("SECTION", { scope: "level", desc: dgeTitle("spatial", "", "STAIR SECTIONS", true), asset: "STAIR" });
+      add("DETAIL", { scope: "level", desc: dgeTitle("spatial", "", "STAIR DETAILS", true), asset: "STAIR" });
+    }
+    if(assets.indexOf("PLATFORM") >= 0){
+      add("LAYOUT", { scope: "level", desc: dgeTitle("spatial", "", "PLATFORM LAYOUT", true), asset: "PLATFORM" });
+      add("SECTION", { scope: "level", desc: dgeTitle("spatial", "", "PLATFORM SECTIONS", true), asset: "PLATFORM" });
+      add("DETAIL", { scope: "level", desc: dgeTitle("spatial", "", "PLATFORM DETAILS", true), asset: "PLATFORM" });
+    }
+  }
+
+  if(role === "ME"){
+    dgeSystemsForRole(project, "ME").forEach(function(sys){
+      add("LAYOUT", { scope: "level", desc: dgeTitle("system", sys, "LAYOUT", true), system: sys });
+      add("LAYOUT", { scope: "level", desc: dgeTitle("system", sys, "BUILDERS WORKS", true), system: sys });
+      add("SCHEMATIC", { scope: "general", desc: dgeTitle("system", sys, "SCHEMATIC", false), system: sys });
+      add("CALCULATION", { scope: "general", desc: dgeTitle("system", sys, "CALCULATIONS", false), system: sys });
+    });
+  }
+  if(role === "EE"){
+    dgeSystemsForRole(project, "EE").forEach(function(sys){
+      add("LAYOUT", { scope: "level", desc: dgeTitle("system", sys, "LAYOUT", true), system: sys });
+    });
+    add("SCHEMATIC", { scope: "general", desc: "SLD" });
+    add("SCHEDULE", { scope: "general", desc: "PANEL SCHEDULES" });
+  }
+  if(role === "FD"){
+    dgeSystemsForRole(project, "FD").forEach(function(sys){
+      add("LAYOUT", { scope: "level", desc: dgeTitle("system", sys, "LAYOUT", true), system: sys });
+    });
+    add("SCHEMATIC", { scope: "general", desc: "FIRE DETECTION RISER DIAGRAM" });
+    add("MATRIX", { scope: "general", desc: "CAUSE AND EFFECT MATRIX" });
+    (DGE_OPTIONAL.FD || []).forEach(function(opt){
+      if(dgeOptionalOn(project, "FD", opt)){
+        add("LAYOUT", { scope: "level", desc: dgeTitle("system", opt, "LAYOUT", true), system: opt, optional: true });
+      }
+    });
+  }
+  if(role === "FP"){
+    add("LAYOUT", { scope: "level", desc: dgeTitle("system", "FIRE PROTECTION", "LAYOUT", true), system: "FIRE PROTECTION" });
+    add("LAYOUT", { scope: "general", desc: "FIRE WATER RETICULATION", system: "FIRE WATER RETICULATION" });
+    add("CALCULATION", { scope: "general", desc: "FIRE HYDRAULIC CALCULATIONS" });
+  }
+  if(role === "YS"){
+    dgeSystemsForRole(project, "YS").forEach(function(sys){
+      add("LAYOUT", { scope: "level", desc: dgeTitle("system", sys, "LAYOUT", true), system: sys });
+    });
+    add("SCHEMATIC", { scope: "general", desc: "SECURITY RISER DIAGRAM" });
+    add("SCHEDULE", { scope: "general", desc: "DEVICE SCHEDULES" });
+  }
+  if(role === "HE" || role === "PD"){
+    dgeSystemsForRole(project, role === "PD" ? "PD" : "HE").forEach(function(sys){
+      add("LAYOUT", { scope: "level", desc: dgeTitle("system", sys, "LAYOUT", true), system: sys });
+    });
+    add("SCHEMATIC", { scope: "general", desc: "HYDRAULIC RISER DIAGRAM" });
+  }
+
+  function siteAssetPack(roleKey, extra){
+    dgeAssetsForRole(project, roleKey).forEach(function(asset){
+      add("LAYOUT", { scope: "level", desc: dgeTitle("site", asset, "LAYOUT", true), asset: asset });
+    });
+    (extra || []).forEach(function(row){ add(row[0], row[1]); });
+  }
+  if(role === "CV") siteAssetPack("CV", []);
+  if(role === "LA") siteAssetPack("LA", []);
+  if(role === "HB"){
+    siteAssetPack("HB", [
+      ["SECTION", { scope: "general", desc: "BRIDGE SECTIONS", asset: "BRIDGE" }],
+      ["DETAIL", { scope: "general", desc: "BRIDGE DETAILS", asset: "BRIDGE" }]
+    ]);
+  }
+  if(role === "CW"){
+    siteAssetPack("CW", [
+      ["SECTION", { scope: "general", desc: "LONGITUDINAL SECTIONS" }],
+      ["SCHEDULE", { scope: "general", desc: "MANHOLE SCHEDULES" }]
+    ]);
+  }
+  if(role === "HD"){
+    siteAssetPack("HD", [
+      ["SECTION", { scope: "general", desc: "LONGITUDINAL SECTIONS" }],
+      ["SCHEDULE", { scope: "general", desc: "MANHOLE SCHEDULES" }]
+    ]);
+  }
+
+  if(role === "EV"){
+    ["ENVIRONMENTAL MANAGEMENT PLAN","REHABILITATION PLAN","WASTE MANAGEMENT PLAN","MONITORING PLAN"].forEach(function(t){
+      add("REPORT", { scope: "general", desc: t });
+    });
+    add("REGISTER", { scope: "general", desc: "COMPLIANCE REGISTER" });
+  }
+  if(role === "PE"){
+    add("SCHEMATIC", { scope: "general", desc: "PFD" });
+    add("SCHEMATIC", { scope: "general", desc: "P&ID" });
+    add("REPORT", { scope: "general", desc: "PROCESS DESIGN REPORT" });
+    add("SPECIFICATION", { scope: "general", desc: "PROCESS DESIGN CRITERIA" });
+    add("SCHEDULE", { scope: "general", desc: "EQUIPMENT LIST" });
+    add("SCHEDULE", { scope: "general", desc: "VALVE LIST" });
+    add("SCHEDULE", { scope: "general", desc: "LINE LIST" });
+  }
+  if(role === "YC"){
+    add("REPORT", { scope: "general", desc: "CONTROL PHILOSOPHY" });
+    add("SPECIFICATION", { scope: "general", desc: "FUNCTIONAL DESIGN SPECIFICATION" });
+    add("SCHEMATIC", { scope: "general", desc: "PLC ARCHITECTURE" });
+    add("SCHEMATIC", { scope: "general", desc: "SCADA ARCHITECTURE" });
+    add("SCHEDULE", { scope: "general", desc: "I/O SCHEDULE" });
+    add("SCHEMATIC", { scope: "general", desc: "LOOP DIAGRAM" });
+    add("MATRIX", { scope: "general", desc: "CAUSE AND EFFECT MATRIX" });
+  }
+  if(role === "IM"){
+    add("REPORT", { scope: "general", desc: "BIM EXECUTION PLAN", form: "MS" });
+  }
+  if(role === "ZZ"){
+    add("REPORT", { scope: "general", desc: "BASIS OF DESIGN", form: "PP" });
+    add("REGISTER", { scope: "general", desc: "DRAWING REGISTER" });
+    add("REGISTER", { scope: "general", desc: "{STAGE} COMMENTS TRACKER" });
+  }
+
+  if(!out.length && typeof TEMPLATES !== "undefined" && TEMPLATES[role]){
+    return TEMPLATES[role].slice();
+  }
+  return out;
+}
+function dgeExpandDesc(desc, spatialLabel, stageLabel, system, asset){
+  return String(desc || "")
+    .replace(/\{SPATIAL\}/g, spatialLabel || "")
+    .replace(/\{LEVEL\}/g, spatialLabel || "")
+    .replace(/\{STAGE\}/g, stageLabel || "")
+    .replace(/\{SYSTEM\}/g, system || "")
+    .replace(/\{ASSET\}/g, asset || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 
 const TEMPLATES = {
   ST: [
@@ -3452,8 +3770,12 @@ function generate(){
   const existingKeys = new Set(state.rows.map(r=>r.isoNumber+"|"+r.stage));
   const newRows = [];
 
+  const _dgeProject = (typeof projectById === "function") ? projectById(currentProjectId) : null;
+  const _dgeOn = !_dgeProject || normalizeDgeState(_dgeProject.dge).engine !== false;
   activeRoles.forEach(role => {
-    const baseTpl = TEMPLATES[role.code] || [];
+    const baseTpl = _dgeOn && typeof dgeBuildTemplates === "function"
+      ? dgeBuildTemplates(_dgeProject || {}, role.code)
+      : (TEMPLATES[role.code] || []);
     const customTpl = (projectById(currentProjectId)?.customTemplates && projectById(currentProjectId).customTemplates[role.code]) || [];
     const templates = baseTpl.concat(customTpl);
     templates.forEach((t, tIdx) => {
@@ -3461,7 +3783,9 @@ function generate(){
       selectedFunctionals.forEach(func => {
         if(t.scope === "level"){
           selectedLevels.forEach(lvl => {
-            const description = t.desc.replace("{LEVEL}", lvl.label).replace("{STAGE}", stage);
+            const description = (typeof dgeExpandDesc === "function")
+              ? dgeExpandDesc(t.desc, lvl.label, stage, t.system, t.asset)
+              : t.desc.replace("{LEVEL}", lvl.label).replace("{STAGE}", stage);
             const number = getNumber(role.code, t.series, tIdx, func.code, lvl.code, t.form, description);
             const _ord = (typeof getNamingOrder === "function") ? getNamingOrder(projectById(currentProjectId)||{}) : null;
             const _map = { project, originator, func: func.code, spatial: lvl.code, form: t.form, role: role.code, number };
@@ -3473,7 +3797,12 @@ function generate(){
           });
         } else {
           const spatial = t.scope === "site" ? "SI" : "XX";
-          const description = t.desc.replace("{STAGE}", stage);
+          const spatialLabel = t.scope === "site"
+            ? ((selectedLevels.filter(function(l){ return String(l.code).toUpperCase()==="SI"; })[0]||{}).label || "SITE")
+            : "";
+          const description = (typeof dgeExpandDesc === "function")
+            ? dgeExpandDesc(t.desc, spatialLabel, stage, t.system, t.asset)
+            : t.desc.replace("{STAGE}", stage);
           const number = getNumber(role.code, t.series, tIdx, func.code, spatial, t.form, description);
           const _ord2 = (typeof getNamingOrder === "function") ? getNamingOrder(projectById(currentProjectId)||{}) : null;
           const _map2 = { project, originator, func: func.code, spatial, form: t.form, role: role.code, number };
@@ -7690,6 +8019,7 @@ function normalizeProject(p){
     customTemplates: (p.customTemplates && typeof p.customTemplates === "object") ? p.customTemplates : {},
     originator: (p.originator || "ATA").toString().toUpperCase(),
     midpCatalog: normalizeMidpCatalog(p.midpCatalog || p.midp),
+    dge: (typeof normalizeDgeState === "function") ? normalizeDgeState(p.dge) : (p.dge || { engine: true }),
     midpStageDates: (p.midpStageDates && typeof p.midpStageDates === "object") ? p.midpStageDates : ((p.midp && p.midp.stageDates) || {}),
     midp: (p.midp && typeof p.midp === "object") ? p.midp : null,
     dpow: (p.dpow && typeof p.dpow === "object") ? p.dpow : null,
