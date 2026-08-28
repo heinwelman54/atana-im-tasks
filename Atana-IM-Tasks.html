@@ -2396,8 +2396,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.37.0";
-const APP_BUILD = "2026-08-28-containers";
+const APP_VERSION = "3.38.0";
+const APP_BUILD = "2026-08-28-ir-framework";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -3036,6 +3036,56 @@ const DGE_TYPE_CONTAINER = {
   SCHEDULE: "SCHEDULE", SCHEMATIC: "SCHEMATIC", REPORT: "REPORT", CALCULATION: "CALCULATION",
   SPECIFICATION: "SPECIFICATION", "DATA SHEET": "DATASHEET", MATRIX: "REGISTER", REGISTER: "REGISTER", MODEL: "MODEL"
 };
+
+const ATANA_IR_LEVELS = {
+  CONCEPT: { level: "L1", label: "Concept information" },
+  PRELIMINARY: { level: "L2", label: "Coordinated design information" },
+  DETAILED: { level: "L2", label: "Coordinated design information" },
+  TENDER: { level: "L2", label: "Coordinated design information" },
+  CONSTRUCTION: { level: "L3", label: "Construction information" },
+  "AS-BUILT": { level: "L4", label: "Asset information" }
+};
+const ATANA_IR_BY_TYPE = {
+  LAYOUT: {
+    CONCEPT: { geometry: ["SPACE RESERVATION"], data: [], documentation: ["DESIGN REPORT"] },
+    DETAILED: { geometry: ["EQUIPMENT LOCATION", "SIZING"], data: ["CAPACITY"], documentation: ["SPECIFICATION"] },
+    CONSTRUCTION: { geometry: ["INSTALLATION INFORMATION"], data: ["ASSET TAG"], documentation: ["DATA SHEETS"] },
+    "AS-BUILT": { geometry: ["AS-BUILT"], data: ["INSTALLED ASSET INFORMATION"], documentation: ["O&M MANUALS", "CERTIFICATES"] }
+  },
+  CALCULATION: {
+    DETAILED: { geometry: [], data: ["FLOW RATE", "CAPACITY"], documentation: ["CALCULATIONS"] },
+    TENDER: { geometry: [], data: ["CAPACITY"], documentation: ["CALCULATIONS"] }
+  },
+  SCHEDULE: {
+    DETAILED: { geometry: [], data: ["MANUFACTURER"], documentation: ["DEVICE SCHEDULE"] },
+    "AS-BUILT": { geometry: [], data: ["ASSET TAG", "MANUFACTURER"], documentation: ["COMMISSIONING RECORD"] }
+  },
+  REPORT: {
+    CONCEPT: { geometry: [], data: [], documentation: ["CONCEPT REPORT"] },
+    DETAILED: { geometry: [], data: [], documentation: ["DESIGN REPORT"] }
+  }
+};
+const ATANA_IR_SYSTEMS = {
+  HVAC: ["LAYOUT", "SCHEMATIC", "CALCULATION", "SPECIFICATION"],
+  "FIRE DETECTION": ["LAYOUT", "RISER", "MATRIX", "SCHEDULE", "COMMISSIONING"]
+};
+const ATANA_IR_ASSETS = {
+  AHU: ["MODEL", "LAYOUT", "DATA SHEET", "SPECIFICATION", "COMMISSIONING RECORD", "O&M"]
+};
+const ATANA_IR_SPACES = {
+  "MCC ROOM": ["ROOM DATA SHEET", "FINISHES", "EQUIPMENT ALLOCATIONS", "ACCESS REQUIREMENTS"]
+};
+function dgeIrLevel(gate){
+  const g = String(gate || "DETAILED").toUpperCase();
+  return ATANA_IR_LEVELS[g] || ATANA_IR_LEVELS.DETAILED;
+}
+function dgeIrForDeliverable(type, gate){
+  const t = String(type || "LAYOUT").toUpperCase();
+  const g = String(gate || "DETAILED").toUpperCase();
+  const byType = ATANA_IR_BY_TYPE[t] || ATANA_IR_BY_TYPE.LAYOUT;
+  return byType[g] || byType.DETAILED || { geometry: [], data: [], documentation: [] };
+}
+
 function dgeContainerCode(type, formHint){
   const t = String(type || "").toUpperCase();
   if(DGE_TYPE_CONTAINER[t]) return DGE_TYPE_CONTAINER[t];
@@ -3782,6 +3832,13 @@ function dgeFlattenPackageTemplates(project, roleCode, stageId, includeOptional)
       if(gate === "CONCEPT" && (item.type === "DETAIL" || /CONSTRUCTION|AS-BUILT|AS BUILT/i.test(item.desc||""))) return;
       item.genStatus = dgeGenerationStatus(project, item, roleCode);
       if(item.genStatus === "USER_REMOVED") return;
+      const ir = dgeIrForDeliverable(item.type, gate);
+      const irLv = dgeIrLevel(gate);
+      item.irLevel = irLv.level;
+      item.irLabel = irLv.label;
+      item.irGeometry = (ir.geometry || []).join("; ");
+      item.irData = (ir.data || []).join("; ");
+      item.irDocs = (ir.documentation || []).join("; ");
       const rec = dgeStageRecord(project, stageId || (project && project.currentStageId) || "S3") || {};
       out.push(Object.assign({}, item, {
         packageId: pkg.packageId,
@@ -4485,7 +4542,7 @@ function generate(){
             const key = isoNumber+"|"+stage;
             if(existingKeys.has(key)) return;
             existingKeys.add(key);
-            newRows.push({rowId: isoNumber+"|"+stage+"|"+Math.random().toString(36).slice(2,7), stage, role:role.code, form:t.form, number, status, revision, date, functional:func.code, spatial:lvl.code, description, isoNumber, container: t.container || dgeContainerCode(t.type, t.form), packageId: t.packageId || "", packageTitle: t.packageTitle || "", packageType: t.packageType || "", stageRule: t.stageRule || "", lod: t.lod || "", loi: t.loi || "", suitability: t.suitability || "", mandatory: !!t.mandatory, genStatus: t.genStatus || (t.mandatory ? "MANDATORY" : "OPTIONAL"), generatedBy: t.system || t.asset || t.packageTitle || role.code, triggeredBy: t.packageId || "", generatedFrom: (typeof lvl !== "undefined" && lvl && lvl.label) ? lvl.label : (spatial || ""), precedence: "SYSTEM"});
+            newRows.push({rowId: isoNumber+"|"+stage+"|"+Math.random().toString(36).slice(2,7), stage, role:role.code, form:t.form, number, status, revision, date, functional:func.code, spatial:lvl.code, description, isoNumber, container: t.container || dgeContainerCode(t.type, t.form), irLevel: t.irLevel || "", irLabel: t.irLabel || "", irGeometry: t.irGeometry || "", irData: t.irData || "", irDocs: t.irDocs || "", packageId: t.packageId || "", packageTitle: t.packageTitle || "", packageType: t.packageType || "", stageRule: t.stageRule || "", lod: t.lod || "", loi: t.loi || "", suitability: t.suitability || "", mandatory: !!t.mandatory, genStatus: t.genStatus || (t.mandatory ? "MANDATORY" : "OPTIONAL"), generatedBy: t.system || t.asset || t.packageTitle || role.code, triggeredBy: t.packageId || "", generatedFrom: (typeof lvl !== "undefined" && lvl && lvl.label) ? lvl.label : (spatial || ""), precedence: "SYSTEM"});
           });
         } else {
           const spatial = t.scope === "site" ? "SI" : "XX";
@@ -4502,7 +4559,7 @@ function generate(){
           const key = isoNumber+"|"+stage;
           if(existingKeys.has(key)) return;
           existingKeys.add(key);
-          newRows.push({rowId: isoNumber+"|"+stage+"|"+Math.random().toString(36).slice(2,7), stage, role:role.code, form:t.form, number, status, revision, date, functional:func.code, spatial, description, isoNumber, container: t.container || dgeContainerCode(t.type, t.form), packageId: t.packageId || "", packageTitle: t.packageTitle || "", packageType: t.packageType || "", stageRule: t.stageRule || "", lod: t.lod || "", loi: t.loi || "", suitability: t.suitability || "", mandatory: !!t.mandatory, genStatus: t.genStatus || (t.mandatory ? "MANDATORY" : "OPTIONAL"), generatedBy: t.system || t.asset || t.packageTitle || role.code, triggeredBy: t.packageId || "", generatedFrom: (typeof lvl !== "undefined" && lvl && lvl.label) ? lvl.label : (spatial || ""), precedence: "SYSTEM"});
+          newRows.push({rowId: isoNumber+"|"+stage+"|"+Math.random().toString(36).slice(2,7), stage, role:role.code, form:t.form, number, status, revision, date, functional:func.code, spatial, description, isoNumber, container: t.container || dgeContainerCode(t.type, t.form), irLevel: t.irLevel || "", irLabel: t.irLabel || "", irGeometry: t.irGeometry || "", irData: t.irData || "", irDocs: t.irDocs || "", packageId: t.packageId || "", packageTitle: t.packageTitle || "", packageType: t.packageType || "", stageRule: t.stageRule || "", lod: t.lod || "", loi: t.loi || "", suitability: t.suitability || "", mandatory: !!t.mandatory, genStatus: t.genStatus || (t.mandatory ? "MANDATORY" : "OPTIONAL"), generatedBy: t.system || t.asset || t.packageTitle || role.code, triggeredBy: t.packageId || "", generatedFrom: (typeof lvl !== "undefined" && lvl && lvl.label) ? lvl.label : (spatial || ""), precedence: "SYSTEM"});
         }
       });
     });

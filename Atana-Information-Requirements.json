@@ -1,0 +1,41 @@
+{
+  "title": "Atana Information Requirements Framework",
+  "version": "1.0",
+  "types": [
+    "GEOMETRY",
+    "DATA",
+    "DOCUMENTATION"
+  ],
+  "levels": {
+    "L1": "Concept information",
+    "L2": "Coordinated design information",
+    "L3": "Construction information",
+    "L4": "Asset information"
+  },
+  "example": {
+    "deliverable": "HVAC LAYOUT - GROUND FLOOR",
+    "CONCEPT": [
+      "SPACE RESERVATION"
+    ],
+    "DETAILED": [
+      "EQUIPMENT LOCATION",
+      "DUCT SIZING"
+    ],
+    "CONSTRUCTION": [
+      "INSTALLATION INFORMATION"
+    ],
+    "AS-BUILT": [
+      "INSTALLED ASSET INFORMATION"
+    ]
+  },
+  "asset": {
+    "AHU": [
+      "MODEL",
+      "LAYOUT",
+      "DATA SHEET",
+      "SPECIFICATION",
+      "COMMISSIONING",
+      "O&M"
+    ]
+  }
+}

@@ -601,3 +601,14 @@ CREATE TABLE IF NOT EXISTS DeliverableTypeMap (
   Deliverable_Type TEXT PRIMARY KEY,
   Container_Code TEXT REFERENCES InformationContainers(Container_Code)
 );
+
+CREATE TABLE IF NOT EXISTS InformationRequirements (
+  IR_ID TEXT PRIMARY KEY,
+  Object_Type TEXT,
+  Object_Name TEXT,
+  Gate TEXT,
+  IR_Level TEXT,
+  Geometry TEXT,
+  Data TEXT,
+  Documentation TEXT
+);
