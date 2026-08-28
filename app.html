@@ -2014,6 +2014,7 @@
             <div id="psdScopeDash"></div>
             <div id="methodHowRoot"></div>
             <div id="scopeWizardRoot" style="margin-top:12px;"></div>
+            <div id="govAdminRoot" style="margin-top:12px;"></div>
             <div id="verifyExchangeRootAlias"></div>
           </div>
         </div>
@@ -2395,8 +2396,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.35.0";
-const APP_BUILD = "2026-08-28-setup-wizard";
+const APP_VERSION = "3.36.0";
+const APP_BUILD = "2026-08-28-governance";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -3081,6 +3082,81 @@ function normalizeDgeState(src){
   };
 }
 const DGE_PRECEDENCE = ["USER", "ASSET", "PROJECT", "ORGANISATION", "SYSTEM"];
+
+const ATANA_ADMIN_LEVELS = {
+  SYSADMIN: { label: "System administrator", can: ["global-teams","global-models","global-rules","catalogues","versioning"] },
+  ORGADMIN: { label: "Organisation administrator", can: ["org-standards","numbering","naming","default-packages","discipline-config"] },
+  PROJECTADMIN: { label: "Project administrator", can: ["project-teams","project-numbering","project-stages","spatial","project-packages"] },
+  TTM: { label: "Task team manager", can: ["generated-deliverables","optional","assignments"] }
+};
+function govAdminLevel(project){
+  const role = String((typeof currentFuncRoleCode === "function") ? currentFuncRoleCode(project) : "IM").toUpperCase();
+  if(role === "SYSADMIN" || role === "PLATFORM") return "SYSADMIN";
+  if(role === "ORGADMIN") return "ORGADMIN";
+  if(role === "IM" || role === "DTL" || role === "PDM") return "PROJECTADMIN";
+  if(role === "TTM") return "TTM";
+  return "TTM";
+}
+function govCan(project, action){
+  const level = govAdminLevel(project);
+  const spec = ATANA_ADMIN_LEVELS[level] || ATANA_ADMIN_LEVELS.TTM;
+  if(action === "global-rules" || action === "global-models") return level === "SYSADMIN" || level === "ORGADMIN";
+  return (spec.can || []).indexOf(action) >= 0 || level === "SYSADMIN";
+}
+function normalizeGovernance(src){
+  const s = src && typeof src === "object" ? src : {};
+  return {
+    version: s.version || "1.0",
+    catalogues: s.catalogues || { systems: {}, assets: {}, spaces: {}, teams: {} },
+    audit: Array.isArray(s.audit) ? s.audit.slice(-200) : []
+  };
+}
+function govAudit(project, rec){
+  if(!project) return;
+  project.governance = normalizeGovernance(project.governance);
+  project.governance.audit.push({
+    at: new Date().toISOString(),
+    who: rec.who || govAdminLevel(project),
+    action: rec.action || "change",
+    object: rec.object || "",
+    why: rec.why || "",
+    oldValue: rec.oldValue || "",
+    newValue: rec.newValue || ""
+  });
+  if(project.governance.audit.length > 200) project.governance.audit = project.governance.audit.slice(-200);
+}
+function govCatalogRecord(name, extra){
+  extra = extra || {};
+  return Object.assign({
+    name: name,
+    status: extra.status || "ACTIVE",
+    version: extra.version || "1.0",
+    owner: extra.owner || "",
+    approved: extra.approved || "",
+    reviewDate: extra.reviewDate || ""
+  }, extra);
+}
+function renderGovernanceAdmin(project){
+  const host = document.getElementById("govAdminRoot");
+  if(!host) return;
+  if((window.__psdView || "") !== "gov"){ host.innerHTML = ""; return; }
+  const level = govAdminLevel(project);
+  const spec = ATANA_ADMIN_LEVELS[level];
+  const gov = normalizeGovernance(project && project.governance);
+  let html = '<div class="card" style="padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div style="font-size:13px;font-weight:800;color:#5b2d8e;">Data governance</div>';
+  html += '<p class="section-sub">You are <strong>' + escapeHtml(spec.label) + '</strong>. TTM can refine generated outputs, not global rules.</p>';
+  html += '<div style="font-size:12px;margin:8px 0;">Allowed: ' + escapeHtml((spec.can||[]).join(" · ")) + '</div>';
+  html += '<div style="font-size:11px;font-weight:700;margin-top:10px;">Recent audit</div>';
+  const rows = (gov.audit || []).slice(-8).reverse();
+  if(!rows.length) html += '<p class="section-sub">No catalogue changes recorded yet. Generation still writes why-it-exists on each MIDP row.</p>';
+  rows.forEach(function(a){
+    html += '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #eee;">' + escapeHtml(a.at||"") + ' · ' + escapeHtml(a.who||"") + ' · ' + escapeHtml(a.action||"") + ' · ' + escapeHtml(a.object||"") + '</div>';
+  });
+  html += '</div>';
+  host.innerHTML = html;
+}
+
 const DGE_GEN_STATUS = ["MANDATORY", "OPTIONAL", "PROJECT_MANDATORY", "USER_ADDED", "USER_REMOVED"];
 function dgeOverrideBag(project){
   const dge = normalizeDgeState(project && project.dge);
@@ -4298,6 +4374,10 @@ function toggleTemplate(role, desc){
   const hit = tpls.filter(function(t){ return t.desc === desc; })[0];
   if(hit && dgeIsLockedPackage(proj, hit.packageId)){
     if(typeof showToast === "function") showToast("Package locked — cannot remove " + (hit.packageTitle || desc));
+    return;
+  }
+  if(proj && typeof govCan === "function" && !govCan(proj, "generated-deliverables") && !govCan(proj, "project-packages")){
+    if(typeof showToast === "function") showToast("Your role cannot change generation rules");
     return;
   }
   state.disabledTemplates[key] = !state.disabledTemplates[key];
@@ -8599,6 +8679,7 @@ function normalizeProject(p){
     midpCatalog: normalizeMidpCatalog(p.midpCatalog || p.midp),
     dge: (typeof normalizeDgeState === "function") ? normalizeDgeState(p.dge) : (p.dge || { engine: true }),
     deliveryFramework: (typeof normalizeDeliveryFramework === "function") ? normalizeDeliveryFramework(p.deliveryFramework, p) : (p.deliveryFramework || null),
+    governance: (typeof normalizeGovernance === "function") ? normalizeGovernance(p.governance) : (p.governance || { audit: [] }),
     midpStageDates: (p.midpStageDates && typeof p.midpStageDates === "object") ? p.midpStageDates : ((p.midp && p.midp.stageDates) || {}),
     midp: (p.midp && typeof p.midp === "object") ? p.midp : null,
     dpow: (p.dpow && typeof p.dpow === "object") ? p.dpow : null,
@@ -13605,7 +13686,8 @@ function renderMvpDashboards(project){
     b.onclick = function(){ window.__mvpFocusPp = b.getAttribute("data-mvp-pp"); renderMvpDashboards(project); };
   });
   try { renderHowAtanaWorks(project); } catch(e){}
-  try { renderScopeWizard(project); } catch(e){}
+  try { renderScopeWizard(project);
+  if(typeof renderGovernanceAdmin === "function") renderGovernanceAdmin(project); } catch(e){}
 }
 
 
@@ -14321,6 +14403,7 @@ function renderPsdNav(project){
     ["bench", "Package workbench", "One package"],
     ["scope", "PROJECT / Scope", "FB · Systems"],
     ["wizard", "Project setup", "Tell Atana about the project"],
+    ["gov", "Governance", "Who can change it"],
     ["how", "Methodology", "How Atana works"],
     ["production", "Production", "Packages · TIDP"],
     ["verify", "Verification", "Deps · Interfaces · Model"],

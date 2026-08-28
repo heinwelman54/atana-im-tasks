@@ -1,0 +1,39 @@
+{
+  "title": "Atana Data Governance & Admin Framework",
+  "version": "1.0",
+  "admins": [
+    "SYSADMIN",
+    "ORGADMIN",
+    "PROJECTADMIN",
+    "TTM"
+  ],
+  "ttmCannot": [
+    "GLOBAL RULES"
+  ],
+  "catalogues": {
+    "status": [
+      "ACTIVE",
+      "RETIRED",
+      "DRAFT"
+    ],
+    "fields": [
+      "version",
+      "owner",
+      "approvalDate"
+    ]
+  },
+  "change": [
+    "who",
+    "when",
+    "why",
+    "oldValue",
+    "newValue"
+  ],
+  "architecture": [
+    "GOVERNANCE",
+    "CATALOGUES",
+    "RULE ENGINE",
+    "PROJECT",
+    "OUTPUT"
+  ]
+}

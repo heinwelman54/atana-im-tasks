@@ -569,3 +569,24 @@ CREATE TABLE IF NOT EXISTS DecisionDependencies (
   Child_Subject TEXT,
   Dep_Type TEXT
 );
+
+CREATE TABLE IF NOT EXISTS GovernanceAudit (
+  AUDIT_ID TEXT PRIMARY KEY,
+  Project_ID TEXT,
+  Who TEXT,
+  Action TEXT,
+  Object TEXT,
+  Why TEXT,
+  Old_Value TEXT,
+  New_Value TEXT,
+  At TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS CatalogueEntries (
+  CAT_ID TEXT PRIMARY KEY,
+  Catalogue TEXT,
+  Name TEXT,
+  Status TEXT,
+  Version TEXT,
+  Owner TEXT,
+  Approved TEXT
+);
