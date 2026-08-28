@@ -1,0 +1,33 @@
+{
+  "title": "Atana Configuration Hierarchy",
+  "version": "1.0",
+  "precedence": [
+    "USER",
+    "ASSET",
+    "PROJECT",
+    "ORGANISATION",
+    "SYSTEM"
+  ],
+  "statuses": [
+    "MANDATORY",
+    "OPTIONAL",
+    "PROJECT_MANDATORY",
+    "USER_ADDED",
+    "USER_REMOVED"
+  ],
+  "locking": "Locked packages cannot be user-removed",
+  "audit": [
+    "generatedBy",
+    "triggeredBy",
+    "generatedFrom",
+    "precedence"
+  ],
+  "example": {
+    "title": "HVAC LAYOUT - GROUND FLOOR",
+    "generatedBy": "HVAC SYSTEM",
+    "triggeredBy": "ME-HVAC-001",
+    "generatedFrom": "GROUND FLOOR",
+    "genStatus": "MANDATORY",
+    "precedence": "SYSTEM"
+  }
+}

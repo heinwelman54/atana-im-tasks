@@ -2395,8 +2395,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.34.0";
-const APP_BUILD = "2026-08-28-decision-engine";
+const APP_VERSION = "3.34.1";
+const APP_BUILD = "2026-08-28-config-hierarchy";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -3074,7 +3074,49 @@ function normalizeDgeState(src){
     engine: s.engine !== false,
     systems: (s.systems && typeof s.systems === "object") ? s.systems : {},
     assets: (s.assets && typeof s.assets === "object") ? s.assets : {},
-    optional: (s.optional && typeof s.optional === "object") ? s.optional : {}
+    optional: (s.optional && typeof s.optional === "object") ? s.optional : {},
+    overrides: (s.overrides && typeof s.overrides === "object") ? s.overrides : { organisation: {}, project: {}, asset: {}, user: {} },
+    lockedPackages: Array.isArray(s.lockedPackages) ? s.lockedPackages.slice() : ["PKG-ST-FOUNDATION"],
+    removed: Array.isArray(s.removed) ? s.removed.slice() : []
+  };
+}
+const DGE_PRECEDENCE = ["USER", "ASSET", "PROJECT", "ORGANISATION", "SYSTEM"];
+const DGE_GEN_STATUS = ["MANDATORY", "OPTIONAL", "PROJECT_MANDATORY", "USER_ADDED", "USER_REMOVED"];
+function dgeOverrideBag(project){
+  const dge = normalizeDgeState(project && project.dge);
+  return dge.overrides || { organisation: {}, project: {}, asset: {}, user: {} };
+}
+function dgeLookupOverride(project, key){
+  const bag = dgeOverrideBag(project);
+  for(let i = 0; i < DGE_PRECEDENCE.length; i++){
+    const level = DGE_PRECEDENCE[i].toLowerCase();
+    if(level === "system") continue;
+    const hit = bag[level] && bag[level][key];
+    if(hit) return { level: DGE_PRECEDENCE[i], value: hit };
+  }
+  return null;
+}
+function dgeIsLockedPackage(project, packageId){
+  const dge = normalizeDgeState(project && project.dge);
+  return (dge.lockedPackages || []).indexOf(String(packageId || "")) >= 0;
+}
+function dgeGenerationStatus(project, item, role){
+  const key = (role || "") + "::" + (item.desc || item.description || "");
+  const ov = dgeLookupOverride(project, key);
+  if(ov && (ov.value === "USER_REMOVED" || ov.value === "removed")) return "USER_REMOVED";
+  if(typeof state !== "undefined" && state.disabledTemplates && state.disabledTemplates[key]) return "USER_REMOVED";
+  if(ov && ov.value === "USER_ADDED") return "USER_ADDED";
+  if(ov && (ov.value === "PROJECT_MANDATORY" || ov.level === "PROJECT")) return "PROJECT_MANDATORY";
+  if(item.mandatory || item.stageRule === "required") return "MANDATORY";
+  if(item.stageRule === "optional" || item.optional) return "OPTIONAL";
+  return "MANDATORY";
+}
+function dgeAudit(item, spatialLabel, role){
+  return {
+    generatedBy: item.system || item.asset || item.packageTitle || role || "",
+    triggeredBy: item.ruleId || item.packageId || "",
+    generatedFrom: spatialLabel || item.scope || "",
+    precedence: item.precedence || "SYSTEM"
   };
 }
 const DGE_MODELS = {
@@ -3618,6 +3660,8 @@ function dgeFlattenPackageTemplates(project, roleCode, stageId, includeOptional)
     pkg.items.forEach(function(item){
       if(!dgeItemApplies(item, gate, includeOpt)) return;
       if(gate === "CONCEPT" && (item.type === "DETAIL" || /CONSTRUCTION|AS-BUILT|AS BUILT/i.test(item.desc||""))) return;
+      item.genStatus = dgeGenerationStatus(project, item, roleCode);
+      if(item.genStatus === "USER_REMOVED") return;
       const rec = dgeStageRecord(project, stageId || (project && project.currentStageId) || "S3") || {};
       out.push(Object.assign({}, item, {
         packageId: pkg.packageId,
@@ -4249,6 +4293,13 @@ function toggleRole(code){ const r = state.roles.find(r=>r.code===code); r.selec
 
 function toggleTemplate(role, desc){
   const key = tplKey(role, desc);
+  const proj = (typeof projectById === "function") ? projectById(currentProjectId) : null;
+  const tpls = (typeof dgeBuildTemplates === "function" && proj) ? dgeBuildTemplates(proj, role) : [];
+  const hit = tpls.filter(function(t){ return t.desc === desc; })[0];
+  if(hit && dgeIsLockedPackage(proj, hit.packageId)){
+    if(typeof showToast === "function") showToast("Package locked — cannot remove " + (hit.packageTitle || desc));
+    return;
+  }
   state.disabledTemplates[key] = !state.disabledTemplates[key];
   render();
 }
@@ -4310,7 +4361,7 @@ function generate(){
             const key = isoNumber+"|"+stage;
             if(existingKeys.has(key)) return;
             existingKeys.add(key);
-            newRows.push({rowId: isoNumber+"|"+stage+"|"+Math.random().toString(36).slice(2,7), stage, role:role.code, form:t.form, number, status, revision, date, functional:func.code, spatial:lvl.code, description, isoNumber, packageId: t.packageId || "", packageTitle: t.packageTitle || "", packageType: t.packageType || "", stageRule: t.stageRule || "", lod: t.lod || "", loi: t.loi || "", suitability: t.suitability || "", mandatory: !!t.mandatory});
+            newRows.push({rowId: isoNumber+"|"+stage+"|"+Math.random().toString(36).slice(2,7), stage, role:role.code, form:t.form, number, status, revision, date, functional:func.code, spatial:lvl.code, description, isoNumber, packageId: t.packageId || "", packageTitle: t.packageTitle || "", packageType: t.packageType || "", stageRule: t.stageRule || "", lod: t.lod || "", loi: t.loi || "", suitability: t.suitability || "", mandatory: !!t.mandatory, genStatus: t.genStatus || (t.mandatory ? "MANDATORY" : "OPTIONAL"), generatedBy: t.system || t.asset || t.packageTitle || role.code, triggeredBy: t.packageId || "", generatedFrom: (typeof lvl !== "undefined" && lvl && lvl.label) ? lvl.label : (spatial || ""), precedence: "SYSTEM"});
           });
         } else {
           const spatial = t.scope === "site" ? "SI" : "XX";
@@ -4327,7 +4378,7 @@ function generate(){
           const key = isoNumber+"|"+stage;
           if(existingKeys.has(key)) return;
           existingKeys.add(key);
-          newRows.push({rowId: isoNumber+"|"+stage+"|"+Math.random().toString(36).slice(2,7), stage, role:role.code, form:t.form, number, status, revision, date, functional:func.code, spatial, description, isoNumber, packageId: t.packageId || "", packageTitle: t.packageTitle || "", packageType: t.packageType || "", stageRule: t.stageRule || "", lod: t.lod || "", loi: t.loi || "", suitability: t.suitability || "", mandatory: !!t.mandatory});
+          newRows.push({rowId: isoNumber+"|"+stage+"|"+Math.random().toString(36).slice(2,7), stage, role:role.code, form:t.form, number, status, revision, date, functional:func.code, spatial, description, isoNumber, packageId: t.packageId || "", packageTitle: t.packageTitle || "", packageType: t.packageType || "", stageRule: t.stageRule || "", lod: t.lod || "", loi: t.loi || "", suitability: t.suitability || "", mandatory: !!t.mandatory, genStatus: t.genStatus || (t.mandatory ? "MANDATORY" : "OPTIONAL"), generatedBy: t.system || t.asset || t.packageTitle || role.code, triggeredBy: t.packageId || "", generatedFrom: (typeof lvl !== "undefined" && lvl && lvl.label) ? lvl.label : (spatial || ""), precedence: "SYSTEM"});
         }
       });
     });
