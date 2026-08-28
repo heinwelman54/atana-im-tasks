@@ -2136,7 +2136,7 @@
           <details class="midp-collapse" style="margin-bottom:12px;">
             <summary>Deliverable templates</summary>
             <div class="midp-collapse-body">
-              <p class="midp-hint">Per task team — tick to include, edit or add new templates.</p>
+              <p class="midp-hint">Package engine: generate issues a package (Design / Layout / Documentation), not a single drawing. Stage tags show required vs optional for the current work stage.</p>
               <div class="midp-tpl-grid" id="midp-templatesGrid"></div>
             </div>
           </details>
@@ -2395,8 +2395,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.32.1";
-const APP_BUILD = "2026-08-28-dge-custom-teams";
+const APP_VERSION = "3.34.0";
+const APP_BUILD = "2026-08-28-decision-engine";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -2999,7 +2999,7 @@ const DEFAULT_ROLES = [
 const DGE_VERSION = "1.0";
 const DGE_DISCIPLINES = {
   AR: { name: "ARCHITECTURE", driver: "spatial", uses: "space" },
-  ID: { name: "INTERIOR DESIGN", driver: "spatial", uses: "space" },
+  ID: { name: "INTERIOR DESIGN", driver: "space", uses: "space" },
   ST: { name: "STRUCTURAL", driver: "spatial", uses: "asset" },
   EE: { name: "ELECTRICAL", driver: "system", uses: "system" },
   ME: { name: "MECHANICAL", driver: "system", uses: "system" },
@@ -3236,8 +3236,412 @@ function dgeOptionalOn(project, role, name){
   const bag = dge.optional[role] || {};
   return !!(bag[name] || bag[String(name).toUpperCase()]);
 }
+const DGE_PACKAGE_TYPES = {
+  LAYOUT: { code: "LAYOUT", label: "Layout package", typical: ["LAYOUT", "DETAILS", "SECTIONS"] },
+  DESIGN: { code: "DESIGN", label: "Design package", typical: ["LAYOUT", "CALCULATIONS", "REPORT", "SPECIFICATION"] },
+  DOCUMENTATION: { code: "DOCUMENTATION", label: "Documentation package", typical: ["REPORT", "REGISTER", "SPECIFICATION"] }
+};
+const DGE_STAGE_GATES = ["CONCEPT", "PRELIMINARY", "DETAILED", "TENDER", "CONSTRUCTION", "ASBUILT"];
+
+function defaultDeliveryFramework(){
+  return {
+    version: "1.0",
+    stages: [
+      { id: "S1", code: "CONCEPT", label: "Concept", lod: 2, loi: 2, suitability: "S0", state: "WIP", gate: "CONCEPT" },
+      { id: "S2", code: "PRELIMINARY", label: "Preliminary Design", lod: 2, loi: 2, suitability: "S1", state: "SHARED", gate: "PRELIMINARY" },
+      { id: "S3", code: "DETAILED", label: "Detailed Design", lod: 3, loi: 3, suitability: "S2", state: "SHARED", gate: "DETAILED" },
+      { id: "S4", code: "TENDER", label: "Tender", lod: 3, loi: 3, suitability: "D2", state: "SHARED", gate: "TENDER" },
+      { id: "S5", code: "CONSTRUCTION", label: "Construction", lod: 4, loi: 4, suitability: "A1", state: "PUBLISHED", gate: "CONSTRUCTION" },
+      { id: "S6", code: "ASBUILT", label: "As-Built", lod: 5, loi: 5, suitability: "CR", state: "PUBLISHED", gate: "ASBUILT" }
+    ]
+  };
+}
+function normalizeDeliveryFramework(src, project){
+  const d = defaultDeliveryFramework();
+  const incoming = (src && Array.isArray(src.stages) && src.stages.length) ? src.stages : d.stages;
+  const byId = {};
+  incoming.forEach(function(s){
+    const id = String(s.id || s.stageId || "").toUpperCase();
+    if(!id) return;
+    byId[id] = {
+      id: id,
+      code: String(s.code || s.gate || "").toUpperCase() || id,
+      label: String(s.label || s.name || id),
+      lod: Number(s.lod) > 0 ? Number(s.lod) : 3,
+      loi: Number(s.loi) > 0 ? Number(s.loi) : 3,
+      suitability: String(s.suitability || s.status || ""),
+      state: String(s.state || ""),
+      gate: String(s.gate || s.code || "").toUpperCase()
+    };
+  });
+  d.stages.forEach(function(s){ if(!byId[s.id]) byId[s.id] = s; });
+  return { version: (src && src.version) || "1.0", stages: Object.keys(byId).sort().map(function(k){ return byId[k]; }) };
+}
+function dgeStageRecord(project, stageId){
+  const fw = (project && project.deliveryFramework) ? project.deliveryFramework : defaultDeliveryFramework();
+  const id = String(stageId || "").toUpperCase();
+  return (fw.stages || []).filter(function(s){ return s.id === id || s.code === id || ("WS"+id.replace("S","")) === s.id; })[0] || null;
+}
+
+function dgeStageGate(stageId, project){
+  const rec = project ? dgeStageRecord(project, stageId) : null;
+  if(rec && rec.gate && DGE_STAGE_GATES.indexOf(rec.gate) >= 0) return rec.gate;
+  const s = String(stageId || "").toUpperCase();
+  if(s === "S1" || s.indexOf("CONCEPT") >= 0 || s === "WS1") return "CONCEPT";
+  if(s === "S2" || s.indexOf("PRELIM") >= 0 || s === "WS2") return "PRELIMINARY";
+  if(s === "S3" || s.indexOf("DETAIL") >= 0 || s === "WS3") return "DETAILED";
+  if(s === "S4" || s.indexOf("TENDER") >= 0 || s === "WS4") return "TENDER";
+  if(s === "S5" || s.indexOf("CONSTRUCT") >= 0 || s === "WS5") return "CONSTRUCTION";
+  if(s === "S6" || s.indexOf("AS") >= 0 || s === "WS6") return "ASBUILT";
+  return "DETAILED";
+}
+function dgeRule(type, desc, scope, stages, extra){
+  extra = extra || {};
+  const meta = DGE_TYPE_FORM[type] || DGE_TYPE_FORM.LAYOUT;
+  return Object.assign({
+    type: type,
+    form: extra.form || meta.form,
+    series: extra.series != null ? extra.series : meta.series,
+    scope: scope || "general",
+    desc: desc,
+    stages: stages || { PRELIMINARY: "required", DETAILED: "required", TENDER: "required" },
+    lod: extra.lod || "",
+    loi: extra.loi || "",
+    system: extra.system || "",
+    asset: extra.asset || ""
+  }, extra);
+}
+function dgePkg(id, type, title, subject, model, items){
+  return { packageId: id, packageType: type, title: title, subject: subject, model: model, items: items };
+}
+const _S = {
+  C: { CONCEPT: "optional" },
+  P: { CONCEPT: "optional", PRELIMINARY: "required" },
+  D: { CONCEPT: "optional", PRELIMINARY: "required", DETAILED: "required", TENDER: "required" },
+  T: { DETAILED: "required", TENDER: "required" },
+  X: { DETAILED: "required", TENDER: "required", CONSTRUCTION: "required" },
+  W: { CONSTRUCTION: "required", ASBUILT: "required" },
+  A: { ASBUILT: "required" },
+  O: { CONCEPT: "optional", PRELIMINARY: "optional", DETAILED: "optional" }
+};
+function dgeItemApplies(item, gate, includeOptional){
+  const st = (item && item.stages) || {};
+  const rule = st[gate] || st[String(gate).toUpperCase()] || "";
+  if(rule === "required") return true;
+  if(rule === "optional") return includeOptional !== false;
+  return false;
+}
+const DGE_DECISION_RULES = [
+  { id: "ME-HVAC-001", type: "SYSTEM", trigger: "SYSTEM_EXISTS", role: "ME", subject: "HVAC", output: "HVAC PACKAGE" },
+  { id: "EE-LIGHT-001", type: "SYSTEM", trigger: "SYSTEM_EXISTS", role: "EE", subject: "LIGHTING", output: "LIGHTING PACKAGE" },
+  { id: "EE-POWER-001", type: "SYSTEM", trigger: "SYSTEM_EXISTS", role: "EE", subject: "POWER", output: "POWER PACKAGE" },
+  { id: "EE-WIRE-001", type: "SYSTEM", trigger: "SYSTEM_EXISTS", role: "EE", subject: "WIREWAYS", output: "WIREWAYS PACKAGE" },
+  { id: "FD-DET-001", type: "SYSTEM", trigger: "SYSTEM_EXISTS", role: "FD", subject: "FIRE DETECTION", output: "FIRE DETECTION PACKAGE", children: ["CAUSE AND EFFECT MATRIX", "FIRE DETECTION RISER DIAGRAM"] },
+  { id: "FP-PROT-001", type: "SYSTEM", trigger: "SYSTEM_EXISTS", role: "FP", subject: "FIRE PROTECTION", output: "FIRE PROTECTION PACKAGE" },
+  { id: "YS-CCTV-001", type: "SYSTEM", trigger: "SYSTEM_EXISTS", role: "YS", subject: "CCTV", output: "CCTV PACKAGE" },
+  { id: "YS-AC-001", type: "SYSTEM", trigger: "SYSTEM_EXISTS", role: "YS", subject: "ACCESS CONTROL", output: "ACCESS CONTROL PACKAGE" },
+  { id: "ST-CONC-001", type: "ASSET", trigger: "ASSET_EXISTS", role: "ST", subject: "CONCRETE", output: "CONCRETE PACKAGE", children: ["REINFORCEMENT"] },
+  { id: "ST-STAIR-001", type: "ASSET", trigger: "ASSET_EXISTS", role: "ST", subject: "STAIR", output: "STAIR PACKAGE" },
+  { id: "ST-PLAT-001", type: "ASSET", trigger: "ASSET_EXISTS", role: "ST", subject: "PLATFORM", output: "PLATFORM PACKAGE" },
+  { id: "FD-VESDA-001", type: "OPTIONAL", trigger: "OPTIONAL_ENABLED", role: "FD", subject: "VESDA", output: "VESDA PACKAGE" },
+  { id: "STAGE-CONCEPT-001", type: "STAGE", trigger: "STAGE_IS", gate: "CONCEPT", allowTypes: ["REPORT", "SCHEMATIC"], denyTypes: ["DETAIL"] },
+  { id: "STAGE-CONSTR-001", type: "STAGE", trigger: "STAGE_IS", gate: "CONSTRUCTION", allowTypes: ["LAYOUT"], prefer: "CONSTRUCTION" }
+];
+const DGE_DEPENDENCIES = [
+  { parent: "CONCRETE", child: "REINFORCEMENT", type: "ASSET" },
+  { parent: "HVAC", child: "HVAC CALCULATIONS", type: "SYSTEM" },
+  { parent: "FIRE DETECTION", child: "CAUSE AND EFFECT MATRIX", type: "SYSTEM" },
+  { parent: "FIRE DETECTION", child: "FIRE DETECTION RISER DIAGRAM", type: "SYSTEM" }
+];
+function dgeTeamSelected(project, role){
+  const rec = dgeRoleRecord(project, role);
+  if(rec) return rec.selected !== false;
+  const roles = (project && project.midpCatalog && project.midpCatalog.roles) || [];
+  const hit = roles.filter(function(r){ return String(r.code).toUpperCase() === String(role).toUpperCase(); })[0];
+  return hit ? hit.selected !== false : true;
+}
+function dgeDecisionContext(project, role){
+  return {
+    systems: dgeSystemsForRole(project, role).map(function(s){ return String(s).toUpperCase(); }),
+    assets: dgeAssetsForRole(project, role).map(function(s){ return String(s).toUpperCase(); }),
+    optional: ((project && project.dge && project.dge.optional && project.dge.optional[role]) || {})
+  };
+}
+function dgeRuleTriggered(project, role, rule){
+  if(rule.role && String(rule.role).toUpperCase() !== String(role).toUpperCase()) return false;
+  if(!dgeTeamSelected(project, role)) return false;
+  const ctx = dgeDecisionContext(project, role);
+  const trig = String(rule.trigger || "").toUpperCase();
+  const subject = String(rule.subject || "").toUpperCase();
+  if(trig === "SYSTEM_EXISTS") return ctx.systems.indexOf(subject) >= 0 || ctx.systems.some(function(s){ return s.indexOf(subject) >= 0; });
+  if(trig === "ASSET_EXISTS") return ctx.assets.indexOf(subject) >= 0;
+  if(trig === "OPTIONAL_ENABLED") return !!(ctx.optional[subject] || ctx.optional[rule.subject]);
+  if(trig === "TEAM_SELECTED") return true;
+  if(trig === "STAGE_IS") return true;
+  return true;
+}
+function dgeEvaluateDecisions(project, role, stageId){
+  const gate = dgeStageGate(stageId || (project && project.currentStageId) || "S3", project);
+  const fired = [];
+  const skipped = [];
+  DGE_DECISION_RULES.forEach(function(rule){
+    if(rule.type === "STAGE") return;
+    if(dgeRuleTriggered(project, role, rule)) fired.push(rule);
+    else if(!rule.role || String(rule.role).toUpperCase() === String(role).toUpperCase()) skipped.push(rule.id);
+  });
+  const subjects = {};
+  fired.forEach(function(r){ if(r.subject) subjects[String(r.subject).toUpperCase()] = r; });
+  DGE_DEPENDENCIES.forEach(function(dep){
+    if(subjects[String(dep.parent).toUpperCase()]) subjects[String(dep.child).toUpperCase()] = subjects[String(dep.child).toUpperCase()] || { id: "DEP-" + dep.parent, subject: dep.child, type: "DEPENDENCY" };
+  });
+  return { gate: gate, fired: fired, skipped: skipped, subjects: Object.keys(subjects), subjectMap: subjects };
+}
+function dgePackageAllowed(project, role, pkg, decision){
+  if(!decision) return true;
+  const sub = String(pkg.subject || pkg.title || "").toUpperCase();
+  if(!decision.subjects.length) return true;
+  if(decision.subjectMap[sub]) return true;
+  return decision.subjects.some(function(s){ return sub.indexOf(s) >= 0 || s.indexOf(sub) >= 0; });
+}
+
+function dgeBuildPackages(project, roleCode){
+  const role = String(roleCode || "").toUpperCase();
+  const model = dgeResolveModel(project, role);
+  const rec = dgeRoleRecord(project, role) || {};
+  const packages = [];
+  function push(pkg){ packages.push(pkg); }
+
+  if(role === "ME" || (model === "SYSTEM" && role === "ME")){
+    dgeSystemsForRole(project, "ME").forEach(function(sys){
+      push(dgePkg("PKG-" + role + "-" + sys.replace(/\s+/g,"_"), "DESIGN", sys + " PACKAGE", sys, "SYSTEM", [
+        dgeRule("LAYOUT", sys + " LAYOUT - {SPATIAL}", "level", _S.D, { system: sys }),
+        dgeRule("LAYOUT", sys + " BUILDERS WORKS - {SPATIAL}", "level", _S.X, { system: sys }),
+        dgeRule("SCHEMATIC", sys + " SCHEMATIC", "general", _S.T, { system: sys }),
+        dgeRule("CALCULATION", sys + " CALCULATIONS", "general", _S.T, { system: sys }),
+        dgeRule("SPECIFICATION", sys + " SPECIFICATION", "general", _S.T, { system: sys }),
+        dgeRule("REPORT", sys + " DESIGN REPORT", "general", _S.T, { system: sys }),
+        dgeRule("LAYOUT", sys + " CONSTRUCTION LAYOUT - {SPATIAL}", "level", _S.W, { system: sys })
+      ]));
+    });
+  }
+  if(role === "EE"){
+    dgeSystemsForRole(project, "EE").forEach(function(sys){
+      push(dgePkg("PKG-" + role + "-" + sys.replace(/\s+/g,"_"), "DESIGN", sys + " PACKAGE", sys, "SYSTEM", [
+        dgeRule("LAYOUT", sys + " LAYOUT - {SPATIAL}", "level", _S.D, { system: sys })
+      ]));
+    });
+    push(dgePkg("PKG-EE-POWER-DOCS", "DESIGN", "ELECTRICAL DESIGN PACKAGE", "ELECTRICAL", "SYSTEM", [
+      dgeRule("SCHEMATIC", "SLD", "general", _S.T),
+      dgeRule("SCHEDULE", "PANEL SCHEDULES", "general", _S.T)
+    ]));
+  }
+  if(role === "FD"){
+    dgeSystemsForRole(project, "FD").forEach(function(sys){
+      push(dgePkg("PKG-FD-" + sys.replace(/\s+/g,"_"), "DESIGN", sys + " PACKAGE", sys, "SYSTEM", [
+        dgeRule("LAYOUT", sys + " LAYOUT - {SPATIAL}", "level", _S.D, { system: sys })
+      ]));
+    });
+    push(dgePkg("PKG-FD-DOCS", "DESIGN", "FIRE DETECTION DESIGN PACKAGE", "FIRE DETECTION", "SYSTEM", [
+      dgeRule("SCHEMATIC", "FIRE DETECTION RISER DIAGRAM", "general", _S.T),
+      dgeRule("MATRIX", "CAUSE AND EFFECT MATRIX", "general", _S.T)
+    ]));
+  }
+  if(role === "FP"){
+    push(dgePkg("PKG-FP-DESIGN", "DESIGN", "FIRE PROTECTION PACKAGE", "FIRE PROTECTION", "SYSTEM", [
+      dgeRule("LAYOUT", "FIRE PROTECTION LAYOUT - {SPATIAL}", "level", _S.D, { system: "FIRE PROTECTION" }),
+      dgeRule("LAYOUT", "FIRE WATER RETICULATION", "general", _S.T, { system: "FIRE WATER RETICULATION" }),
+      dgeRule("CALCULATION", "FIRE HYDRAULIC CALCULATIONS", "general", _S.T)
+    ]));
+  }
+  if(role === "YS"){
+    dgeSystemsForRole(project, "YS").forEach(function(sys){
+      push(dgePkg("PKG-YS-" + sys.replace(/\s+/g,"_"), "DESIGN", sys + " PACKAGE", sys, "SYSTEM", [
+        dgeRule("LAYOUT", sys + " LAYOUT - {SPATIAL}", "level", _S.D, { system: sys })
+      ]));
+    });
+    push(dgePkg("PKG-YS-DOCS", "DESIGN", "SECURITY DESIGN PACKAGE", "SECURITY", "SYSTEM", [
+      dgeRule("SCHEMATIC", "SECURITY RISER DIAGRAM", "general", _S.T),
+      dgeRule("SCHEDULE", "DEVICE SCHEDULES", "general", _S.T)
+    ]));
+  }
+  if(role === "HE" || role === "PD"){
+    dgeSystemsForRole(project, role).forEach(function(sys){
+      push(dgePkg("PKG-" + role + "-" + sys.replace(/\s+/g,"_"), "DESIGN", sys + " PACKAGE", sys, "SYSTEM", [
+        dgeRule("LAYOUT", sys + " LAYOUT - {SPATIAL}", "level", _S.D, { system: sys })
+      ]));
+    });
+    push(dgePkg("PKG-" + role + "-RISER", "DESIGN", "HYDRAULIC DESIGN PACKAGE", "HYDRAULIC", "SYSTEM", [
+      dgeRule("SCHEMATIC", "HYDRAULIC RISER DIAGRAM", "general", _S.T)
+    ]));
+  }
+  if(role === "ST"){
+    const assets = dgeAssetsForRole(project, "ST");
+    if(assets.indexOf("CONCRETE") >= 0){
+      push(dgePkg("PKG-ST-CONCRETE", "LAYOUT", "CONCRETE PACKAGE", "CONCRETE", "SPATIAL", [
+        dgeRule("LAYOUT", "{SPATIAL} CONCRETE LAYOUT", "level", _S.D, { asset: "CONCRETE" }),
+        dgeRule("LAYOUT", "{SPATIAL} REINFORCEMENT LAYOUT", "level", _S.X, { asset: "CONCRETE", series: 5000, form: "DR" })
+      ]));
+    }
+    if(assets.indexOf("FOUNDATION") >= 0){
+      push(dgePkg("PKG-ST-FOUNDATION", "LAYOUT", "FOUNDATION PACKAGE", "FOUNDATION", "SPATIAL", [
+        dgeRule("LAYOUT", "FOUNDATION LAYOUT", "general", _S.P, { asset: "FOUNDATION" }),
+        dgeRule("DETAIL", "FOUNDATION DETAILS", "general", _S.T, { asset: "FOUNDATION" }),
+        dgeRule("LAYOUT", "FOUNDATION REINFORCEMENT", "general", _S.X, { asset: "FOUNDATION", series: 5000 })
+      ]));
+    }
+    if(assets.indexOf("STRUCTURAL STEEL") >= 0){
+      push(dgePkg("PKG-ST-STEEL", "LAYOUT", "STRUCTURAL STEEL PACKAGE", "STRUCTURAL STEEL", "SPATIAL", [
+        dgeRule("LAYOUT", "{SPATIAL} STRUCTURAL STEEL LAYOUT", "level", _S.D, { asset: "STRUCTURAL STEEL" }),
+        dgeRule("SECTION", "STRUCTURAL STEEL SECTIONS", "general", _S.T, { asset: "STRUCTURAL STEEL" }),
+        dgeRule("DETAIL", "STRUCTURAL STEEL DETAILS", "general", _S.T, { asset: "STRUCTURAL STEEL" }),
+        dgeRule("SCHEDULE", "STRUCTURAL STEEL SCHEDULE", "general", _S.T, { asset: "STRUCTURAL STEEL" })
+      ]));
+    }
+    ["STAIR","PLATFORM"].forEach(function(asset){
+      if(assets.indexOf(asset) >= 0){
+        push(dgePkg("PKG-ST-" + asset, "LAYOUT", asset + " PACKAGE", asset, "SPATIAL", [
+          dgeRule("LAYOUT", "{SPATIAL} " + asset + " LAYOUT", "level", _S.D, { asset: asset }),
+          dgeRule("SECTION", "{SPATIAL} " + asset + " SECTIONS", "level", _S.T, { asset: asset }),
+          dgeRule("DETAIL", "{SPATIAL} " + asset + " DETAILS", "level", _S.T, { asset: asset })
+        ]));
+      }
+    });
+  }
+  if(role === "AR"){
+    push(dgePkg("PKG-AR-PLANS", "LAYOUT", "ARCHITECTURAL PLAN PACKAGE", "ARCHITECTURE", "SPATIAL", [
+      dgeRule("PLAN", "{SPATIAL} PLAN", "level", _S.P),
+      dgeRule("PLAN", "{SPATIAL} CEILING PLAN", "level", _S.D),
+      dgeRule("PLAN", "{SPATIAL} FLOOR FINISHES PLAN", "level", _S.T),
+      dgeRule("PLAN", "{SPATIAL} OVERALL GA PLAN", "level", _S.P)
+    ]));
+    push(dgePkg("PKG-AR-DOCS", "DESIGN", "ARCHITECTURAL DESIGN PACKAGE", "ARCHITECTURE", "SPATIAL", [
+      dgeRule("ELEVATION", "ELEVATIONS", "general", _S.D),
+      dgeRule("SECTION", "SECTIONS", "general", _S.D),
+      dgeRule("DETAIL", "TYPICAL DETAILS", "general", _S.T),
+      dgeRule("SCHEDULE", "DOOR SCHEDULE", "general", _S.T),
+      dgeRule("SCHEDULE", "WINDOW SCHEDULE", "general", _S.T),
+      dgeRule("SCHEDULE", "FINISH SCHEDULE", "general", _S.T),
+      dgeRule("SCHEDULE", "SANWARE SCHEDULE", "general", _S.T)
+    ]));
+  }
+  if(role === "EV"){
+    push(dgePkg("PKG-EV-DOCS", "DOCUMENTATION", "ENVIRONMENTAL PACKAGE", "ENVIRONMENTAL", "DOCUMENT", [
+      dgeRule("REPORT", "ENVIRONMENTAL MANAGEMENT PLAN", "general", _S.P),
+      dgeRule("REPORT", "REHABILITATION PLAN", "general", _S.T),
+      dgeRule("REPORT", "WASTE MANAGEMENT PLAN", "general", _S.T),
+      dgeRule("REPORT", "MONITORING PLAN", "general", _S.W),
+      dgeRule("REGISTER", "COMPLIANCE REGISTER", "general", _S.D)
+    ]));
+  }
+  if(role === "PE"){
+    push(dgePkg("PKG-PE-DOCS", "DOCUMENTATION", "PROCESS DESIGN PACKAGE", "PROCESS", "DOCUMENT", [
+      dgeRule("SCHEMATIC", "PFD", "general", _S.P),
+      dgeRule("SCHEMATIC", "P&ID", "general", _S.D),
+      dgeRule("REPORT", "PROCESS DESIGN REPORT", "general", _S.T),
+      dgeRule("SPECIFICATION", "PROCESS DESIGN CRITERIA", "general", _S.T),
+      dgeRule("SCHEDULE", "EQUIPMENT LIST", "general", _S.T),
+      dgeRule("SCHEDULE", "VALVE LIST", "general", _S.T),
+      dgeRule("SCHEDULE", "LINE LIST", "general", _S.T)
+    ]));
+  }
+  if(role === "YC"){
+    push(dgePkg("PKG-YC-DOCS", "DOCUMENTATION", "CONTROLS PACKAGE", "CONTROLS", "DOCUMENT", [
+      dgeRule("REPORT", "CONTROL PHILOSOPHY", "general", _S.P),
+      dgeRule("SPECIFICATION", "FUNCTIONAL DESIGN SPECIFICATION", "general", _S.T),
+      dgeRule("SCHEMATIC", "PLC ARCHITECTURE", "general", _S.T),
+      dgeRule("SCHEMATIC", "SCADA ARCHITECTURE", "general", _S.T),
+      dgeRule("SCHEDULE", "I/O SCHEDULE", "general", _S.T),
+      dgeRule("SCHEMATIC", "LOOP DIAGRAM", "general", _S.X),
+      dgeRule("MATRIX", "CAUSE AND EFFECT MATRIX", "general", _S.T)
+    ]));
+  }
+
+  if(!packages.length){
+    const subjects = (rec.generationSubjects && rec.generationSubjects.length)
+      ? rec.generationSubjects
+      : (dgeSystemsForRole(project, role).concat(dgeAssetsForRole(project, role)));
+    const name = rec.label || role;
+    if(model === "SYSTEM"){
+      (subjects.length ? subjects : [name]).forEach(function(sys){
+        push(dgePkg("PKG-" + role + "-" + String(sys).replace(/\s+/g,"_"), "DESIGN", sys + " PACKAGE", sys, "SYSTEM", [
+          dgeRule("LAYOUT", sys + " LAYOUT - {SPATIAL}", "level", _S.D, { system: sys }),
+          dgeRule("SCHEMATIC", sys + " SCHEMATIC", "general", _S.T, { system: sys }),
+          dgeRule("CALCULATION", sys + " CALCULATIONS", "general", _S.T, { system: sys }),
+          dgeRule("SPECIFICATION", sys + " SPECIFICATION", "general", _S.T, { system: sys })
+        ]));
+      });
+    } else if(model === "SITE"){
+      (subjects.length ? subjects : [name]).forEach(function(ast){
+        push(dgePkg("PKG-" + role + "-" + String(ast).replace(/\s+/g,"_"), "LAYOUT", ast + " PACKAGE", ast, "SITE", [
+          dgeRule("LAYOUT", ast + " LAYOUT - {SPATIAL}", "level", _S.D, { asset: ast }),
+          dgeRule("SECTION", ast + " SECTIONS", "general", _S.T, { asset: ast }),
+          dgeRule("DETAIL", ast + " DETAILS", "general", _S.T, { asset: ast })
+        ]));
+      });
+    } else if(model === "DOCUMENT"){
+      push(dgePkg("PKG-" + role + "-DOCS", "DOCUMENTATION", name + " PACKAGE", name, "DOCUMENT", [
+        dgeRule("REPORT", name + " REPORT", "general", _S.P),
+        dgeRule("REGISTER", name + " REGISTER", "general", _S.D),
+        dgeRule("SPECIFICATION", name + " SPECIFICATION", "general", _S.T)
+      ]));
+    } else if(model === "SPACE"){
+      (subjects.length ? subjects : ["OFFICE", "BOARDROOM", "RECEPTION"]).forEach(function(sp){
+        push(dgePkg("PKG-" + role + "-" + String(sp).replace(/\s+/g,"_"), "LAYOUT", sp + " PACKAGE", sp, "SPACE", [
+          dgeRule("LAYOUT", sp + " FURNITURE LAYOUT", "general", _S.D),
+          dgeRule("ELEVATION", sp + " INTERIOR ELEVATIONS", "general", _S.T),
+          dgeRule("DETAIL", sp + " JOINERY DETAILS", "general", _S.T)
+        ]));
+      });
+    } else {
+      push(dgePkg("PKG-" + role + "-SPATIAL", "LAYOUT", name + " PACKAGE", name, "SPATIAL", [
+        dgeRule("PLAN", "{SPATIAL} PLAN", "level", _S.P),
+        dgeRule("LAYOUT", "{SPATIAL} LAYOUT", "level", _S.D),
+        dgeRule("SECTION", "SECTIONS", "general", _S.T),
+        dgeRule("DETAIL", "TYPICAL DETAILS", "general", _S.T)
+      ]));
+    }
+  }
+  if(typeof dgeEvaluateDecisions === "function"){
+    const decision = dgeEvaluateDecisions(project, role);
+    if(decision.subjects && decision.subjects.length){
+      const filtered = packages.filter(function(pkg){ return dgePackageAllowed(project, role, pkg, decision); });
+      if(filtered.length) return filtered;
+    }
+  }
+  return packages;
+}
+function dgeFlattenPackageTemplates(project, roleCode, stageId, includeOptional){
+  const gate = dgeStageGate(stageId || (project && project.currentStageId) || "S3", project);
+  const includeOpt = includeOptional !== false;
+  const out = [];
+  dgeBuildPackages(project, roleCode).forEach(function(pkg){
+    pkg.items.forEach(function(item){
+      if(!dgeItemApplies(item, gate, includeOpt)) return;
+      if(gate === "CONCEPT" && (item.type === "DETAIL" || /CONSTRUCTION|AS-BUILT|AS BUILT/i.test(item.desc||""))) return;
+      const rec = dgeStageRecord(project, stageId || (project && project.currentStageId) || "S3") || {};
+      out.push(Object.assign({}, item, {
+        packageId: pkg.packageId,
+        packageTitle: pkg.title,
+        packageType: pkg.packageType,
+        stageGate: gate,
+        stageRule: (item.stages && item.stages[gate]) || "",
+        lod: item.lod || rec.lod || "",
+        loi: item.loi || rec.loi || "",
+        suitability: rec.suitability || "",
+        infoState: rec.state || "",
+        mandatory: ((item.stages && item.stages[gate]) === "required")
+      }));
+    });
+  });
+  return out;
+}
+
 function dgeBuildTemplates(project, roleCode){
   const role = String(roleCode || "").toUpperCase();
+  if(typeof dgeFlattenPackageTemplates === "function"){
+    const staged = dgeFlattenPackageTemplates(project, role, (project && (project.currentStageId || (typeof state !== "undefined" && state.stage))) || "S3", true);
+    if(staged.length) return staged;
+  }
   const spec = DGE_DISCIPLINES[role];
   const out = [];
   function add(type, opts){
@@ -3248,7 +3652,7 @@ function dgeBuildTemplates(project, roleCode){
     return ((typeof TEMPLATES !== "undefined" && TEMPLATES[role]) || []).slice();
   }
 
-  if(role === "AR" || role === "ID"){
+  if(role === "AR"){
     ["PLAN","CEILING PLAN","FLOOR FINISHES PLAN","OVERALL GA PLAN"].forEach(function(d){
       add("PLAN", { scope: "level", desc: dgeTitle("spatial", "", d, true) });
     });
@@ -3258,7 +3662,7 @@ function dgeBuildTemplates(project, roleCode){
     add("SCHEDULE", { scope: "general", desc: "DOOR SCHEDULE" });
     add("SCHEDULE", { scope: "general", desc: "WINDOW SCHEDULE" });
     add("SCHEDULE", { scope: "general", desc: "FINISH SCHEDULE" });
-    if(role === "AR") add("SCHEDULE", { scope: "general", desc: "SANWARE SCHEDULE" });
+    add("SCHEDULE", { scope: "general", desc: "SANWARE SCHEDULE" });
   }
 
   if(role === "ST"){
@@ -3703,14 +4107,18 @@ function render(){
   // templates — editable per project (customTemplates on project + global TEMPLATES)
   const projTpl = (projectById(currentProjectId)?.customTemplates) || {};
   const activeRoles = state.roles.filter(r=>r.selected);
-  const tplEl = document.getElementById("templatesGrid");
+  const tplEl = document.getElementById("midp-templatesGrid") || document.getElementById("templatesGrid");
   if(tplEl){
+    const _proj = (typeof projectById === "function") ? projectById(currentProjectId) : null;
     tplEl.innerHTML = activeRoles.length === 0
       ? `<p style="font-size:12px;color:#a8a29e">Select at least one discipline / task team above.</p>`
       : activeRoles.map(role => {
-          const base = TEMPLATES[role.code] || [];
+          const base = (typeof dgeBuildTemplates === "function")
+            ? dgeBuildTemplates(_proj || {}, role.code)
+            : (TEMPLATES[role.code] || []);
           const custom = Array.isArray(projTpl[role.code]) ? projTpl[role.code] : [];
           const list = base.concat(custom);
+          const model = (typeof dgeResolveModel === "function") ? dgeResolveModel(_proj || { midpCatalog: { roles: state.roles } }, role.code) : "";
           const items = list.length === 0
             ? `<div class="tpl-empty">No templates yet — add below.</div>`
             : list.map((t, ti) => {
@@ -3721,12 +4129,12 @@ function render(){
                 return `<div class="tpl-item ${disabled?'disabled':''}" style="display:flex;align-items:flex-start;gap:6px;">
                           <input type="checkbox" ${disabled?"":"checked"} onchange="toggleTemplate('${role.code}','${safeDesc}')" />
                           <span class="mono" style="color:#a8a29e;width:22px;flex-shrink:0">${esc(t.form||"DR")}</span>
-                          <span class="desc" style="flex:1">${esc(String(t.desc||"").replace("{LEVEL}","[LEVEL]"))}</span>
+                          <span class="desc" style="flex:1">${t.packageTitle ? `<span class="mono" style="color:#7c3aed;font-size:10px;margin-right:6px;">${esc(t.packageTitle)}</span>` : ""}${esc(String(t.desc||"").replace(/\{LEVEL\}/g,"[SPATIAL]").replace(/\{SPATIAL\}/g,"[SPATIAL]"))}${t.stageRule ? ` <span class="mono" style="color:#78716c;font-size:10px;">${esc(t.stageRule)}</span>` : ""}</span>
                           ${isCustom ? `<button type="button" class="btn btn-ghost btn-xs" onclick="editCustomTemplate('${role.code}',${ti-base.length})">Edit</button>` : `<button type="button" class="btn btn-ghost btn-xs" onclick="editTemplateNote('${role.code}','${safeDesc}')">Edit</button>`}
                         </div>`;
               }).join("");
           return `<div style="margin-bottom:12px;">
-            <div class="tpl-group-title">${esc(role.code)} · ${esc(role.label)} <span style="font-weight:500;color:var(--slate-500);text-transform:none;">(task team)</span></div>
+            <div class="tpl-group-title">${esc(role.code)} · ${esc(role.label)} <span style="font-weight:500;color:var(--slate-500);text-transform:none;">${model ? "· " + model : ""} · task team</span></div>
             <div class="midp-select-list">${items}</div>
             <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;">
               <select id="tpl-form-${esc(role.code)}" class="mono" style="width:auto;max-width:160px;" title="Document type / Form">${formOptionsHtml("DR")}</select>
@@ -3902,7 +4310,7 @@ function generate(){
             const key = isoNumber+"|"+stage;
             if(existingKeys.has(key)) return;
             existingKeys.add(key);
-            newRows.push({rowId: isoNumber+"|"+stage+"|"+Math.random().toString(36).slice(2,7), stage, role:role.code, form:t.form, number, status, revision, date, functional:func.code, spatial:lvl.code, description, isoNumber});
+            newRows.push({rowId: isoNumber+"|"+stage+"|"+Math.random().toString(36).slice(2,7), stage, role:role.code, form:t.form, number, status, revision, date, functional:func.code, spatial:lvl.code, description, isoNumber, packageId: t.packageId || "", packageTitle: t.packageTitle || "", packageType: t.packageType || "", stageRule: t.stageRule || "", lod: t.lod || "", loi: t.loi || "", suitability: t.suitability || "", mandatory: !!t.mandatory});
           });
         } else {
           const spatial = t.scope === "site" ? "SI" : "XX";
@@ -3919,7 +4327,7 @@ function generate(){
           const key = isoNumber+"|"+stage;
           if(existingKeys.has(key)) return;
           existingKeys.add(key);
-          newRows.push({rowId: isoNumber+"|"+stage+"|"+Math.random().toString(36).slice(2,7), stage, role:role.code, form:t.form, number, status, revision, date, functional:func.code, spatial, description, isoNumber});
+          newRows.push({rowId: isoNumber+"|"+stage+"|"+Math.random().toString(36).slice(2,7), stage, role:role.code, form:t.form, number, status, revision, date, functional:func.code, spatial, description, isoNumber, packageId: t.packageId || "", packageTitle: t.packageTitle || "", packageType: t.packageType || "", stageRule: t.stageRule || "", lod: t.lod || "", loi: t.loi || "", suitability: t.suitability || "", mandatory: !!t.mandatory});
         }
       });
     });
@@ -8085,6 +8493,14 @@ function normalizeMidpCatalog(src, opts){
       if(!have.has(code)) roles.push({code, label: String(label).toUpperCase(), description: "", selected:false});
     });
   }
+  roles = roles.map(function(r){
+    if(!r.generationModel && typeof dgeResolveModel === "function"){
+      r.generationModel = dgeResolveModel({ midpCatalog: { roles: roles } }, r.code);
+    } else if(!r.generationModel && typeof DGE_DISCIPLINES !== "undefined" && DGE_DISCIPLINES[r.code]){
+      r.generationModel = dgeDriverToModel(DGE_DISCIPLINES[r.code].driver);
+    }
+    return r;
+  });
   const out = {
     functionalList: mapList(src.functionalList, d.functionalList),
     levels: mapList(src.levels, d.levels),
@@ -8131,6 +8547,7 @@ function normalizeProject(p){
     originator: (p.originator || "ATA").toString().toUpperCase(),
     midpCatalog: normalizeMidpCatalog(p.midpCatalog || p.midp),
     dge: (typeof normalizeDgeState === "function") ? normalizeDgeState(p.dge) : (p.dge || { engine: true }),
+    deliveryFramework: (typeof normalizeDeliveryFramework === "function") ? normalizeDeliveryFramework(p.deliveryFramework, p) : (p.deliveryFramework || null),
     midpStageDates: (p.midpStageDates && typeof p.midpStageDates === "object") ? p.midpStageDates : ((p.midp && p.midp.stageDates) || {}),
     midp: (p.midp && typeof p.midp === "object") ? p.midp : null,
     dpow: (p.dpow && typeof p.dpow === "object") ? p.dpow : null,
