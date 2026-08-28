@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Atana Package Framework",
+  "version": "1.0",
+  "flow": "DISCIPLINE \u2192 GENERATION MODEL \u2192 SYSTEM/ASSET/SPACE \u2192 PACKAGE \u2192 DELIVERABLES \u2192 PROJECT STAGE",
+  "packageTypes": {
+    "LAYOUT": [
+      "LAYOUT",
+      "DETAILS",
+      "SECTIONS"
+    ],
+    "DESIGN": [
+      "LAYOUT",
+      "CALCULATIONS",
+      "REPORT",
+      "SPECIFICATION"
+    ],
+    "DOCUMENTATION": [
+      "REPORT",
+      "REGISTER",
+      "SPECIFICATION"
+    ]
+  },
+  "stageGates": [
+    "CONCEPT",
+    "PRELIMINARY",
+    "DETAILED",
+    "TENDER",
+    "CONSTRUCTION",
+    "ASBUILT"
+  ],
+  "stageMap": {
+    "S1": "CONCEPT",
+    "S2": "PRELIMINARY",
+    "S3": "DETAILED",
+    "S4": "TENDER",
+    "S5": "CONSTRUCTION",
+    "S6": "ASBUILT"
+  },
+  "example": {
+    "taskTeam": "ME",
+    "generationModel": "SYSTEM",
+    "system": "HVAC",
+    "packageType": "DESIGN",
+    "package": "HVAC PACKAGE",
+    "spatialBreakdown": "GROUND FLOOR",
+    "stage": "DETAILED",
+    "deliverables": [
+      {
+        "title": "HVAC LAYOUT - GROUND FLOOR",
+        "rule": "required"
+      },
+      {
+        "title": "HVAC BUILDERS WORKS - GROUND FLOOR",
+        "rule": "required"
+      },
+      {
+        "title": "HVAC SCHEMATIC",
+        "rule": "required"
+      },
+      {
+        "title": "HVAC CALCULATIONS",
+        "rule": "required"
+      },
+      {
+        "title": "HVAC SPECIFICATION",
+        "rule": "required"
+      }
+    ]
+  }
+}

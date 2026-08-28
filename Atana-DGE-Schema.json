@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Atana Deliverable Generation Engine",
+  "version": "1.0",
+  "description": "TASK TEAM \u2192 GENERATION MODEL \u2192 ASSETS/SYSTEMS/SPACES \u2192 RULES \u2192 DELIVERABLES",
+  "generationModels": {
+    "SPATIAL": {
+      "pattern": "[SPATIAL BREAKDOWN] [DELIVERABLE]",
+      "defaultTeams": [
+        "AR",
+        "ST"
+      ]
+    },
+    "SYSTEM": {
+      "pattern": "[SYSTEM] [DELIVERABLE] - [SPATIAL BREAKDOWN]",
+      "defaultTeams": [
+        "EE",
+        "ME",
+        "HE",
+        "FD",
+        "FP",
+        "YS"
+      ]
+    },
+    "SITE": {
+      "pattern": "[SYSTEM/ASSET] [DELIVERABLE] - [SPATIAL BREAKDOWN]",
+      "defaultTeams": [
+        "CV",
+        "CW",
+        "HD",
+        "LA",
+        "HB"
+      ]
+    },
+    "DOCUMENT": {
+      "pattern": "[SUBJECT] [DOCUMENT TYPE]",
+      "defaultTeams": [
+        "PE",
+        "YC",
+        "EV"
+      ]
+    },
+    "SPACE": {
+      "pattern": "[SPACE] [DELIVERABLE]",
+      "defaultTeams": [
+        "ID"
+      ]
+    }
+  },
+  "example": {
+    "taskTeam": "ME",
+    "generationModel": "SYSTEM",
+    "system": "HVAC",
+    "spatialBreakdown": "GROUND FLOOR",
+    "deliverables": [
+      "HVAC LAYOUT - GROUND FLOOR",
+      "HVAC BUILDERS WORKS - GROUND FLOOR",
+      "HVAC SCHEMATIC",
+      "HVAC CALCULATIONS"
+    ]
+  },
+  "entities": {
+    "GenerationModel": [
+      "model_id",
+      "code",
+      "pattern",
+      "description"
+    ],
+    "TaskTeam": [
+      "ro_id",
+      "code",
+      "name",
+      "generation_model",
+      "subjects[]"
+    ],
+    "SpatialBreakdown": [
+      "sl_id",
+      "code",
+      "label"
+    ],
+    "System": [
+      "ss_id",
+      "code",
+      "name",
+      "uniclass_ss"
+    ],
+    "Asset": [
+      "asset_id",
+      "code",
+      "name",
+      "owner_model"
+    ],
+    "Space": [
+      "space_id",
+      "code",
+      "name",
+      "uniclass_sl"
+    ],
+    "GenerationRule": [
+      "rule_id",
+      "model",
+      "deliverable_type",
+      "form",
+      "series",
+      "scope",
+      "title_pattern",
+      "mandatory"
+    ],
+    "GeneratedDeliverable": [
+      "del_id",
+      "project_id",
+      "task_team",
+      "model",
+      "spatial_code",
+      "spatial_label",
+      "system",
+      "asset",
+      "space",
+      "title",
+      "form",
+      "number"
+    ]
+  }
+}

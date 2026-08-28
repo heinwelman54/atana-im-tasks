@@ -1,0 +1,69 @@
+{
+  "title": "Atana Decision Engine",
+  "version": "1.0",
+  "question": "HOW DOES ATANA DETERMINE WHAT TO GENERATE AUTOMATICALLY?",
+  "hierarchy": [
+    "PROJECT SETTINGS",
+    "SPATIAL",
+    "TASK TEAMS",
+    "STAGES",
+    "SYSTEMS",
+    "ASSETS",
+    "SPACES",
+    "RULE ENGINE",
+    "PACKAGES",
+    "MIDP/TIDP"
+  ],
+  "rule": {
+    "required": [
+      "id",
+      "type",
+      "trigger",
+      "conditions",
+      "outputs",
+      "stages"
+    ],
+    "types": [
+      "SYSTEM",
+      "ASSET",
+      "SPACE",
+      "STAGE",
+      "OPTIONAL",
+      "DEPENDENCY"
+    ],
+    "triggers": [
+      "SYSTEM_EXISTS",
+      "ASSET_EXISTS",
+      "SPACE_CLASS",
+      "STAGE_IS",
+      "OPTIONAL_ENABLED",
+      "TEAM_SELECTED"
+    ]
+  },
+  "example": {
+    "id": "ME-HVAC-001",
+    "trigger": "HVAC SYSTEM EXISTS",
+    "output": "HVAC PACKAGE",
+    "generate": [
+      "HVAC LAYOUT - [LEVEL]",
+      "HVAC BUILDERS WORKS - [LEVEL]",
+      "HVAC SCHEMATIC",
+      "HVAC CALCULATIONS",
+      "HVAC SPECIFICATION"
+    ]
+  },
+  "dependencies": [
+    {
+      "parent": "CONCRETE",
+      "child": "REINFORCEMENT"
+    },
+    {
+      "parent": "HVAC",
+      "child": "HVAC CALCULATIONS"
+    },
+    {
+      "parent": "FIRE DETECTION",
+      "child": "CAUSE AND EFFECT MATRIX"
+    }
+  ]
+}

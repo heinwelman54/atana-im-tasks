@@ -1,0 +1,97 @@
+{
+  "title": "Atana Stage Framework",
+  "version": "1.0",
+  "object": "PROJECT DELIVERY FRAMEWORK",
+  "contains": [
+    "STAGES",
+    "GATES",
+    "APPROVALS",
+    "REVIEWS"
+  ],
+  "defaultStages": [
+    {
+      "id": "S1",
+      "gate": "CONCEPT",
+      "lod": 2,
+      "loi": 2,
+      "suitability": "S0",
+      "state": "WIP"
+    },
+    {
+      "id": "S2",
+      "gate": "PRELIMINARY",
+      "lod": 2,
+      "loi": 2,
+      "suitability": "S1",
+      "state": "SHARED"
+    },
+    {
+      "id": "S3",
+      "gate": "DETAILED",
+      "lod": 3,
+      "loi": 3,
+      "suitability": "S2",
+      "state": "SHARED"
+    },
+    {
+      "id": "S4",
+      "gate": "TENDER",
+      "lod": 3,
+      "loi": 3,
+      "suitability": "D2",
+      "state": "SHARED"
+    },
+    {
+      "id": "S5",
+      "gate": "CONSTRUCTION",
+      "lod": 4,
+      "loi": 4,
+      "suitability": "A1",
+      "state": "PUBLISHED"
+    },
+    {
+      "id": "S6",
+      "gate": "ASBUILT",
+      "lod": 5,
+      "loi": 5,
+      "suitability": "CR",
+      "state": "PUBLISHED"
+    }
+  ],
+  "applicability": {
+    "values": [
+      "required",
+      "optional",
+      "not-applicable"
+    ],
+    "example": {
+      "deliverable": "HVAC CALCULATIONS",
+      "DETAILED": "required",
+      "TENDER": "required",
+      "CONCEPT": "optional"
+    }
+  },
+  "dataModel": {
+    "PROJECT": [
+      "TASK TEAMS",
+      "SPATIAL BREAKDOWNS",
+      "SYSTEMS",
+      "ASSETS",
+      "DELIVERY STAGES",
+      "NUMBERING RULES"
+    ],
+    "RULE ENGINE": [
+      "GENERATION MODEL",
+      "PACKAGE RULES",
+      "STAGE RULES",
+      "OPTIONAL RULES"
+    ],
+    "OUTPUT": [
+      "MIDP",
+      "TIDP",
+      "DELIVERABLE REGISTER",
+      "TASK ASSIGNMENTS",
+      "DOCUMENT NUMBERS"
+    ]
+  }
+}
