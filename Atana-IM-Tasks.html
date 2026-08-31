@@ -168,19 +168,18 @@
   .tabbar button .ic{font-size:20px;line-height:1;}
   .tabbar button.active{color:var(--purple-900);}
   .tabbar button.active .ic{color:var(--gold-700);}
-  .tools-grid{display:flex;flex-wrap:nowrap;gap:10px;overflow-x:auto;padding-bottom:4px;}
-  .tools-grid .tool-card{flex:1 1 0;min-width:160px;max-width:280px;}
-  @media(max-width:600px){.tools-grid{flex-wrap:wrap;}.tools-grid .tool-card{min-width:calc(50% - 8px);max-width:none;}}
+  .tools-grid{display:grid;grid-template-columns:1fr;gap:12px;}
+  @media(min-width:700px){.tools-grid{grid-template-columns:1fr 1fr;}}
   .acc-status{font-size:12px;color:var(--slate-500);margin:6px 0 10px;}
   .acc-hub{margin:10px 0 6px;font-size:12px;font-weight:800;color:var(--purple-950);text-transform:uppercase;letter-spacing:.04em;}
   .acc-proj-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--slate-100);border-radius:10px;margin-bottom:8px;background:var(--white);}
   .acc-proj-row .meta{font-size:12px;color:var(--slate-500);}
   .acc-proj-row .title{font-weight:700;color:var(--purple-950);}
-  .tool-card{background:var(--white);border:1px solid var(--slate-100);border-radius:var(--radius-lg);padding:12px 14px;cursor:pointer;box-shadow:0 2px 8px rgba(62,11,59,.06);display:flex;flex-direction:column;gap:2px;}
+  .tool-card{background:var(--white);border:1px solid var(--slate-100);border-radius:var(--radius-lg);padding:18px 16px;cursor:pointer;}
   .tool-card:active{border-color:var(--purple-800);}
-  .tool-card .tool-ic{font-size:20px;margin-bottom:2px;line-height:1;}
-  .tool-card .tool-name{font-family:var(--serif);font-weight:700;font-size:14px;color:var(--purple-950);margin:0;}
-  .tool-card .tool-desc{font-size:11px;color:var(--slate-500);margin:0;line-height:1.35;}
+  .tool-card .tool-ic{font-size:28px;margin-bottom:8px;}
+  .tool-card .tool-name{font-family:var(--serif);font-weight:700;font-size:16px;color:var(--purple-950);margin:0 0 4px;}
+  .tool-card .tool-desc{font-size:13px;color:var(--slate-500);margin:0;line-height:1.4;}
   .link-row{display:flex;align-items:center;gap:12px;padding:14px 4px;border-bottom:1px solid var(--slate-100);text-decoration:none;color:inherit;}
   .link-row:last-child{border-bottom:none;}
   .link-row .link-ic{width:40px;height:40px;border-radius:10px;background:var(--purple-900);color:var(--gold-500);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex-shrink:0;}
@@ -559,6 +558,21 @@
     display:flex;background:var(--slate-100);border-radius:999px;padding:3px;margin-bottom:16px;
     box-shadow:0 2px 6px rgba(15,23,42,.08),0 1px 2px rgba(15,23,42,.06),inset 0 1px 0 rgba(255,255,255,.6);
   }
+  
+  #wsSegmented{flex-wrap:wrap;border-radius:16px;gap:4px;}
+  #wsSegmented button{flex:0 0 auto;min-height:44px;padding:9px 12px;}
+  .atn-grid{display:grid;gap:10px;}
+  .atn-2{grid-template-columns:1fr;}
+  @media(min-width:720px){.atn-2{grid-template-columns:1fr 1fr;}}
+  .atn-pin{min-height:44px;border:0;border-radius:999px;padding:0 14px;background:var(--slate-100);color:var(--ink);font-weight:700;cursor:pointer;}
+  .atn-pin.on{background:var(--purple-900);color:#fff;}
+  .atn-ask{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+  .atn-ask input{flex:1;min-width:180px;min-height:44px;border:1px solid var(--slate-300);border-radius:10px;padding:0 12px;font:inherit;}
+  .atn-trace{font-family:var(--mono);font-size:12px;line-height:1.55;white-space:pre-wrap;}
+  .atn-bar{height:8px;background:var(--slate-100);border-radius:99px;overflow:hidden;margin-top:8px;}
+  .atn-bar>i{display:block;height:100%;background:var(--gold-500);}
+  .atn-muted{color:var(--slate-500);font-size:13px;line-height:1.45;}
+
   .segmented button.active{
     box-shadow:0 1px 3px rgba(15,23,42,.12);
   }
@@ -1375,7 +1389,6 @@
   }
   .midp-docs-toolbar-one-row .btn{ white-space:nowrap; }
 </style>
-<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -1394,7 +1407,7 @@
     var b = document.getElementById("atanaBootBeacon");
     if(b){
       b.style.background="#14532d";
-      b.innerHTML = "Atana IM <strong>v" + APP_VERSION + "</strong> ready";
+      b.innerHTML = "Atana IM <strong>v3.2.1</strong> ready";
       setTimeout(function(){ try{ b.remove(); }catch(e){} }, 4000);
     }
     // Kill stale service workers on first load of 3.0.0
@@ -1420,7 +1433,7 @@
     </button>
     <img src="./icons/icon-192.png" class="brand-icon" alt="" id="topbarIcon">
     <img id="topbarProjectImg" alt="" style="display:none;">
-    <h1 id="topbarTitle">Projects</h1>
+    <h1 id="topbarTitle">Information Management</h1>
     <span class="app-version-badge" id="appVersionBadge" title="App build">v…</span>
     <button type="button" class="acc-status-btn" id="accStatusBtn" title="FORMA / Autodesk" aria-label="FORMA login status">
       <span class="acc-status-dot" id="accStatusDot"></span>
@@ -1435,7 +1448,7 @@
     <section class="panel active" id="panel-projects">
       <div class="fab-row">
         <div>
-          <div class="section-title">Projects</div>
+          <div class="section-title">Information Management</div>
           <p class="section-sub">Projects and IM task checklists. Tap a project to open it.</p>
         </div>
       </div>
@@ -1460,17 +1473,17 @@
         <div class="tool-card" id="toolChecklists" role="button" tabindex="0">
           <div class="tool-ic">&#9745;</div>
           <div class="tool-name">IM Good Practice Checklists</div>
-          <div class="tool-desc">ISO 19650 / SACAP QA · progress on device</div>
+          <div class="tool-desc">ISO 19650 / SACAP QA checklists embedded in the app. Progress saves on this device.</div>
         </div>
         <div class="tool-card" id="toolDeliverableNaming" role="button" tabindex="0">
           <div class="tool-ic">&#128196;</div>
           <div class="tool-name">Deliverable naming</div>
-          <div class="tool-desc">ISO deliverable naming helper</div>
+          <div class="tool-desc">ISO naming helper (defaults). Prefer project Tools when a project is open.</div>
         </div>
         <div class="tool-card" id="toolAssetNaming" role="button" tabindex="0">
           <div class="tool-ic">&#129513;</div>
           <div class="tool-name">Asset naming</div>
-          <div class="tool-desc">NBS family names · Uniclass · Content Catalog</div>
+          <div class="tool-desc">NBS family naming · Content Catalog process · Uniclass & IFC4 · FORMA export.</div>
         </div>
       </div>
       <div id="toolsChecklistsHost" style="display:none;margin-top:16px;">
@@ -1641,59 +1654,13 @@
       <div class="card" style="margin-top:14px;" id="apsCard">
         <div class="chart-card-title" style="margin-bottom:6px;">Autodesk ACC</div>
         <p class="section-sub" style="margin-bottom:12px;">Sign in with your Autodesk account to list ACC hubs/projects, import a project into Atana, and sync Docs. Create an APS app at <strong>aps.autodesk.com</strong> with this exact callback URL.</p>
-        <div class="field" style="border:1px solid #e9d5ff;background:#faf5ff;border-radius:12px;padding:12px;margin-bottom:12px;box-shadow:0 2px 8px rgba(109,40,217,.08)">
-          <div style="font-weight:800;font-size:13px;color:#4c1d95;margin-bottom:6px;">Load APS credentials from SharePoint</div>
-          <p class="section-sub" style="margin:0 0 10px;">Restricted library (only intended users). Default path can be changed. Uses Microsoft sign-in + Graph — secrets stay out of the GitHub repo.</p>
-          <div class="field">
-            <label>Azure AD (MSAL) Application (client) ID</label>
-            <input type="text" id="spMsalClientId" placeholder="Azure AD app client ID for this web app" autocomplete="off" spellcheck="false">
-            <p class="section-sub" style="margin:4px 0 0;">Separate from APS. Register a SPA app in Entra ID with redirect = this site. API permission: Microsoft Graph <code>Files.Read.All</code> or <code>Sites.Read.All</code> (admin consent).</p>
-          </div>
-          <div class="field">
-            <label>Azure AD Tenant ID</label>
-            <input type="text" id="spMsalTenantId" placeholder="Directory (tenant) ID or &quot;organizations&quot;" autocomplete="off" spellcheck="false">
-          </div>
-          <div class="field">
-            <label>SharePoint site URL</label>
-            <input type="text" id="spSiteUrl" placeholder="https://rootcoredirectory.sharepoint.com/sites/KTG_BIM_Execution-IMTeam" autocomplete="off" spellcheck="false">
-          </div>
-          <div class="field">
-            <label>Config file path (default library)</label>
-            <input type="text" id="spConfigPath" placeholder="AtanaIM/Data/aps-config.json" autocomplete="off" spellcheck="false">
-            <p class="section-sub" style="margin:4px 0 0;">Default: <code>AtanaIM/Data/aps-config.json</code> on the IM Team site. Change if your library path differs.</p>
-          </div>
-          <div class="field">
-            <label>SharePoint folder (browser link)</label>
-            <input type="text" id="spFolderUrl" placeholder="SharePoint folder link" autocomplete="off" spellcheck="false">
-            <p class="section-sub" style="margin:4px 0 0;">Opens the shared Data folder so you can download <code>aps-config.json</code> if automatic load is unavailable.</p>
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
-            <button type="button" class="btn btn-primary" id="btnLoadApsFromSharePoint">Sign in to Microsoft &amp; load config</button>
-            <button type="button" class="btn btn-ghost" id="btnImportApsConfigFile" type="button">Browse / import aps-config.json</button>
-            <input type="file" id="apsConfigFileInput" accept=".json,application/json" hidden>
-            <button type="button" class="btn btn-ghost" id="btnOpenSpFolder">Open SharePoint folder</button>
-            <button type="button" class="btn btn-ghost" id="btnSaveSpPath">Save path settings</button>
-            <button type="button" class="btn btn-ghost" id="btnClearApsSecretSession">Clear loaded secret (this browser)</button>
-          </div>
-          <p class="section-sub" style="margin:8px 0 0;">No Azure AD admin? Use <strong>Browse / import</strong> after downloading the JSON from the SharePoint folder (Edge SSO works on SharePoint).</p>
-          <p class="section-sub" id="spCfgStatus" style="margin:8px 0 0;"></p>
-          <details style="margin-top:8px">
-            <summary style="cursor:pointer;font-size:12px;font-weight:700;color:#6d28d9">aps-config.json format</summary>
-            <pre style="font-size:11px;background:#0f172a;color:#e9d5ff;padding:10px;border-radius:8px;overflow:auto;margin-top:6px">{
-  "apsClientId": "…",
-  "apsClientSecret": "…",
-  "apsRegion": "EMEA",
-  "apsCallbackUrl": "https://…/app.html"
-}</pre>
-          </details>
-        </div>
         <div class="field">
           <label>APS Client ID</label>
           <input type="text" id="apsClientId" placeholder="Client ID" autocomplete="off" spellcheck="false">
         </div>
         <div class="field">
           <label>APS Client Secret</label>
-          <input type="password" id="apsClientSecret" placeholder="Client Secret (prefer load from SharePoint)" autocomplete="off" spellcheck="false">
+          <input type="password" id="apsClientSecret" placeholder="Client Secret" autocomplete="off" spellcheck="false">
         </div>
         <div class="field">
           <label>ACC / APS region</label>
@@ -1766,6 +1733,11 @@
         <button data-wsview="planner">IM Planner</button>
         <button data-wsview="dpow">DPoW</button>
         <button data-wsview="midp">MIDP</button>
+        <button data-wsview="ite">ITE</button>
+        <button data-wsview="air">AIR</button>
+        <button data-wsview="aim">AIM</button>
+        <button data-wsview="graph">Graph</button>
+        <button data-wsview="decide">Decide</button>
         <button data-wsview="prjtools">Tools</button>
         <button data-wsview="prjdocs">Documents</button>
       </div>
@@ -2036,6 +2008,42 @@
         </div>
       </div>
 
+
+      <div class="ws-view" id="wsview-ite">
+        <div class="card" style="margin-bottom:12px;">
+          <div class="chart-card-title">Information Template Engine</div>
+          <p class="section-sub" style="margin:0;">Single source of truth. IR, AIR and IDS are generated from these templates. Completeness is present vs required at the current LOI — never a drawing count.</p>
+        </div>
+        <div id="atnIteRoot"></div>
+      </div>
+      <div class="ws-view" id="wsview-air">
+        <div class="card" style="margin-bottom:12px;">
+          <div class="chart-card-title">AIR builder</div>
+          <p class="section-sub" style="margin:0;">Asset Information Requirements generated from the template engine, bound to OIR → PIR → EIR. Select templates and LOI, then issue the AIR.</p>
+        </div>
+        <div id="atnAirRoot"></div>
+      </div>
+      <div class="ws-view" id="wsview-aim">
+        <div class="card" style="margin-bottom:12px;">
+          <div class="chart-card-title">Asset Information Model</div>
+          <p class="section-sub" style="margin:0;">Instances inherit templates. Gate is 95% present vs required at this work stage.</p>
+        </div>
+        <div id="atnAimRoot"></div>
+      </div>
+      <div class="ws-view" id="wsview-graph">
+        <div class="card" style="margin-bottom:12px;">
+          <div class="chart-card-title">Knowledge graph</div>
+          <p class="section-sub" style="margin:0;">Central intelligence layer. Ontology, trace, impact, saved queries, role dashboards. Same graph Decide uses.</p>
+        </div>
+        <div id="atnGraphRoot"></div>
+      </div>
+      <div class="ws-view" id="wsview-decide">
+        <div class="card" style="margin-bottom:12px;">
+          <div class="chart-card-title">Decision intelligence</div>
+          <p class="section-sub" style="margin:0;">What should happen next. Health, risk, recovery and Copilot walk the same graph.</p>
+        </div>
+        <div id="atnDecideRoot"></div>
+      </div>
     </section>
 
   </main>
@@ -2044,7 +2052,7 @@
   <button type="button" class="fab-btn" id="fabBackTop" title="Back to top">↑ Top</button>
 </div>
 <nav class="tabbar" id="tabbar">
-    <button class="tab-btn active" data-tab="projects"><span class="ic">&#128193;</span>Projects</button>
+    <button class="tab-btn active" data-tab="projects"><span class="ic">&#128193;</span>IM</button>
     <button class="tab-btn" data-tab="tools"><span class="ic">&#128295;</span>Tools</button>
     <button class="tab-btn" data-tab="templates"><span class="ic">&#128209;</span>Templates</button>
     <button class="tab-btn" data-tab="links"><span class="ic">&#128279;</span>Links</button>
@@ -2060,8 +2068,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.5.2";
-const APP_BUILD = "2026-08-20-syntax-fix";
+const APP_VERSION = "3.6.1";
+const APP_BUILD = "2026-08-31-kge-ontology";
 
 /** Atana IM Framework — path relative to app (same folder on GitHub Pages / local). */
 const IM_FRAMEWORK_URL = "Atana-IM-Framework.html";
@@ -7242,209 +7250,7 @@ const APS_AUTH = "https://developer.api.autodesk.com/authentication/v2";
 const APS_DM = "https://developer.api.autodesk.com/project/v1";
 const APS_SCOPES = "data:read data:write account:read user-profile:read";
 const APS_STORE_KEY = "atana-aps-auth-v1";
-
 const APS_CFG_KEY = "atana-aps-cfg-v1";
-const SP_APS_PATH_KEY = "atana-sp-aps-path-v1";
-const APS_SECRET_SESSION_KEY = "atana-aps-secret-session";
-
-/** Default SharePoint location — user can change and save */
-const SP_APS_DEFAULTS = {
-  siteUrl: "https://rootcoredirectory.sharepoint.com/sites/KTG_BIM_Execution-IMTeam",
-  filePath: "AtanaIM/Data/aps-config.json",
-  folderUrl: "https://rootcoredirectory.sharepoint.com/:f:/r/sites/KTG_BIM_Execution-IMTeam/AtanaIM/Data?d=w2e487c83e7ab47c4806ed533b9d0eaa2&csf=1&web=1&e=cerynx",
-  msalClientId: "",
-  msalTenantId: "organizations"
-};
-
-function spApsLoadPathCfg(){
-  try {
-    const raw = JSON.parse(localStorage.getItem(SP_APS_PATH_KEY) || "{}");
-    return Object.assign({}, SP_APS_DEFAULTS, raw || {});
-  } catch(e){ return Object.assign({}, SP_APS_DEFAULTS); }
-}
-function spApsSavePathCfg(cfg){
-  localStorage.setItem(SP_APS_PATH_KEY, JSON.stringify(cfg || {}));
-}
-function spApsFillPathForm(){
-  const c = spApsLoadPathCfg();
-  const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v || ""; };
-  set("spMsalClientId", c.msalClientId);
-  set("spMsalTenantId", c.msalTenantId || "organizations");
-  set("spSiteUrl", c.siteUrl);
-  set("spConfigPath", c.filePath);
-  set("spFolderUrl", c.folderUrl || SP_APS_DEFAULTS.folderUrl || "");
-}
-function spApsReadPathForm(){
-  return {
-    msalClientId: (document.getElementById("spMsalClientId") && document.getElementById("spMsalClientId").value || "").trim(),
-    msalTenantId: (document.getElementById("spMsalTenantId") && document.getElementById("spMsalTenantId").value || "organizations").trim() || "organizations",
-    siteUrl: (document.getElementById("spSiteUrl") && document.getElementById("spSiteUrl").value || "").trim(),
-    filePath: (document.getElementById("spConfigPath") && document.getElementById("spConfigPath").value || "").trim(),
-    folderUrl: (document.getElementById("spFolderUrl") && document.getElementById("spFolderUrl").value || "").trim()
-  };
-}
-
-function spImportApsConfigFromFile(file){
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = function(){
-    try {
-      const json = JSON.parse(String(reader.result || ""));
-      const applied = spApplyApsConfigJson(json);
-      spApsSetStatus("Imported APS config from file" + (applied.hasSecret ? " (secret in session)" : ""), true);
-      if(typeof showToast === "function") showToast("APS config imported from file");
-      try { if(typeof updateApsLoginUi === "function") updateApsLoginUi(); } catch(e){}
-    } catch(e){
-      spApsSetStatus("Invalid JSON: " + (e.message || e), false);
-    }
-  };
-  reader.readAsText(file);
-}
-function spApsSetStatus(msg, ok){
-  const el = document.getElementById("spCfgStatus");
-  if(!el) return;
-  el.textContent = msg || "";
-  el.style.color = ok === false ? "#b91c1c" : (ok ? "#047857" : "");
-}
-
-function parseSharePointSiteUrl(siteUrl){
-  const u = new URL(siteUrl);
-  const host = u.hostname; // contoso.sharepoint.com
-  let path = u.pathname.replace(/\/$/, "");
-  if(!path.startsWith("/")) path = "/" + path;
-  // Graph: /sites/{hostname}:/sites/SiteName
-  return { host, serverRelative: path, graphSitePath: host + ":" + path };
-}
-
-async function spMsalAcquireToken(pathCfg){
-  if(typeof msal === "undefined" || !msal.PublicClientApplication){
-    throw new Error("MSAL library not loaded — check network / CDN");
-  }
-  if(!pathCfg.msalClientId){
-    throw new Error("Azure AD Application (client) ID is required");
-  }
-  const redirectUri = (function(){
-    try {
-      const u = new URL(window.location.href);
-      return u.origin + u.pathname; // current page is fine for popup/redirect
-    } catch(e){ return window.location.href.split("#")[0].split("?")[0]; }
-  })();
-  const pca = new msal.PublicClientApplication({
-    auth: {
-      clientId: pathCfg.msalClientId,
-      authority: "https://login.microsoftonline.com/" + (pathCfg.msalTenantId || "organizations"),
-      redirectUri: redirectUri
-    },
-    cache: { cacheLocation: "sessionStorage" }
-  });
-  await pca.initialize();
-  const scopes = ["Files.Read.All", "Sites.Read.All", "User.Read"];
-  let account = pca.getAllAccounts()[0] || null;
-  if(!account){
-    const login = await pca.loginPopup({ scopes });
-    account = login.account;
-  }
-  try {
-    const silent = await pca.acquireTokenSilent({ account, scopes });
-    return silent.accessToken;
-  } catch(e){
-    const pop = await pca.acquireTokenPopup({ account, scopes });
-    return pop.accessToken;
-  }
-}
-
-async function spGraphGetJsonConfig(pathCfg, accessToken){
-  const site = parseSharePointSiteUrl(pathCfg.siteUrl);
-  let filePath = (pathCfg.filePath || "").replace(/^\/+/, "");
-  // Allow "Shared Documents/..." or "General/..."
-  const headers = { Authorization: "Bearer " + accessToken, Accept: "application/json" };
-
-  // Resolve site id
-  const siteRes = await fetch("https://graph.microsoft.com/v1.0/sites/" + encodeURIComponent(site.graphSitePath), { headers });
-  const siteText = await siteRes.text();
-  if(!siteRes.ok){
-    throw new Error("SharePoint site not found (" + siteRes.status + "). Check site URL. " + siteText.slice(0, 180));
-  }
-  const siteJson = JSON.parse(siteText);
-  const siteId = siteJson.id;
-
-  // Prefer path on default drive
-  const contentUrl = "https://graph.microsoft.com/v1.0/sites/" + encodeURIComponent(siteId) +
-    "/drive/root:/" + filePath.split("/").map(encodeURIComponent).join("/") + ":/content";
-  const fileRes = await fetch(contentUrl, { headers });
-  const fileText = await fileRes.text();
-  if(!fileRes.ok){
-    throw new Error("Config file not found (" + fileRes.status + "). Path: " + filePath + " — " + fileText.slice(0, 200));
-  }
-  try {
-    return JSON.parse(fileText);
-  } catch(e){
-    throw new Error("Config file is not valid JSON");
-  }
-}
-
-function spApplyApsConfigJson(cfgJson){
-  if(!cfgJson || typeof cfgJson !== "object") throw new Error("Empty config");
-  const clientId = (cfgJson.apsClientId || cfgJson.clientId || cfgJson.CLIENT_ID || "").trim();
-  const clientSecret = (cfgJson.apsClientSecret || cfgJson.clientSecret || cfgJson.CLIENT_SECRET || "").trim();
-  const region = (cfgJson.apsRegion || cfgJson.region || "EMEA").trim();
-  const redirect = (cfgJson.apsCallbackUrl || cfgJson.redirectUri || cfgJson.callbackUrl || "").trim();
-  if(!clientId) throw new Error("apsClientId missing in SharePoint JSON");
-
-  const idEl = document.getElementById("apsClientId");
-  const secEl = document.getElementById("apsClientSecret");
-  const regEl = document.getElementById("apsRegion");
-  const redEl = document.getElementById("apsRedirectUri");
-  if(idEl) idEl.value = clientId;
-  if(secEl && clientSecret) secEl.value = clientSecret;
-  if(regEl && region) regEl.value = region;
-  if(redEl && redirect) redEl.value = redirect;
-
-  // Persist non-secret to local cfg; secret to session only
-  const cfg = apsLoadCfg();
-  cfg.clientId = clientId;
-  if(region) cfg.region = region;
-  if(redirect) cfg.redirectUri = redirect;
-  // Do not write secret into localStorage long-term if avoidable
-  if(clientSecret){
-    try { sessionStorage.setItem(APS_SECRET_SESSION_KEY, clientSecret); } catch(e){}
-    cfg.clientSecret = clientSecret; // existing login still reads cfg.clientSecret — keep compatibility
-  }
-  apsSaveCfg(cfg);
-  return { clientId, hasSecret: !!clientSecret, region, redirect };
-}
-
-async function spLoadApsConfigFromSharePoint(){
-  const pathCfg = spApsReadPathForm();
-  if(!pathCfg.siteUrl || !pathCfg.filePath){
-    spApsSetStatus("Site URL and file path are required", false);
-    return;
-  }
-  if(!pathCfg.msalClientId){
-    spApsSetStatus("Azure AD Application (client) ID is required", false);
-    return;
-  }
-  spApsSavePathCfg(pathCfg);
-  spApsSetStatus("Signing in to Microsoft…");
-  try {
-    const token = await spMsalAcquireToken(pathCfg);
-    spApsSetStatus("Downloading config from SharePoint…");
-    const json = await spGraphGetJsonConfig(pathCfg, token);
-    const applied = spApplyApsConfigJson(json);
-    spApsSetStatus("Loaded APS config from SharePoint" + (applied.hasSecret ? " (secret in session)" : " (no secret in file)"), true);
-    if(typeof showToast === "function") showToast("APS credentials loaded from SharePoint");
-    // refresh FORMA header indicator if present
-    try { if(typeof updateApsLoginUi === "function") updateApsLoginUi(); } catch(e){}
-    try { if(typeof renderApsStatus === "function") renderApsStatus(); } catch(e){}
-  } catch(e){
-    console.error("[SharePoint APS config]", e);
-    spApsSetStatus((e && e.message) || String(e), false);
-    if(typeof showToast === "function") showToast("SharePoint config failed: " + ((e && e.message) || e));
-  }
-}
-
-// Prefer session secret when reading cfg for login
-
 
 const BUSINESS_UNITS = [
   { code: "AVI", label: "AVI - Aviation", description: "Airport Civil Engineering Southern Africa" },
@@ -7504,14 +7310,7 @@ function extractAccProjectFields(accProj){
 
 
 function apsLoadCfg(){
-  try {
-    const cfg = JSON.parse(localStorage.getItem(APS_CFG_KEY) || "{}") || {};
-    try {
-      const sess = sessionStorage.getItem(APS_SECRET_SESSION_KEY);
-      if(sess) cfg.clientSecret = sess;
-    } catch(e){}
-    return cfg;
-  } catch(e){ return {}; }
+  try { return JSON.parse(localStorage.getItem(APS_CFG_KEY) || "{}"); } catch(e){ return {}; }
 }
 function apsSaveCfg(cfg){ localStorage.setItem(APS_CFG_KEY, JSON.stringify(cfg || {})); }
 function apsLoadAuth(){
@@ -7577,79 +7376,6 @@ function apsRandomString(len){
   for(let i=0;i<len;i++) out += chars[arr[i] % chars.length];
   return out;
 }
-
-function bindSharePointApsConfigUi(){
-  try { spApsFillPathForm(); } catch(e){}
-  // One-time document-level delegation so buttons work even if Settings was not open at load
-  if(!window.__spApsDelegated){
-    window.__spApsDelegated = true;
-    document.addEventListener("click", function(ev){
-      const t = ev.target && (ev.target.closest ? ev.target.closest("button, a, label") : ev.target);
-      if(!t || !t.id) return;
-      if(t.id === "btnImportApsConfigFile"){
-        ev.preventDefault();
-        const fileInp = document.getElementById("apsConfigFileInput");
-        if(fileInp) fileInp.click();
-        else if(typeof showToast === "function") showToast("File input missing — hard-refresh the app");
-        return;
-      }
-      if(t.id === "btnLoadApsFromSharePoint"){
-        ev.preventDefault();
-        if(typeof spLoadApsConfigFromSharePoint === "function") spLoadApsConfigFromSharePoint();
-        return;
-      }
-      if(t.id === "btnSaveSpPath"){
-        ev.preventDefault();
-        try {
-          spApsSavePathCfg(spApsReadPathForm());
-          spApsSetStatus("Path settings saved on this device", true);
-        } catch(e){ spApsSetStatus(String(e.message||e), false); }
-        return;
-      }
-      if(t.id === "btnClearApsSecretSession"){
-        ev.preventDefault();
-        try { sessionStorage.removeItem(APS_SECRET_SESSION_KEY); } catch(e){}
-        try {
-          const cfg = apsLoadCfg();
-          delete cfg.clientSecret;
-          apsSaveCfg(cfg);
-        } catch(e){}
-        const secEl = document.getElementById("apsClientSecret");
-        if(secEl) secEl.value = "";
-        spApsSetStatus("Cleared APS secret from this browser session", true);
-        return;
-      }
-      if(t.id === "btnOpenSpFolder"){
-        ev.preventDefault();
-        let url = "";
-        try {
-          const c = spApsReadPathForm();
-          url = (c.folderUrl || (SP_APS_DEFAULTS && SP_APS_DEFAULTS.folderUrl) || "").trim();
-        } catch(e){}
-        if(!url && SP_APS_DEFAULTS) url = SP_APS_DEFAULTS.folderUrl || "";
-        if(!url){ spApsSetStatus("No SharePoint folder URL set", false); return; }
-        window.open(url, "_blank", "noopener");
-        return;
-      }
-    }, true);
-    document.addEventListener("change", function(ev){
-      const t = ev.target;
-      if(!t || t.id !== "apsConfigFileInput") return;
-      const f = t.files && t.files[0];
-      if(f && typeof spImportApsConfigFromFile === "function") spImportApsConfigFromFile(f);
-      try { t.value = ""; } catch(e){}
-    }, true);
-  }
-}
-
-// Ensure handlers install as soon as script runs + on DOM ready
-try { bindSharePointApsConfigUi(); } catch(e){ console.warn("[SP APS bind]", e); }
-try {
-  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", function(){ try { bindSharePointApsConfigUi(); } catch(e){} });
-  else bindSharePointApsConfigUi();
-} catch(e){}
-
-
 async function apsBeginLogin(){
   const cfg = apsLoadCfg();
   const clientId = ((document.getElementById("apsClientId") && document.getElementById("apsClientId").value) || cfg.clientId || "").trim();
@@ -12613,6 +12339,11 @@ function setActiveWsView(view){
       try { renderMidpTool(project); }
       catch(err){ console.error("renderMidpTool", err); showToast("MIDP view error: " + (err.message||err)); }
     }
+    if(main === "ite" && typeof renderAtnIte === "function") renderAtnIte(project);
+    if(main === "air" && typeof renderAtnAir === "function") renderAtnAir(project);
+    if(main === "aim" && typeof renderAtnAim === "function") renderAtnAim(project);
+    if(main === "graph" && typeof renderAtnGraph === "function") renderAtnGraph(project);
+    if(main === "decide" && typeof renderAtnDecide === "function") renderAtnDecide(project);
     if(main === "prjtools" && typeof bindProjectTools === "function") bindProjectTools(project);
     if(main === "prjdocs" && typeof bindProjectDocs === "function") bindProjectDocs(project);
   } catch(e){ console.error(e); }
@@ -15996,15 +15727,11 @@ function buildRevitSyncPack(project){
       designTeamLead: nameOfFunc("DTL"),
       documentManager: nameOfFunc("DM")
     },
-    deliverables: sheetPlan,
-    planRows: sheetPlan,
-    allPlanRows: sheetPlan,
     sheets: {
       publishSetName: stageId,
       publishSetNameAlt: "SW" + stageIdx,
-      forms: [],
+      forms: ["DR", "SH"],
       plan: sheetPlan,
-      allPlanned: sheetPlan,
       instructions: [
         "Parse Revit model file name for task team role code (ISO segment).",
         "Filter plan rows to that task team.",
@@ -17247,16 +16974,6 @@ function switchTab(tab){
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   document.getElementById("panel-" + tab).classList.add("active");
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-  if(tab === "settings"){
-    try { bindSharePointApsConfigUi(); } catch(e){}
-    try { spApsFillPathForm(); } catch(e){}
-  }
-  if(tab === "projects"){
-    try {
-      const t = document.getElementById("topbarTitle");
-      if(t && !currentProjectId) t.textContent = "Projects";
-    } catch(e){}
-  }
   document.getElementById("tabbar").style.display = "flex";
   document.getElementById("backBtn").style.display = "none";
 
@@ -20958,6 +20675,461 @@ document.getElementById('assetNamingClose') && document.getElementById('assetNam
 });
 
 
+
+
+/* ========== Copilot engines 2026-08-31: ITE / AIR / AIM / Graph / Decide ========== */
+const ATN_GATE = 95;
+const ATN_TEMPLATES = [
+  {id:"door", name:"Door", ifc:"IfcDoor", revit:"Doors", uniclass:"Pr_30_59_24", attrs:[
+    {id:"fire", name:"Fire Rating", loi:2, unit:"min", req:true},
+    {id:"width", name:"Clear Width", loi:2, unit:"mm", req:true},
+    {id:"hand", name:"Handing", loi:3, unit:"", req:true},
+    {id:"iron", name:"Ironmongery Set", loi:4, unit:"", req:true},
+    {id:"maint", name:"Maintenance Regime", loi:5, unit:"", req:false}
+  ]},
+  {id:"window", name:"Window", ifc:"IfcWindow", revit:"Windows", uniclass:"Pr_30_59_94", attrs:[
+    {id:"uval", name:"U-Value", loi:2, unit:"W/m2K", req:true},
+    {id:"gval", name:"g-Value", loi:3, unit:"", req:true},
+    {id:"sec", name:"Security Rating", loi:4, unit:"", req:true}
+  ]},
+  {id:"pump", name:"Pump", ifc:"IfcPump", revit:"Mechanical Equipment", uniclass:"Pr_65_53_30", attrs:[
+    {id:"flow", name:"Duty Flow", loi:2, unit:"l/s", req:true},
+    {id:"head", name:"Duty Head", loi:2, unit:"kPa", req:true},
+    {id:"nplus", name:"N+1 Redundancy", loi:4, unit:"", req:true}
+  ]},
+  {id:"ahu", name:"AHU", ifc:"IfcUnitaryEquipment", revit:"Mechanical Equipment", uniclass:"Pr_70_65_03", attrs:[
+    {id:"sa", name:"Supply Airflow", loi:2, unit:"l/s", req:true},
+    {id:"filt", name:"Filter Class", loi:3, unit:"", req:true},
+    {id:"hvac", name:"HVAC Control Strategy", loi:4, unit:"", req:true}
+  ]},
+  {id:"cctv", name:"CCTV Camera", ifc:"IfcAudioVisualAppliance", revit:"Electrical Fixtures", uniclass:"Pr_75_75_17", attrs:[
+    {id:"res", name:"Resolution", loi:2, unit:"", req:true},
+    {id:"cov", name:"Coverage Zone", loi:3, unit:"", req:true}
+  ]},
+  {id:"det", name:"Detector", ifc:"IfcSensor", revit:"Fire Alarm Devices", uniclass:"Pr_75_50_76", attrs:[
+    {id:"type", name:"Detector Type", loi:2, unit:"", req:true},
+    {id:"loop", name:"Loop Address", loi:4, unit:"", req:true}
+  ]}
+];
+const ATN_ASSETS = [
+  {id:"d1", type:"door", name:"D-01 Reception"},
+  {id:"d2", type:"door", name:"D-02 Comms"},
+  {id:"d3", type:"door", name:"D-03 Stair A"},
+  {id:"w1", type:"window", name:"W-14 West"},
+  {id:"p1", type:"pump", name:"P-01 Duty"},
+  {id:"a1", type:"ahu", name:"AHU-01 L1"}
+];
+const ATN_CHAIN = [
+  {id:"org", kind:"Organisation", label:"Atana / appointing party"},
+  {id:"proj", kind:"Project", label:"FB01 Administration"},
+  {id:"fb", kind:"Functional Breakdown", label:"FB01 Administration"},
+  {id:"sl", kind:"Spatial Breakdown", label:"SL_90_10 Reception / Comms / Stair A"},
+  {id:"stage4", kind:"Work Stage", label:"Stage 4 — Technical design"},
+  {id:"tt-arch", kind:"Task Team", label:"Architecture task team"},
+  {id:"tt-mep", kind:"Task Team", label:"MEP task team"},
+  {id:"role-im", kind:"Role", label:"Information Manager"},
+  {id:"role-ia", kind:"Role", label:"Information Author"},
+  {id:"oir", kind:"OIR", label:"OIR — operate a safe building"},
+  {id:"pir", kind:"PIR", label:"PIR — fire compartmentation known at handover"},
+  {id:"eir", kind:"EIR", label:"EIR — fire-rated openings scheduled at Stage 4"},
+  {id:"hvac", kind:"EIR", label:"EIR — HVAC strategy at Stage 4"},
+  {id:"air", kind:"AIR", label:"AIR — Fire Rating on every door instance"},
+  {id:"air-hvac", kind:"AIR", label:"AIR — HVAC Control Strategy on every AHU"},
+  {id:"ir-door", kind:"Information Requirement", label:"IR — Door LOI 4 schedule"},
+  {id:"tpl-door", kind:"Information Template", label:"Template — Door"},
+  {id:"tpl-ahu", kind:"Information Template", label:"Template — AHU"},
+  {id:"attr-fire", kind:"Attribute", label:"Fire Rating"},
+  {id:"attr-hvac", kind:"Attribute", label:"HVAC Control Strategy"},
+  {id:"pset", kind:"IFC Property Set", label:"Pset_DoorCommon.FireRating"},
+  {id:"revit", kind:"Revit Parameter", label:"Fire Rating (ATA_ZZ)"},
+  {id:"ss-door", kind:"Uniclass SS", label:"Ss_25_30_20 Doorsets"},
+  {id:"spp-door", kind:"Scope Production Package", label:"Package — Doors"},
+  {id:"spp-ahu", kind:"Scope Production Package", label:"Package — AHU"},
+  {id:"del-door", kind:"Deliverable", label:"Door schedule S4"},
+  {id:"ids-door", kind:"IDS", label:"IDS — Door Fire Rating required"},
+  {id:"aim", kind:"AIM", label:"AIM — FB01 asset set"},
+  {id:"aim-d1", kind:"Asset", label:"D-01 Reception"},
+  {id:"aim-d2", kind:"Asset", label:"D-02 Comms"},
+  {id:"aim-a1", kind:"Asset", label:"AHU-01 L1"},
+  {id:"sys-fire", kind:"System", label:"Fire compartmentation"},
+  {id:"twin", kind:"Digital Twin Entity", label:"Twin — FB01 doors / AHU"},
+  {id:"ops", kind:"Operations Entity", label:"FM — fire door inspection"},
+  {id:"risk1", kind:"Risk", label:"Stage 4 issue gate missed"},
+  {id:"act1", kind:"Action", label:"Capture Fire Rating on D-02"}
+];
+const ATN_EDGES = [
+  ["org","OWNS","proj"],["proj","CONTAINS","fb"],["proj","CONTAINS","sl"],
+  ["proj","CONTAINS","stage4"],["proj","ASSIGNED_TO","tt-arch"],["proj","ASSIGNED_TO","tt-mep"],
+  ["role-im","GOVERNS","proj"],["role-ia","AUTHORED_BY","del-door"],
+  ["oir","GENERATES","pir"],["pir","GENERATES","eir"],["eir","BINDS","air"],
+  ["oir","GENERATES","hvac"],["hvac","BINDS","air-hvac"],
+  ["air","DEFINES","tpl-door"],["air-hvac","DEFINES","tpl-ahu"],
+  ["tpl-door","CONTAINS","attr-fire"],["tpl-ahu","CONTAINS","attr-hvac"],
+  ["attr-fire","CLASSIFIED_AS","pset"],["attr-fire","REFERENCES","revit"],
+  ["tpl-door","CLASSIFIED_AS","ss-door"],["tpl-door","GENERATES","ir-door"],
+  ["ir-door","FEEDS","spp-door"],["tpl-door","PRODUCES","spp-door"],["tpl-ahu","PRODUCES","spp-ahu"],
+  ["spp-door","CONTAINS","del-door"],["ir-door","VALIDATED_BY","ids-door"],
+  ["ids-door","VALIDATED_BY","aim"],["aim","CONTAINS","aim-d1"],["aim","CONTAINS","aim-d2"],["aim","CONTAINS","aim-a1"],
+  ["attr-fire","REQUIRES","aim-d1"],["attr-fire","REQUIRES","aim-d2"],["attr-hvac","REQUIRES","aim-a1"],
+  ["aim-d1","LOCATED_IN","sl"],["aim-d2","LOCATED_IN","sl"],["aim-d1","PART_OF","sys-fire"],
+  ["aim","FEEDS","twin"],["twin","SUPPORTS","ops"],
+  ["attr-fire","BLOCKS","stage4"],["aim-d2","IMPACTS","risk1"],["risk1","ASSIGNED_TO","act1"],
+  ["tt-arch","RESPONSIBLE_FOR","spp-door"],["tt-mep","RESPONSIBLE_FOR","spp-ahu"],
+  ["stage4","DEPENDS_ON","del-door"]
+];
+const ATN_KINDS = ["Organisation","Project","Portfolio","Functional Breakdown","Spatial Breakdown","Task Team","Stakeholder","Role","Work Stage","Scope Production Package","Information Template","Information Requirement","Attribute","Parameter","Deliverable","Deliverable Package","Information Container","IDS","AIM","AIR","EIR","PIR","OIR","Asset","Asset Type","System","System Type","Space","Space Type","Workflow","Approval","Action","Recommendation","Prediction","Issue","Risk","Compliance Result","Validation Result","Requirement","Classification","Uniclass SS","Uniclass SL","IFC Property Set","Revit Parameter","Document","Model","Drawing","Report","Specification","Schedule","Calculation","Register","Matrix","Digital Twin Entity","Operations Entity","Facility","Maintenance Activity","Lifecycle Stage"];
+const ATN_REL_KINDS = ["REQUIRES","GENERATES","DEPENDS_ON","OWNS","BELONGS_TO","SATISFIES","VALIDATED_BY","APPROVED_BY","AUTHORED_BY","MANAGED_BY","CLASSIFIED_AS","LOCATED_IN","PART_OF","TRACES_TO","DERIVED_FROM","RELATED_TO","SUPPORTS","FEEDS","REFERENCES","CONTAINS","BLOCKS","ENABLES","IMPACTS","ASSIGNED_TO","RESPONSIBLE_FOR","INFORMS","MONITORS","GOVERNS","BINDS","DEFINES","PRODUCES"];
+const ATN_QUERIES = [
+  {id:"missing", q:"What information is missing?"},
+  {id:"noncomp", q:"Which assets are non-compliant?"},
+  {id:"support", q:"Which deliverables support this requirement?"},
+  {id:"why", q:"Why is Fire Rating required?"},
+  {id:"block4", q:"What is blocking Stage 4?"},
+  {id:"stakeholders", q:"Which stakeholders are impacted?"},
+  {id:"handover", q:"Which assets will fail handover?"},
+  {id:"unsat", q:"Which client requirements are not satisfied?"},
+  {id:"sysrisk", q:"Which systems have the highest risk?"},
+  {id:"ready", q:"Which deliverables are ready for issue?"},
+  {id:"next", q:"What information must be delivered next?"},
+  {id:"health", q:"What is the current project health?"},
+  {id:"ahu", q:"Which AHUs are missing mandatory AIR information?"},
+  {id:"recover", q:"Generate a recovery plan for Stage 4."},
+  {id:"trace", q:"Show traceability from OIR to Asset."},
+  {id:"hvacwhy", q:"Why is HVAC compliance below target?"}
+];
+const ATN_DASHBOARDS = [
+  {id:"exec", role:"Executive", kpi:["Health %","Stage 4 gate","Open P1"], ask:"health"},
+  {id:"client", role:"Client", kpi:["OIR satisfied","Unsatisfied AIR","Handover risk"], ask:"unsat"},
+  {id:"owner", role:"Asset Owner", kpi:["AIM present","Twin ready","FM inspections"], ask:"handover"},
+  {id:"pm", role:"Project Manager", kpi:["Blocked packages","Days of risk","Ready to issue"], ask:"block4"},
+  {id:"pdm", role:"Project Delivery Manager", kpi:["TIDP vs MIDP","Team load","Stage risk"], ask:"next"},
+  {id:"im", role:"Information Manager", kpi:["IDS fails","Missing LOI 4","CDE state"], ask:"missing"},
+  {id:"ttm", role:"Task Team Manager", kpi:["Package health","Author queue","Approvals"], ask:"support"},
+  {id:"ia", role:"Information Author", kpi:["My missing attrs","Templates to fill","Next capture"], ask:"next"},
+  {id:"fm", role:"Facility Manager", kpi:["Ops entities","Maintenance","Fire doors"], ask:"handover"},
+  {id:"ops", role:"Operations Manager", kpi:["Twin coverage","Regime LOI 5","Open issues"], ask:"sysrisk"}
+];
+function atnLoiForStage(project){
+  const id = String((project && (project.currentStage || project.workStage || project.stage)) || "S4").toUpperCase();
+  if(id.indexOf("1")>=0 || id==="S1") return 2;
+  if(id.indexOf("2")>=0 || id==="S2") return 2;
+  if(id.indexOf("3")>=0 || id==="S3") return 3;
+  if(id.indexOf("5")>=0 || id==="S5") return 5;
+  if(id.indexOf("6")>=0 || id==="S6") return 5;
+  return 4;
+}
+function atnLoad(){
+  try { return JSON.parse(localStorage.getItem("atana_im_engines_v1")||"{}"); } catch(e){ return {}; }
+}
+function atnSave(patch){
+  const cur = Object.assign({present:{}, persona:"information-author", airLoi:4, airSel:["door","ahu"]}, atnLoad(), patch||{});
+  localStorage.setItem("atana_im_engines_v1", JSON.stringify(cur));
+  return cur;
+}
+function atnPresent(assetId, attrId){
+  const st = atnLoad();
+  const key = assetId+":"+attrId;
+  if(st.present && Object.prototype.hasOwnProperty.call(st.present, key)) return !!st.present[key];
+  return !(assetId==="d2" && attrId==="fire") && !(assetId==="d3" && attrId==="iron") && !(assetId==="a1" && attrId==="hvac");
+}
+function atnTogglePresent(assetId, attrId){
+  const st = atnLoad();
+  st.present = st.present || {};
+  const key = assetId+":"+attrId;
+  st.present[key] = !atnPresent(assetId, attrId);
+  atnSave(st);
+}
+function atnTpl(id){ return ATN_TEMPLATES.find(t => t.id===id); }
+function atnRequiredAttrs(tpl, loi){ return (tpl.attrs||[]).filter(a => a.loi <= loi && a.req); }
+function atnAimScore(loi){
+  let req=0, have=0;
+  ATN_ASSETS.forEach(a => {
+    const tpl = atnTpl(a.type);
+    atnRequiredAttrs(tpl, loi).forEach(attr => {
+      req++;
+      if(atnPresent(a.id, attr.id)) have++;
+    });
+  });
+  const pct = req ? Math.round(have/req*100) : 100;
+  return {req, have, pct, ready: pct >= ATN_GATE};
+}
+function atnWhy(id){
+  const back = {};
+  ATN_EDGES.forEach(([f,k,to]) => { (back[to]=back[to]||[]).push({from:f, kind:k}); });
+  const out=[], seen={};
+  function walk(cur){
+    if(seen[cur]) return; seen[cur]=1;
+    const n = ATN_CHAIN.find(x => x.id===cur);
+    if(n) out.push(n);
+    const pref = (back[cur]||[]).sort((a,b) => {
+      const ra = {OIR:0,PIR:1,EIR:2,AIR:3,TEMPLATE:4}[ (ATN_CHAIN.find(x=>x.id===a.from)||{}).kind ] ?? 9;
+      const rb = {OIR:0,PIR:1,EIR:2,AIR:3,TEMPLATE:4}[ (ATN_CHAIN.find(x=>x.id===b.from)||{}).kind ] ?? 9;
+      return ra-rb;
+    });
+    pref.forEach(p => walk(p.from));
+  }
+  walk(id);
+  return out;
+}
+function atnImpact(id){
+  const fwd = {};
+  ATN_EDGES.forEach(([f,k,to]) => { if(k!=="SATISFIES") (fwd[f]=fwd[f]||[]).push(to); });
+  const out=[], q=[id], seen={};
+  while(q.length){
+    const cur=q.shift();
+    if(seen[cur]) continue; seen[cur]=1;
+    if(cur!==id){ const n=ATN_CHAIN.find(x=>x.id===cur); if(n) out.push(n); }
+    (fwd[cur]||[]).forEach(n => q.push(n));
+  }
+  return out;
+}
+function atnAnswer(q){
+  const s = String(q||"").toLowerCase();
+  const sc = atnAimScore(4);
+  const missing = [];
+  if(!atnPresent("d2","fire")) missing.push("Fire Rating on D-02 Comms");
+  if(!atnPresent("d3","iron")) missing.push("Ironmongery set on D-03");
+  if(!atnPresent("a1","hvac")) missing.push("HVAC Control Strategy on AHU-01");
+  if(/missing|what information is missing/.test(s)) return missing.length ? ("Missing at LOI 4: "+missing.join("; ")+".") : "Nothing required is missing.";
+  if(/non-compliant|non compliant/.test(s)) return missing.length ? ("Non-compliant assets: "+missing.join("; ")+".") : "All seeded assets meet required AIR at LOI 4.";
+  if(/deliverables support|support this requirement/.test(s)) return "Fire Rating is satisfied by deliverable Door schedule S4, validated by IDS — Door Fire Rating required, produced by package Doors.";
+  if(/fire/.test(s) && /why|required|need|parameter/.test(s)){
+    const steps = atnWhy("attr-fire").map(n => n.kind+": "+n.label).join(" ← ");
+    return "Fire Rating is required because the OIR is to operate a safe building. PIR: compartment known at handover. EIR: openings scheduled at Stage 4. AIR: Fire Rating on every door. Trace: "+steps+".";
+  }
+  if(/hvac/.test(s)) return "HVAC compliance is below target because AIR HVAC Control Strategy is missing on AHU-01. That AIR is bound to the HVAC EIR, which is generated from the same OIR. MEP package cannot issue.";
+  if(/blocking stage 4|block stage 4|what is blocking/.test(s)) return "Stage 4 is blocked by Fire Rating on D-02 (BLOCKS Stage 4) and HVAC strategy on AHU-01. Door schedule S4 depends on the Door package.";
+  if(/stakeholder/.test(s)) return "Impacted stakeholders: Information Manager (governs project), Architecture task team (Doors package), MEP task team (AHU package), Information Author (door schedule), Facility Manager (fire door inspection).";
+  if(/fail handover|handover/.test(s) && !/ready/.test(s)) return missing.length ? ("Will fail handover: "+missing.join("; ")+". Twin and FM inspection cannot start.") : "No seeded asset fails handover.";
+  if(/not satisfied|unsatisfied|client requirement/.test(s)) return missing.length ? ("Unsatisfied client requirements: OIR safe building is open while Fire Rating on D-02 is empty; HVAC EIR is open while AHU-01 strategy is empty.") : "Client OIR/PIR/EIR/AIR chain is satisfied on the seed set.";
+  if(/highest risk|systems have/.test(s)) return "Highest risk system: Fire compartmentation (D-02 Fire Rating missing) then HVAC (AHU-01). Risk node: Stage 4 issue gate missed.";
+  if(/ready for issue|deliverables are ready/.test(s)) return sc.ready ? "Door schedule S4 and IDS Door can issue." : "No Stage 4 deliverable is ready. Gate "+sc.pct+"% / 95%.";
+  if(/delivered next|must be delivered/.test(s)) return missing[0] ? ("Deliver next: "+missing[0]+". Then "+(missing[1]||"re-run IDS")+".") : "Queue is clear.";
+  if(/project health|current project health/.test(s)) return "Project health is "+sc.pct+"% present vs required at LOI 4 ("+sc.have+"/"+sc.req+"). Gate 95%.";
+  if(/ahu/.test(s)) return atnPresent("a1","hvac") ? "AHU-01 has HVAC Control Strategy present." : "AHU-01 L1 is missing mandatory AIR: HVAC Control Strategy (LOI 4).";
+  if(/recovery/.test(s)) return "Recovery for Stage 4: 1) Capture Fire Rating on D-02. 2) Confirm HVAC strategy on AHU-01. 3) Re-run IDS Door. 4) Issue Door schedule S4. 5) Recompute health.";
+  if(/traceability from oir|oir to asset|show traceability/.test(s)){
+    return "OIR operate a safe building → PIR fire compartmentation → EIR fire-rated openings → AIR Fire Rating → Door template → Attribute Fire Rating → Assets D-01 and D-02 → AIM FB01 → Twin → FM inspection.";
+  }
+  if(/stage 3/.test(s)) return "Stage 3 is not the current gate on this pilot. Stage 4 technical design is the active work stage.";
+  if(/impact|block/.test(s)){
+    const imp = atnImpact("oir").map(n => n.label).join("; ");
+    return "Impact of the OIR: "+imp+".";
+  }
+  if(/door schedule/.test(s)) return "Door schedule S4 is the deliverable inside package Doors. It SATISFIES IR Door LOI 4 and is VALIDATED_BY IDS Door Fire Rating.";
+  return "Ask a graph question: missing information, non-compliant assets, why Fire Rating exists, Stage 4 block, handover failures, recovery plan, or OIR→Asset trace.";
+}
+function atnEsc(s){ return String(s==null?"":s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function atnCard(title, body){ return `<div class="card" style="margin-bottom:10px;"><div class="chart-card-title">${atnEsc(title)}</div>${body}</div>`; }
+
+function renderAtnIte(project){
+  const root = document.getElementById("atnIteRoot"); if(!root) return;
+  const loi = atnLoiForStage(project);
+  root.innerHTML = ATN_TEMPLATES.map(tpl => {
+    const rows = tpl.attrs.map(a => `<tr><td>${atnEsc(a.name)}</td><td class="mono">LOI ${a.loi}</td><td>${a.req && a.loi<=loi ? "Required now" : a.req ? "Later" : "Optional"}</td><td>${atnEsc(a.unit||"—")}</td></tr>`).join("");
+    return atnCard(tpl.name, `<p class="atn-muted">${atnEsc(tpl.ifc)} · ${atnEsc(tpl.revit)} · ${atnEsc(tpl.uniclass)} · current LOI ${loi}</p>
+      <div class="table-wrap" style="overflow:auto;"><table class="data" style="width:100%;font-size:13px;"><thead><tr><th>Attribute</th><th>LOI</th><th>At this stage</th><th>Unit</th></tr></thead><tbody>${rows}</tbody></table></div>`);
+  }).join("");
+}
+
+function renderAtnAir(project){
+  const root = document.getElementById("atnAirRoot"); if(!root) return;
+  const st = Object.assign({airLoi: atnLoiForStage(project), airSel:["door","ahu"]}, atnLoad());
+  const loi = Number(st.airLoi)||4;
+  const sel = new Set(st.airSel||[]);
+  const rows = [];
+  ATN_TEMPLATES.filter(t => sel.has(t.id)).forEach(tpl => {
+    atnRequiredAttrs(tpl, loi).forEach(a => {
+      rows.push({tpl:tpl.name, attr:a.name, loi:a.loi, chain:"OIR → PIR → EIR → AIR"});
+    });
+  });
+  root.innerHTML = `
+    <div class="card" style="margin-bottom:10px;">
+      <div class="chart-card-title">Issue this AIR</div>
+      <p class="atn-muted">Appointing party requirements for FB01 Administration. LOI ${loi}. ${rows.length} contractual attributes.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;">
+        ${ATN_TEMPLATES.map(t => `<button type="button" class="atn-pin ${sel.has(t.id)?"on":""}" data-airtpl="${t.id}">${atnEsc(t.name)}</button>`).join("")}
+      </div>
+      <label class="field-label">Target LOI</label>
+      <select id="atnAirLoi">${[2,3,4,5].map(n => `<option value="${n}" ${n===loi?"selected":""}>LOI ${n}</option>`).join("")}</select>
+    </div>
+    <div class="card">
+      <table class="data" style="width:100%;font-size:13px;"><thead><tr><th>Template</th><th>Requirement</th><th>LOI</th><th>Trace</th></tr></thead>
+      <tbody>${rows.map(r => `<tr><td>${atnEsc(r.tpl)}</td><td>${atnEsc(r.attr)}</td><td>${r.loi}</td><td class="atn-muted">${r.chain}</td></tr>`).join("") || "<tr><td colspan=4>Select a template.</td></tr>"}</tbody></table>
+      <p class="atn-muted" style="margin-top:10px;">IR is the project-facing extract of this AIR. IDS is the machine check of the same rows.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <button type="button" class="btn btn-gold" id="atnAirIds">Export IDS JSON</button>
+        <button type="button" class="btn btn-ghost" id="atnAirCsv">Export AIR (.csv)</button>
+      </div>
+    </div>`;
+  root.querySelectorAll("[data-airtpl]").forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.getAttribute("data-airtpl");
+      if(sel.has(id)) sel.delete(id); else sel.add(id);
+      atnSave({airSel:[...sel], airLoi:loi});
+      renderAtnAir(project);
+    };
+  });
+  const selEl = document.getElementById("atnAirLoi");
+  if(selEl) selEl.onchange = () => { atnSave({airLoi:Number(selEl.value)}); renderAtnAir(project); };
+  const idsBtn = document.getElementById("atnAirIds");
+  if(idsBtn) idsBtn.onclick = () => {
+    const payload = {
+      spec:"buildingSMART IDS", stage:"S4", loi:loi,
+      specifications: rows.map(r => ({name:r.attr, entity:r.tpl, cardinality:"required", applicability:"AIR"}))
+    };
+    const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "FB01-AIR-IDS.json"; a.click();
+  };
+  const csvBtn = document.getElementById("atnAirCsv");
+  if(csvBtn) csvBtn.onclick = () => {
+    const csv = "Template,Requirement,LOI,Trace\n" + rows.map(r => [r.tpl,r.attr,r.loi,r.chain].join(",")).join("\n");
+    const blob = new Blob([csv], {type:"text/csv"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "FB01-AIR.csv"; a.click();
+  };
+}
+
+function renderAtnAim(project){
+  const root = document.getElementById("atnAimRoot"); if(!root) return;
+  const loi = atnLoiForStage(project);
+  const sc = atnAimScore(loi);
+  const blocks = ATN_ASSETS.map(a => {
+    const tpl = atnTpl(a.type);
+    const attrs = atnRequiredAttrs(tpl, loi);
+    const have = attrs.filter(x => atnPresent(a.id, x.id)).length;
+    const pct = attrs.length ? Math.round(have/attrs.length*100) : 100;
+    const chips = attrs.map(x => {
+      const on = atnPresent(a.id, x.id);
+      return `<button type="button" class="atn-pin ${on?"on":""}" data-aim="${a.id}:${x.id}">${on?"Present":"Missing"} · ${atnEsc(x.name)}</button>`;
+    }).join(" ");
+    return atnCard(a.name, `<p class="atn-muted">${atnEsc(tpl.name)} · ${have}/${attrs.length} required · ${pct}%</p><div class="atn-bar"><i style="width:${pct}%"></i></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">${chips}</div>`);
+  }).join("");
+  root.innerHTML = atnCard("Project health", `<p style="font-size:22px;font-weight:700;margin:0;">${sc.pct}%</p><div class="atn-bar"><i style="width:${sc.pct}%"></i></div><p class="atn-muted">${sc.have}/${sc.req} present vs required · gate ${ATN_GATE}% · ${sc.ready?"Ready for issue":"Not ready"}</p>`) + blocks;
+  root.querySelectorAll("[data-aim]").forEach(btn => {
+    btn.onclick = () => {
+      const [a,b] = btn.getAttribute("data-aim").split(":");
+      atnTogglePresent(a,b);
+      renderAtnAim(project);
+    };
+  });
+}
+
+function atnCypher(qid){
+  const map = {
+    why: "MATCH (a:Attribute {name:'Fire Rating'})<-[:CONTAINS]-(t:InformationTemplate)<-[:DEFINES]-(air:AIR)<-[:BINDS]-(eir:EIR)<-[:GENERATES]-(pir:PIR)<-[:GENERATES]-(oir:OIR) RETURN oir,pir,eir,air,t,a",
+    missing: "MATCH (asset:Asset)-[:REQUIRES]-(attr:Attribute) WHERE asset.present = false RETURN asset, attr",
+    block4: "MATCH (n)-[:BLOCKS]->(s:WorkStage {name:'Stage 4'}) RETURN n,s",
+    impact: "MATCH (p:ScopeProductionPackage {id:'spp-door'})-[:CONTAINS|PRODUCES|REQUIRES*1..5]-(x) RETURN p,x"
+  };
+  return map[qid] || map.why;
+}
+function renderAtnGraph(project){
+  const root = document.getElementById("atnGraphRoot"); if(!root) return;
+  const st = Object.assign({graphId:"attr-fire", graphView:"trace", graphDash:"im"}, atnLoad());
+  const sel = st.graphId || "attr-fire";
+  const view = st.graphView || "trace";
+  const node = ATN_CHAIN.find(n => n.id===sel) || ATN_CHAIN.find(n => n.id==="attr-fire");
+  const pins = [
+    {id:"attr-fire", label:"Fire Rating"},
+    {id:"oir", label:"OIR"},
+    {id:"hvac", label:"HVAC EIR"},
+    {id:"spp-door", label:"Doors package"},
+    {id:"stage4", label:"Stage 4"},
+    {id:"aim-d2", label:"D-02"}
+  ];
+  const tabs = ["trace","impact","ask","queries","dashboards","schema"];
+  let body = "";
+  if(view==="trace"){
+    body = `<div class="atn-trace">${atnEsc(atnWhy(sel).map(n => n.kind+"  "+n.label).join("\\n↑\\n"))}</div>`;
+  } else if(view==="impact"){
+    const imp = atnImpact(sel);
+    body = `<div class="atn-trace">${atnEsc((imp.length?imp:[{kind:"—",label:"Nothing downstream"}]).map(n => n.kind+"  "+n.label).join("\\n↓\\n"))}</div>
+      <p class="atn-muted" style="margin-top:10px;">Change this node and the list above is what breaks: deliverables, templates, assets, requirements, stakeholders.</p>`;
+  } else if(view==="ask"){
+    body = `<div class="atn-trace">${atnEsc(atnAnswer(st.graphQ || "Why is Fire Rating required?"))}</div>
+      <div class="atn-ask"><input id="atnGraphQ" value="${atnEsc(st.graphQ||"Why is Fire Rating required?")}" /><button type="button" class="btn btn-gold" id="atnGraphAsk">Ask</button></div>`;
+  } else if(view==="queries"){
+    body = ATN_QUERIES.map(q => `<button type="button" class="atn-pin" data-gq="${atnEsc(q.q)}" style="margin:4px 4px 0 0;">${atnEsc(q.q)}</button>`).join("") +
+      `<div class="card" style="margin-top:12px;"><div class="chart-card-title">Answer</div><div class="atn-trace">${atnEsc(atnAnswer(st.graphQ || ATN_QUERIES[3].q))}</div>
+      <p class="atn-muted" style="margin-top:8px;">Cypher (target Neo4j): ${atnEsc(atnCypher("why"))}</p></div>`;
+  } else if(view==="dashboards"){
+    const dash = ATN_DASHBOARDS.find(d => d.id===st.graphDash) || ATN_DASHBOARDS[5];
+    const sc = atnAimScore(4);
+    body = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">${ATN_DASHBOARDS.map(d => `<button type="button" class="atn-pin ${d.id===dash.id?"on":""}" data-gdash="${d.id}">${atnEsc(d.role)}</button>`).join("")}</div>
+      ${atnCard(dash.role, `<p class="atn-muted">KPIs: ${atnEsc(dash.kpi.join(" · "))}</p><p style="font-size:22px;font-weight:700;margin:8px 0 0;">${sc.pct}%</p><div class="atn-bar"><i style="width:${sc.pct}%"></i></div>`)}
+      <div class="card">${atnEsc(atnAnswer(ATN_QUERIES.find(q=>q.id===dash.ask)?.q || "health"))}</div>`;
+  } else {
+    body = `<p class="atn-muted">${ATN_CHAIN.length} live nodes · ${ATN_EDGES.length} live edges on FB01. Full ontology ${ATN_KINDS.length} kinds · ${ATN_REL_KINDS.length} relationships.</p>
+      <div class="chart-card-title" style="margin-top:10px;">Node types</div>
+      <p class="atn-muted">${ATN_KINDS.join(" · ")}</p>
+      <div class="chart-card-title" style="margin-top:10px;">Relationships</div>
+      <p class="atn-muted">${ATN_REL_KINDS.join(" · ")}</p>
+      <div class="chart-card-title" style="margin-top:10px;">Live nodes</div>
+      <div class="atn-trace">${ATN_CHAIN.map(n => n.kind+"  "+n.id+"  "+n.label).map(atnEsc).join("<br>")}</div>
+      <p class="atn-muted" style="margin-top:10px;">Production target: Neo4j + GraphQL + .NET 9 + Azure OpenAI. This app is the in-memory operational graph over the same ontology.</p>`;
+  }
+  root.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      ${pins.map(p => `<button type="button" class="atn-pin ${p.id===sel?"on":""}" data-gpin="${p.id}">${atnEsc(p.label)}</button>`).join("")}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      ${tabs.map(v => `<button type="button" class="atn-pin ${v===view?"on":""}" data-gview="${v}">${v[0].toUpperCase()+v.slice(1)}</button>`).join("")}
+    </div>
+    <div class="card">
+      <div class="chart-card-title">${view==="schema"?"Ontology":view==="dashboards"?"Role dashboard":view==="queries"?"Graph queries":atnEsc(node.label)}</div>
+      ${body}
+    </div>`;
+  root.querySelectorAll("[data-gpin]").forEach(b => b.onclick = () => { atnSave({graphId:b.getAttribute("data-gpin")}); renderAtnGraph(project); });
+  root.querySelectorAll("[data-gview]").forEach(b => b.onclick = () => { atnSave({graphView:b.getAttribute("data-gview")}); renderAtnGraph(project); });
+  root.querySelectorAll("[data-gdash]").forEach(b => b.onclick = () => { atnSave({graphDash:b.getAttribute("data-gdash"), graphView:"dashboards"}); renderAtnGraph(project); });
+  root.querySelectorAll("[data-gq]").forEach(b => b.onclick = () => { atnSave({graphQ:b.getAttribute("data-gq"), graphView:"queries"}); renderAtnGraph(project); });
+  const ask = document.getElementById("atnGraphAsk");
+  if(ask) ask.onclick = () => {
+    const q = (document.getElementById("atnGraphQ")||{}).value || "";
+    atnSave({graphQ:q, graphView:"ask"});
+    renderAtnGraph(project);
+  };
+}
+
+function renderAtnDecide(project){
+  const root = document.getElementById("atnDecideRoot"); if(!root) return;
+  const loi = atnLoiForStage(project);
+  const sc = atnAimScore(loi);
+  const actions = [];
+  if(!atnPresent("d2","fire")) actions.push({p:"P1", t:"Capture Fire Rating on D-02 Comms", d:"AIR on the Door template is not present. Blocks Stage 4 door schedule."});
+  if(!atnPresent("a1","hvac")) actions.push({p:"P1", t:"Confirm HVAC strategy on AHU-01", d:"EIR for HVAC at Stage 4 is unbound on the AIM instance."});
+  if(!atnPresent("d3","iron")) actions.push({p:"P2", t:"Ironmongery set on D-03 Stair A", d:"LOI 4 requirement. Needed before issue, not before model freeze."});
+  if(!actions.length) actions.push({p:"P3", t:"Queue is clear", d:"Switch role or work stage to see other work."});
+  const risk = sc.pct < ATN_GATE ? (ATN_GATE-sc.pct)+" points below the 95% issue gate. Likely 5–8 days if Fire Rating stays empty." : "Within gate.";
+  const pred = sc.ready ? "Issue this week." : "If D-02 Fire Rating lands tomorrow, AHU strategy still holds the mechanical package.";
+  const rec = sc.ready ? "No recovery path required." : "Recovery: close Fire Rating on D-02, then HVAC strategy on AHU-01, then re-run IDS.";
+  const chips = ["Why is Fire Rating required?","What does the OIR impact?","Is Stage 4 ready for handover?"];
+  const st = atnLoad();
+  const ans = atnAnswer(st.decideQ || chips[0]);
+  root.innerHTML = `
+    <div class="atn-grid atn-2">
+      ${atnCard("Project health", `<p style="font-size:22px;font-weight:700;margin:0;">${sc.pct}%</p><div class="atn-bar"><i style="width:${sc.pct}%"></i></div><p class="atn-muted">Present vs required at LOI ${loi}</p>`)}
+      ${atnCard("Risk", `<p class="atn-muted">${atnEsc(risk)}</p>`)}
+      ${atnCard("Prediction", `<p class="atn-muted">${atnEsc(pred)}</p>`)}
+      ${atnCard("Recovery", `<p class="atn-muted">${atnEsc(rec)}</p>`)}
+    </div>
+    <div class="card" style="margin-top:10px;">
+      <div class="chart-card-title">Next actions</div>
+      ${actions.map(a => `<div style="padding:10px 0;border-bottom:1px solid var(--slate-100);"><strong>${a.p}</strong> · ${atnEsc(a.t)}<div class="atn-muted">${atnEsc(a.d)}</div></div>`).join("")}
+    </div>
+    <div class="card" style="margin-top:10px;">
+      <div class="chart-card-title">Copilot</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;">
+        ${chips.map(c => `<button type="button" class="atn-pin" data-dq="${atnEsc(c)}">${atnEsc(c)}</button>`).join("")}
+      </div>
+      <div class="atn-ask"><input id="atnDecideQ" value="${atnEsc(st.decideQ||chips[0])}" /><button type="button" class="btn btn-gold" id="atnDecideAsk">Ask</button></div>
+      <p class="atn-muted" style="margin-top:10px;" id="atnDecideA">${atnEsc(ans)}</p>
+    </div>`;
+  function ask(q){ atnSave({decideQ:q}); renderAtnDecide(project); }
+  root.querySelectorAll("[data-dq]").forEach(b => b.onclick = () => ask(b.getAttribute("data-dq")));
+  const go = document.getElementById("atnDecideAsk");
+  if(go) go.onclick = () => ask((document.getElementById("atnDecideQ")||{}).value||"");
+}
 
 </script>
 </body>
