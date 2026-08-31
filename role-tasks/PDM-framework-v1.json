@@ -1,0 +1,1772 @@
+{
+  "schema": "atana-functional-role-delivery-framework/1.0",
+  "roleCode": "PDM",
+  "roleName": "Project Delivery Manager / Design Manager",
+  "purpose": "Orchestrate production: scope packages, task teams, interfaces, package approvals and stage-gate recommendation. Sits between Client, DTL, IM and Task Teams.",
+  "taskCount": 47,
+  "stages": [
+    {
+      "id": "ST0",
+      "name": "Initiate",
+      "isoStage": "S1"
+    },
+    {
+      "id": "ST1",
+      "name": "Plan",
+      "isoStage": "S2"
+    },
+    {
+      "id": "ST2",
+      "name": "Concept",
+      "isoStage": "S2"
+    },
+    {
+      "id": "ST3",
+      "name": "Coordinated Design",
+      "isoStage": "S3"
+    },
+    {
+      "id": "ST4",
+      "name": "Review & Approval",
+      "isoStage": "S3"
+    },
+    {
+      "id": "ST5",
+      "name": "Issue",
+      "isoStage": "S4"
+    },
+    {
+      "id": "ST6",
+      "name": "Construction Support",
+      "isoStage": "S5"
+    },
+    {
+      "id": "ST7",
+      "name": "Handover / Closeout / Archive / Operations transition",
+      "isoStage": "S6"
+    }
+  ],
+  "tasks": [
+    {
+      "taskId": "PDM-000",
+      "taskName": "Prepare to receive the project",
+      "taskDescription": "Ready the PDM seat before DTL-015.",
+      "taskCategory": "Project Opportunity",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "DTL"
+      ],
+      "approvingRole": null,
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "DTL-009 appointment",
+      "entryCriteria": "Appointment letter",
+      "exitCriteria": "PDM ready",
+      "inputs": [
+        "Appointment"
+      ],
+      "outputs": [
+        "Readiness"
+      ],
+      "dependencies": [
+        "DTL-009"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Ready the PDM seat before DTL-015.",
+      "when": "ST0 \u2014 DTL-009 appointment",
+      "how": "Complete Prepare to receive the project against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-001",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-001",
+      "taskName": "Receive project",
+      "taskDescription": "Receive the project after mobilisation approval.",
+      "taskCategory": "Project Initiation",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "DTL",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "DTL-015",
+      "entryCriteria": "Mobilisation approved",
+      "exitCriteria": "Project received on PDM register",
+      "inputs": [
+        "Handover",
+        "PEP"
+      ],
+      "outputs": [
+        "Received project"
+      ],
+      "dependencies": [
+        "DTL-015"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Must not start before DTL-015.",
+      "when": "ST0 \u2014 DTL-015",
+      "how": "Complete Receive project against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-002",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-002",
+      "taskName": "Review contract requirements",
+      "taskDescription": "Extract delivery obligations.",
+      "taskCategory": "Project Initiation",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "DTL"
+      ],
+      "approvingRole": null,
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Project received",
+      "entryCriteria": "Contract",
+      "exitCriteria": "Obligations list",
+      "inputs": [
+        "Contract"
+      ],
+      "outputs": [
+        "Delivery obligations"
+      ],
+      "dependencies": [
+        "PDM-001"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 3,
+      "suggestedLeadDays": 0,
+      "why": "Extract delivery obligations.",
+      "when": "ST0 \u2014 Project received",
+      "how": "Complete Review contract requirements against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-003A",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-003A",
+      "taskName": "Review client requirements",
+      "taskDescription": "Extract design and information needs.",
+      "taskCategory": "Project Initiation",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "DTL",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Obligations listed",
+      "entryCriteria": "Brief",
+      "exitCriteria": "Client requirements note",
+      "inputs": [
+        "Brief"
+      ],
+      "outputs": [
+        "Requirements note"
+      ],
+      "dependencies": [
+        "PDM-002"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 3,
+      "suggestedLeadDays": 0,
+      "why": "Extract design and information needs.",
+      "when": "ST0 \u2014 Obligations listed",
+      "how": "Complete Review client requirements against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-003B",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-003B",
+      "taskName": "Review OIR",
+      "taskDescription": "Read organisational information requirements.",
+      "taskCategory": "Information Management",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Requirements note",
+      "entryCriteria": "OIR",
+      "exitCriteria": "OIR implications",
+      "inputs": [
+        "OIR"
+      ],
+      "outputs": [
+        "OIR implications"
+      ],
+      "dependencies": [
+        "PDM-003A"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Read organisational information requirements.",
+      "when": "ST0 \u2014 Requirements note",
+      "how": "Complete Review OIR against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-003C",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-003C",
+      "taskName": "Review PIR",
+      "taskDescription": "Read project information requirements.",
+      "taskCategory": "Information Management",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "OIR reviewed",
+      "entryCriteria": "PIR",
+      "exitCriteria": "PIR implications",
+      "inputs": [
+        "PIR"
+      ],
+      "outputs": [
+        "PIR implications"
+      ],
+      "dependencies": [
+        "PDM-003B"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Read project information requirements.",
+      "when": "ST0 \u2014 OIR reviewed",
+      "how": "Complete Review PIR against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-003D",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-003D",
+      "taskName": "Review EIR",
+      "taskDescription": "Read exchange information requirements.",
+      "taskCategory": "Information Management",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "PIR reviewed",
+      "entryCriteria": "EIR",
+      "exitCriteria": "EIR implications",
+      "inputs": [
+        "EIR"
+      ],
+      "outputs": [
+        "EIR implications"
+      ],
+      "dependencies": [
+        "PDM-003C"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Read exchange information requirements.",
+      "when": "ST0 \u2014 PIR reviewed",
+      "how": "Complete Review EIR against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-003",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-003",
+      "taskName": "Create delivery strategy",
+      "taskDescription": "Define how the job will be delivered.",
+      "taskCategory": "Mobilisation",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "DTL",
+        "IM"
+      ],
+      "approvingRole": "DTL",
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "OIR/PIR/EIR reviewed",
+      "entryCriteria": "Strategy draft",
+      "exitCriteria": "Delivery strategy issued",
+      "inputs": [
+        "OIR",
+        "PIR",
+        "EIR",
+        "Contract"
+      ],
+      "outputs": [
+        "Delivery strategy"
+      ],
+      "dependencies": [
+        "PDM-003D"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 3,
+      "suggestedLeadDays": 1,
+      "why": "Predecessor to IM project configuration.",
+      "when": "ST0 \u2014 OIR/PIR/EIR reviewed",
+      "how": "Complete Create delivery strategy against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "IM-001 / DTL-014",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-004",
+      "taskName": "Create design strategy",
+      "taskDescription": "Define design management approach.",
+      "taskCategory": "Mobilisation",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "DTL",
+        "TTM"
+      ],
+      "approvingRole": "DTL",
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Delivery strategy",
+      "entryCriteria": "Design strategy draft",
+      "exitCriteria": "Design strategy issued",
+      "inputs": [
+        "Delivery strategy"
+      ],
+      "outputs": [
+        "Design strategy"
+      ],
+      "dependencies": [
+        "PDM-003"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Define design management approach.",
+      "when": "ST0 \u2014 Delivery strategy",
+      "how": "Complete Create design strategy against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-005",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-005",
+      "taskName": "Establish design governance",
+      "taskDescription": "Set design authority and interfaces.",
+      "taskCategory": "Mobilisation",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "DTL",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Design strategy",
+      "entryCriteria": "Governance draft",
+      "exitCriteria": "Design governance live",
+      "inputs": [
+        "RACI"
+      ],
+      "outputs": [
+        "Design governance"
+      ],
+      "dependencies": [
+        "PDM-004"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Set design authority and interfaces.",
+      "when": "ST0 \u2014 Design strategy",
+      "how": "Complete Establish design governance against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-101",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-101",
+      "taskName": "Create scope packages",
+      "taskDescription": "Identify all scope production packages.",
+      "taskCategory": "Production Planning",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM",
+        "TTM"
+      ],
+      "approvingRole": null,
+      "stage": "ST1",
+      "stageName": "Plan",
+      "trigger": "Delivery strategy approved",
+      "entryCriteria": "Package rules",
+      "exitCriteria": "Scope Package Register",
+      "inputs": [
+        "FB",
+        "Ss",
+        "Teams"
+      ],
+      "outputs": [
+        "Scope Package Register"
+      ],
+      "dependencies": [
+        "PDM-003"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 4,
+      "suggestedLeadDays": 0,
+      "why": "Packages exist only after this task. Integrates production planning.",
+      "when": "ST1 \u2014 Delivery strategy approved",
+      "how": "Complete Create scope packages against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-102 / IM-101",
+      "kpis": [],
+      "packageIntegration": {
+        "phase": "planning",
+        "mapsTo": "PDM-101",
+        "note": "Every scope package inherits this activity when the stage is active."
+      }
+    },
+    {
+      "taskId": "PDM-102",
+      "taskName": "Assign package ownership",
+      "taskDescription": "Assign each package to a task team.",
+      "taskCategory": "Production Planning",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "TTM",
+        "DTL"
+      ],
+      "approvingRole": "DTL",
+      "stage": "ST1",
+      "stageName": "Plan",
+      "trigger": "Register exists",
+      "entryCriteria": "Team capacity",
+      "exitCriteria": "Package owners",
+      "inputs": [
+        "Register",
+        "Teams"
+      ],
+      "outputs": [
+        "Ownership matrix"
+      ],
+      "dependencies": [
+        "PDM-101"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Assign each package to a task team.",
+      "when": "ST1 \u2014 Register exists",
+      "how": "Complete Assign package ownership against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-103",
+      "kpis": [],
+      "packageIntegration": {
+        "phase": "planning",
+        "mapsTo": "PDM-102",
+        "note": "Every scope package inherits this activity when the stage is active."
+      }
+    },
+    {
+      "taskId": "PDM-103",
+      "taskName": "Create production plan",
+      "taskDescription": "Sequence packages and interfaces.",
+      "taskCategory": "Production Planning",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM",
+        "TTM"
+      ],
+      "approvingRole": "DTL",
+      "stage": "ST1",
+      "stageName": "Plan",
+      "trigger": "Owners assigned",
+      "entryCriteria": "Dependencies",
+      "exitCriteria": "Production programme",
+      "inputs": [
+        "Ownership",
+        "Programme envelope"
+      ],
+      "outputs": [
+        "Production plan"
+      ],
+      "dependencies": [
+        "PDM-102"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 4,
+      "suggestedLeadDays": 1,
+      "why": "Sequence packages and interfaces.",
+      "when": "ST1 \u2014 Owners assigned",
+      "how": "Complete Create production plan against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-104",
+      "kpis": [],
+      "packageIntegration": {
+        "phase": "planning",
+        "mapsTo": "PDM-103",
+        "note": "Every scope package inherits this activity when the stage is active."
+      }
+    },
+    {
+      "taskId": "PDM-104",
+      "taskName": "Release packages for production",
+      "taskDescription": "Release only after MIDP approval.",
+      "taskCategory": "Production Planning",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM",
+        "TTM"
+      ],
+      "approvingRole": "DTL",
+      "stage": "ST1",
+      "stageName": "Plan",
+      "trigger": "IM-104 and DTL-102",
+      "entryCriteria": "Release checklist",
+      "exitCriteria": "Packages released (PLANNED\u2192ready)",
+      "inputs": [
+        "MIDP",
+        "Production plan"
+      ],
+      "outputs": [
+        "Release record"
+      ],
+      "dependencies": [
+        "IM-104",
+        "PDM-103",
+        "DTL-102"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "No TTM production before this.",
+      "when": "ST1 \u2014 IM-104 and DTL-102",
+      "how": "Complete Release packages for production against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PKG-REL",
+      "kpis": [],
+      "packageIntegration": {
+        "phase": "planning",
+        "mapsTo": "PDM-104",
+        "note": "Every scope package inherits this activity when the stage is active."
+      }
+    },
+    {
+      "taskId": "PDM-105",
+      "taskName": "Identify task teams",
+      "taskDescription": "Confirm which disciplines are required.",
+      "taskCategory": "Planning",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "DTL"
+      ],
+      "approvingRole": null,
+      "stage": "ST1",
+      "stageName": "Plan",
+      "trigger": "Strategy exists",
+      "entryCriteria": "Discipline list",
+      "exitCriteria": "Task team list",
+      "inputs": [
+        "Scope"
+      ],
+      "outputs": [
+        "Task team list"
+      ],
+      "dependencies": [
+        "PDM-003"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Confirm which disciplines are required.",
+      "when": "ST1 \u2014 Strategy exists",
+      "how": "Complete Identify task teams against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-102",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-106",
+      "taskName": "Confirm design scope",
+      "taskDescription": "Confirm FB / systems in and out.",
+      "taskCategory": "Planning",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM",
+        "TTM"
+      ],
+      "approvingRole": null,
+      "stage": "ST1",
+      "stageName": "Plan",
+      "trigger": "Teams listed",
+      "entryCriteria": "FB / Ss",
+      "exitCriteria": "Confirmed design scope",
+      "inputs": [
+        "FB",
+        "Ss"
+      ],
+      "outputs": [
+        "Confirmed scope"
+      ],
+      "dependencies": [
+        "PDM-105"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 3,
+      "suggestedLeadDays": 0,
+      "why": "Confirm FB / systems in and out.",
+      "when": "ST1 \u2014 Teams listed",
+      "how": "Complete Confirm design scope against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-101",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-107",
+      "taskName": "Review production dependencies",
+      "taskDescription": "Review package-to-package dependencies.",
+      "taskCategory": "Planning",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "TTM",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST1",
+      "stageName": "Plan",
+      "trigger": "Plan drafted",
+      "entryCriteria": "Interface list",
+      "exitCriteria": "Dependency register",
+      "inputs": [
+        "Packages"
+      ],
+      "outputs": [
+        "Dependency register"
+      ],
+      "dependencies": [
+        "PDM-103"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Review package-to-package dependencies.",
+      "when": "ST1 \u2014 Plan drafted",
+      "how": "Complete Review production dependencies against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-104",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-108",
+      "taskName": "Review delivery risks",
+      "taskDescription": "Risks to production sequence.",
+      "taskCategory": "Risk Management",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "DTL"
+      ],
+      "approvingRole": null,
+      "stage": "ST1",
+      "stageName": "Plan",
+      "trigger": "Dependencies known",
+      "entryCriteria": "Risks",
+      "exitCriteria": "Delivery risk register",
+      "inputs": [
+        "Plan"
+      ],
+      "outputs": [
+        "Delivery risks"
+      ],
+      "dependencies": [
+        "PDM-107"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Risks to production sequence.",
+      "when": "ST1 \u2014 Dependencies known",
+      "how": "Complete Review delivery risks against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-201",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-109",
+      "taskName": "Approve production responsibilities",
+      "taskDescription": "Lock who produces, reviews, approves.",
+      "taskCategory": "Planning",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "DTL",
+        "IM"
+      ],
+      "approvingRole": "DTL",
+      "stage": "ST1",
+      "stageName": "Plan",
+      "trigger": "Owners assigned",
+      "entryCriteria": "RACI",
+      "exitCriteria": "Responsibilities approved",
+      "inputs": [
+        "RACI"
+      ],
+      "outputs": [
+        "Approved responsibilities"
+      ],
+      "dependencies": [
+        "PDM-102"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Lock who produces, reviews, approves.",
+      "when": "ST1 \u2014 Owners assigned",
+      "how": "Complete Approve production responsibilities against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-104",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-201",
+      "taskName": "Monitor package progress",
+      "taskDescription": "Continuous SS with package production.",
+      "taskCategory": "Production",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "TTM",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST2",
+      "stageName": "Concept",
+      "trigger": "Packages released",
+      "entryCriteria": "Status feed",
+      "exitCriteria": "Progress view",
+      "inputs": [
+        "Package status"
+      ],
+      "outputs": [
+        "Progress view"
+      ],
+      "dependencies": [
+        "PDM-104"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "SS with PKG-PRODUCE",
+      "when": "ST2 \u2014 Packages released",
+      "how": "Complete Monitor package progress against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-202",
+      "kpis": [],
+      "packageIntegration": {
+        "phase": "production-review",
+        "mapsTo": "PDM-201",
+        "note": "Every scope package inherits this activity when the stage is active."
+      }
+    },
+    {
+      "taskId": "PDM-202",
+      "taskName": "Coordinate design interfaces",
+      "taskDescription": "SS with production.",
+      "taskCategory": "Coordination",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "TTM"
+      ],
+      "approvingRole": null,
+      "stage": "ST2",
+      "stageName": "Concept",
+      "trigger": "Production live",
+      "entryCriteria": "Interfaces",
+      "exitCriteria": "Interface actions",
+      "inputs": [
+        "Dependencies"
+      ],
+      "outputs": [
+        "Interface actions"
+      ],
+      "dependencies": [
+        "PDM-201"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "SS with production.",
+      "when": "ST2 \u2014 Production live",
+      "how": "Complete Coordinate design interfaces against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-203",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-203",
+      "taskName": "Resolve coordination issues",
+      "taskDescription": "Triggered by clash, late deliverable or missing information.",
+      "taskCategory": "Coordination",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "TTM",
+        "IM",
+        "DTL"
+      ],
+      "approvingRole": null,
+      "stage": "ST2",
+      "stageName": "Concept",
+      "trigger": "Issue raised",
+      "entryCriteria": "Issue",
+      "exitCriteria": "Closed issue or escalation",
+      "inputs": [
+        "Clash / late / missing"
+      ],
+      "outputs": [
+        "Resolution"
+      ],
+      "dependencies": [],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Triggered by clash, late deliverable or missing information.",
+      "when": "ST2 \u2014 Issue raised",
+      "how": "Complete Resolve coordination issues against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-301 if needed",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-204",
+      "taskName": "Mobilise task teams for concept",
+      "taskDescription": "Stand teams up for concept packages.",
+      "taskCategory": "Production",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "TTM",
+        "DTL"
+      ],
+      "approvingRole": null,
+      "stage": "ST2",
+      "stageName": "Concept",
+      "trigger": "PDM-104",
+      "entryCriteria": "Teams",
+      "exitCriteria": "Teams mobilised",
+      "inputs": [
+        "Owners"
+      ],
+      "outputs": [
+        "Mobilisation record"
+      ],
+      "dependencies": [
+        "PDM-104"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Stand teams up for concept packages.",
+      "when": "ST2 \u2014 PDM-104",
+      "how": "Complete Mobilise task teams for concept against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-201",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-205",
+      "taskName": "Review concept package readiness",
+      "taskDescription": "Concept outputs ready for review.",
+      "taskCategory": "Review",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "TTM",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST2",
+      "stageName": "Concept",
+      "trigger": "Concept produced",
+      "entryCriteria": "Concept set",
+      "exitCriteria": "Readiness note",
+      "inputs": [
+        "Concept deliverables"
+      ],
+      "outputs": [
+        "Readiness"
+      ],
+      "dependencies": [
+        "PKG-PRODUCE"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Concept outputs ready for review.",
+      "when": "ST2 \u2014 Concept produced",
+      "how": "Complete Review concept package readiness against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-301",
+      "kpis": [],
+      "packageIntegration": {
+        "phase": "production-review",
+        "mapsTo": "PDM-205",
+        "note": "Every scope package inherits this activity when the stage is active."
+      }
+    },
+    {
+      "taskId": "PDM-301",
+      "taskName": "Review package readiness",
+      "taskDescription": "FS after TTM approval.",
+      "taskCategory": "Review",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "TTM",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST3",
+      "stageName": "Coordinated Design",
+      "trigger": "PKG-TTM",
+      "entryCriteria": "TTM approval",
+      "exitCriteria": "Readiness reviewed",
+      "inputs": [
+        "TTM approval",
+        "Deliverables"
+      ],
+      "outputs": [
+        "Readiness review"
+      ],
+      "dependencies": [
+        "PKG-TTM"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "FS after TTM approval.",
+      "when": "ST3 \u2014 PKG-TTM",
+      "how": "Complete Review package readiness against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-302",
+      "kpis": [],
+      "packageIntegration": {
+        "phase": "production-review",
+        "mapsTo": "PDM-301",
+        "note": "Every scope package inherits this activity when the stage is active."
+      }
+    },
+    {
+      "taskId": "PDM-302",
+      "taskName": "Approve package",
+      "taskDescription": "Approve the package for IM publication path.",
+      "taskCategory": "Approvals",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM",
+        "DTL"
+      ],
+      "approvingRole": "DTL",
+      "stage": "ST3",
+      "stageName": "Coordinated Design",
+      "trigger": "Readiness reviewed",
+      "entryCriteria": "Review record",
+      "exitCriteria": "Package APPROVED",
+      "inputs": [
+        "Readiness"
+      ],
+      "outputs": [
+        "Package approval"
+      ],
+      "dependencies": [
+        "PDM-301"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Predecessor to IM-401.",
+      "when": "ST3 \u2014 Readiness reviewed",
+      "how": "Complete Approve package against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "IM-401 / PKG-IM",
+      "kpis": [],
+      "packageIntegration": {
+        "phase": "production-review",
+        "mapsTo": "PDM-302",
+        "note": "Every scope package inherits this activity when the stage is active."
+      }
+    },
+    {
+      "taskId": "PDM-303",
+      "taskName": "Recommend stage gate",
+      "taskDescription": "Recommend gate only when all in-scope packages are approved.",
+      "taskCategory": "Approvals",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM",
+        "DTL"
+      ],
+      "approvingRole": null,
+      "stage": "ST4",
+      "stageName": "Review & Approval",
+      "trigger": "All PDM-302 complete",
+      "entryCriteria": "Approvals register",
+      "exitCriteria": "Gate recommendation",
+      "inputs": [
+        "All package approvals"
+      ],
+      "outputs": [
+        "Recommendation"
+      ],
+      "dependencies": [
+        "PDM-302"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Recommend gate only when all in-scope packages are approved.",
+      "when": "ST4 \u2014 All PDM-302 complete",
+      "how": "Complete Recommend stage gate against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-401",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-304",
+      "taskName": "Review discipline progress",
+      "taskDescription": "Review each task team against the plan.",
+      "taskCategory": "Design Management",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "TTM"
+      ],
+      "approvingRole": null,
+      "stage": "ST3",
+      "stageName": "Coordinated Design",
+      "trigger": "Production",
+      "entryCriteria": "Progress",
+      "exitCriteria": "Actions",
+      "inputs": [
+        "TIDP"
+      ],
+      "outputs": [
+        "Actions"
+      ],
+      "dependencies": [
+        "PDM-201"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Review each task team against the plan.",
+      "when": "ST3 \u2014 Production",
+      "how": "Complete Review discipline progress against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-305",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-305",
+      "taskName": "Review interface risks",
+      "taskDescription": "Review remaining interface risk.",
+      "taskCategory": "Risk Management",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "TTM"
+      ],
+      "approvingRole": null,
+      "stage": "ST3",
+      "stageName": "Coordinated Design",
+      "trigger": "Coordination live",
+      "entryCriteria": "Risks",
+      "exitCriteria": "Updated risks",
+      "inputs": [
+        "Interfaces"
+      ],
+      "outputs": [
+        "Updated risks"
+      ],
+      "dependencies": [
+        "PDM-202"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Review remaining interface risk.",
+      "when": "ST3 \u2014 Coordination live",
+      "how": "Complete Review interface risks against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-306",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-306",
+      "taskName": "Review scope gaps",
+      "taskDescription": "Find missing packages or systems.",
+      "taskCategory": "Design Management",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM",
+        "TTM"
+      ],
+      "approvingRole": null,
+      "stage": "ST3",
+      "stageName": "Coordinated Design",
+      "trigger": "Register vs model",
+      "entryCriteria": "Gap list",
+      "exitCriteria": "Gap actions",
+      "inputs": [
+        "Register"
+      ],
+      "outputs": [
+        "Gap actions"
+      ],
+      "dependencies": [
+        "PDM-101"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Find missing packages or systems.",
+      "when": "ST3 \u2014 Register vs model",
+      "how": "Complete Review scope gaps against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-307",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-307",
+      "taskName": "Review scope overlaps",
+      "taskDescription": "Find double-owned scope.",
+      "taskCategory": "Design Management",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "TTM"
+      ],
+      "approvingRole": null,
+      "stage": "ST3",
+      "stageName": "Coordinated Design",
+      "trigger": "Ownership matrix",
+      "entryCriteria": "Overlap list",
+      "exitCriteria": "Ownership corrections",
+      "inputs": [
+        "Ownership"
+      ],
+      "outputs": [
+        "Corrections"
+      ],
+      "dependencies": [
+        "PDM-102"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Find double-owned scope.",
+      "when": "ST3 \u2014 Ownership matrix",
+      "how": "Complete Review scope overlaps against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-308",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-308",
+      "taskName": "Review deliverable quality",
+      "taskDescription": "Sample deliverable quality.",
+      "taskCategory": "Review",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "TTM",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST3",
+      "stageName": "Coordinated Design",
+      "trigger": "Deliverables issued",
+      "entryCriteria": "Samples",
+      "exitCriteria": "Quality note",
+      "inputs": [
+        "Deliverables"
+      ],
+      "outputs": [
+        "Quality note"
+      ],
+      "dependencies": [
+        "PKG-PRODUCE"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Sample deliverable quality.",
+      "when": "ST3 \u2014 Deliverables issued",
+      "how": "Complete Review deliverable quality against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-301",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-309",
+      "taskName": "Review information completeness",
+      "taskDescription": "Completeness vs IR / LOIN.",
+      "taskCategory": "Information Management",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST3",
+      "stageName": "Coordinated Design",
+      "trigger": "IM completeness view",
+      "entryCriteria": "IR",
+      "exitCriteria": "Completeness note",
+      "inputs": [
+        "IM-202"
+      ],
+      "outputs": [
+        "Completeness note"
+      ],
+      "dependencies": [
+        "IM-202"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Completeness vs IR / LOIN.",
+      "when": "ST3 \u2014 IM completeness view",
+      "how": "Complete Review information completeness against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-301",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-310",
+      "taskName": "Review compliance dashboards",
+      "taskDescription": "Read IM compliance.",
+      "taskCategory": "Project Controls",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST3",
+      "stageName": "Coordinated Design",
+      "trigger": "Dashboards",
+      "entryCriteria": "Compliance",
+      "exitCriteria": "Actions",
+      "inputs": [
+        "IM-202"
+      ],
+      "outputs": [
+        "Actions"
+      ],
+      "dependencies": [
+        "IM-202"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Read IM compliance.",
+      "when": "ST3 \u2014 Dashboards",
+      "how": "Complete Review compliance dashboards against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-303",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-401",
+      "taskName": "Issue corrective actions",
+      "taskDescription": "If gate rejected.",
+      "taskCategory": "Approvals",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "TTM",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST4",
+      "stageName": "Review & Approval",
+      "trigger": "DTL-403",
+      "entryCriteria": "Rejection",
+      "exitCriteria": "Corrective actions issued",
+      "inputs": [
+        "Rejection"
+      ],
+      "outputs": [
+        "Actions"
+      ],
+      "dependencies": [
+        "DTL-403"
+      ],
+      "dependencyType": "FS",
+      "mandatory": false,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "If gate rejected.",
+      "when": "ST4 \u2014 DTL-403",
+      "how": "Complete Issue corrective actions against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-301",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-402",
+      "taskName": "Re-submit stage gate",
+      "taskDescription": "Re-submit after corrections.",
+      "taskCategory": "Approvals",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM",
+        "DTL"
+      ],
+      "approvingRole": null,
+      "stage": "ST4",
+      "stageName": "Review & Approval",
+      "trigger": "Actions closed",
+      "entryCriteria": "Updated pack",
+      "exitCriteria": "New recommendation",
+      "inputs": [
+        "Actions"
+      ],
+      "outputs": [
+        "Updated recommendation"
+      ],
+      "dependencies": [
+        "PDM-401"
+      ],
+      "dependencyType": "FS",
+      "mandatory": false,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Re-submit after corrections.",
+      "when": "ST4 \u2014 Actions closed",
+      "how": "Complete Re-submit stage gate against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-401",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-501",
+      "taskName": "Approve design / client submissions",
+      "taskDescription": "Approve what goes to the client.",
+      "taskCategory": "Issue",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM"
+      ],
+      "approvingRole": "DTL",
+      "stage": "ST5",
+      "stageName": "Issue",
+      "trigger": "DTL-402",
+      "entryCriteria": "Submission pack",
+      "exitCriteria": "Submission approved",
+      "inputs": [
+        "Pack"
+      ],
+      "outputs": [
+        "Approval"
+      ],
+      "dependencies": [
+        "DTL-402",
+        "PDM-302"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Approve what goes to the client.",
+      "when": "ST5 \u2014 DTL-402",
+      "how": "Complete Approve design / client submissions against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-501",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-502",
+      "taskName": "Approve construction issue packages",
+      "taskDescription": "Approve C-issue content.",
+      "taskCategory": "Issue",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "CM",
+        "IM"
+      ],
+      "approvingRole": "DTL",
+      "stage": "ST5",
+      "stageName": "Issue",
+      "trigger": "Client path clear",
+      "entryCriteria": "C-pack",
+      "exitCriteria": "C-issue approved",
+      "inputs": [
+        "C-pack"
+      ],
+      "outputs": [
+        "Approval"
+      ],
+      "dependencies": [
+        "PDM-501"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Approve C-issue content.",
+      "when": "ST5 \u2014 Client path clear",
+      "how": "Complete Approve construction issue packages against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-502",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-503",
+      "taskName": "Approve information releases",
+      "taskDescription": "Approve IM publication set.",
+      "taskCategory": "Issue",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST5",
+      "stageName": "Issue",
+      "trigger": "Containers ready",
+      "entryCriteria": "Release list",
+      "exitCriteria": "Release approved",
+      "inputs": [
+        "IM list"
+      ],
+      "outputs": [
+        "Release approval"
+      ],
+      "dependencies": [
+        "IM-401"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Approve IM publication set.",
+      "when": "ST5 \u2014 Containers ready",
+      "how": "Complete Approve information releases against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "IM-403",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-601",
+      "taskName": "Review design queries / RFIs",
+      "taskDescription": "Answer or route RFIs.",
+      "taskCategory": "Construction Support",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "TTM",
+        "IM",
+        "CM"
+      ],
+      "approvingRole": null,
+      "stage": "ST6",
+      "stageName": "Construction Support",
+      "trigger": "RFI",
+      "entryCriteria": "RFI",
+      "exitCriteria": "Response or escalation",
+      "inputs": [
+        "RFI"
+      ],
+      "outputs": [
+        "Response"
+      ],
+      "dependencies": [],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Answer or route RFIs.",
+      "when": "ST6 \u2014 RFI",
+      "how": "Complete Review design queries / RFIs against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-602",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-602",
+      "taskName": "Review site changes",
+      "taskDescription": "Review site-led change.",
+      "taskCategory": "Construction Support",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "CM",
+        "DTL"
+      ],
+      "approvingRole": null,
+      "stage": "ST6",
+      "stageName": "Construction Support",
+      "trigger": "Site change",
+      "entryCriteria": "Change",
+      "exitCriteria": "Instruction",
+      "inputs": [
+        "Change"
+      ],
+      "outputs": [
+        "Instruction"
+      ],
+      "dependencies": [
+        "PDM-601"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Review site-led change.",
+      "when": "ST6 \u2014 Site change",
+      "how": "Complete Review site changes against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-603",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-603",
+      "taskName": "Review design deviations",
+      "taskDescription": "Review deviations from issued information.",
+      "taskCategory": "Construction Support",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "TTM",
+        "DTL"
+      ],
+      "approvingRole": "DTL",
+      "stage": "ST6",
+      "stageName": "Construction Support",
+      "trigger": "Deviation",
+      "entryCriteria": "Deviation",
+      "exitCriteria": "Accept / reject",
+      "inputs": [
+        "Deviation"
+      ],
+      "outputs": [
+        "Decision"
+      ],
+      "dependencies": [
+        "PDM-602"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Review deviations from issued information.",
+      "when": "ST6 \u2014 Deviation",
+      "how": "Complete Review design deviations against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-604",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-604",
+      "taskName": "Approve revisions",
+      "taskDescription": "Approve the revised package.",
+      "taskCategory": "Construction Support",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM",
+        "DTL"
+      ],
+      "approvingRole": "DTL",
+      "stage": "ST6",
+      "stageName": "Construction Support",
+      "trigger": "Revision produced",
+      "entryCriteria": "Rev pack",
+      "exitCriteria": "Revision approved",
+      "inputs": [
+        "Rev"
+      ],
+      "outputs": [
+        "Approval"
+      ],
+      "dependencies": [
+        "PKG-PRODUCE"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Approve the revised package.",
+      "when": "ST6 \u2014 Revision produced",
+      "how": "Complete Approve revisions against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "IM-602",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-701",
+      "taskName": "Review handover deliverables",
+      "taskDescription": "Review the handover set.",
+      "taskCategory": "Handover",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM",
+        "DTL"
+      ],
+      "approvingRole": null,
+      "stage": "ST7",
+      "stageName": "Handover / Closeout / Archive / Operations transition",
+      "trigger": "S6 stable",
+      "entryCriteria": "Handover register",
+      "exitCriteria": "Review note",
+      "inputs": [
+        "Register"
+      ],
+      "outputs": [
+        "Review"
+      ],
+      "dependencies": [
+        "PDM-302"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 3,
+      "suggestedLeadDays": 0,
+      "why": "Review the handover set.",
+      "when": "ST7 \u2014 S6 stable",
+      "how": "Complete Review handover deliverables against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-702",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-702",
+      "taskName": "Review AIM readiness",
+      "taskDescription": "Review AIM with IM.",
+      "taskCategory": "Handover",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST7",
+      "stageName": "Handover / Closeout / Archive / Operations transition",
+      "trigger": "IM-702",
+      "entryCriteria": "AIM",
+      "exitCriteria": "AIM view",
+      "inputs": [
+        "AIM"
+      ],
+      "outputs": [
+        "AIM view"
+      ],
+      "dependencies": [
+        "IM-702"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Review AIM with IM.",
+      "when": "ST7 \u2014 IM-702",
+      "how": "Complete Review AIM readiness against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-703",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-703",
+      "taskName": "Review asset information",
+      "taskDescription": "Review asset-level completeness.",
+      "taskCategory": "Handover",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "IM",
+        "FM"
+      ],
+      "approvingRole": null,
+      "stage": "ST7",
+      "stageName": "Handover / Closeout / Archive / Operations transition",
+      "trigger": "AIM view",
+      "entryCriteria": "Assets",
+      "exitCriteria": "Asset note",
+      "inputs": [
+        "Assets"
+      ],
+      "outputs": [
+        "Asset note"
+      ],
+      "dependencies": [
+        "PDM-702"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Review asset-level completeness.",
+      "when": "ST7 \u2014 AIM view",
+      "how": "Complete Review asset information against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-704",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "PDM-704",
+      "taskName": "Approve design completion",
+      "taskDescription": "Approve that design delivery is complete.",
+      "taskCategory": "Handover",
+      "responsibleRole": "PDM",
+      "consultedRoles": [
+        "DTL",
+        "IM"
+      ],
+      "approvingRole": "DTL",
+      "stage": "ST7",
+      "stageName": "Handover / Closeout / Archive / Operations transition",
+      "trigger": "Handover reviewed",
+      "entryCriteria": "Completion pack",
+      "exitCriteria": "Design completion approved",
+      "inputs": [
+        "Pack"
+      ],
+      "outputs": [
+        "Approval"
+      ],
+      "dependencies": [
+        "PDM-701",
+        "PDM-703"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Approve that design delivery is complete.",
+      "when": "ST7 \u2014 Handover reviewed",
+      "how": "Complete Approve design completion against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-704",
+      "kpis": [],
+      "packageIntegration": null
+    }
+  ]
+}

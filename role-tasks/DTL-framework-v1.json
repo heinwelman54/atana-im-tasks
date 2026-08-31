@@ -1,0 +1,1706 @@
+{
+  "schema": "atana-functional-role-delivery-framework/1.0",
+  "roleCode": "DTL",
+  "roleName": "Delivery Team Lead / Project Manager",
+  "purpose": "Own client-facing governance, mobilisation, stage gates, commercial and resource authority. Does not produce packages.",
+  "taskCount": 46,
+  "stages": [
+    {
+      "id": "ST0",
+      "name": "Initiate",
+      "isoStage": "S1"
+    },
+    {
+      "id": "ST1",
+      "name": "Plan",
+      "isoStage": "S2"
+    },
+    {
+      "id": "ST2",
+      "name": "Concept",
+      "isoStage": "S2"
+    },
+    {
+      "id": "ST3",
+      "name": "Coordinated Design",
+      "isoStage": "S3"
+    },
+    {
+      "id": "ST4",
+      "name": "Review & Approval",
+      "isoStage": "S3"
+    },
+    {
+      "id": "ST5",
+      "name": "Issue",
+      "isoStage": "S4"
+    },
+    {
+      "id": "ST6",
+      "name": "Construction Support",
+      "isoStage": "S5"
+    },
+    {
+      "id": "ST7",
+      "name": "Handover / Closeout / Archive / Operations transition",
+      "isoStage": "S6"
+    }
+  ],
+  "tasks": [
+    {
+      "taskId": "DTL-000",
+      "taskName": "Assess project opportunity",
+      "taskDescription": "Decide whether the appointment is acceptable before mobilisation.",
+      "taskCategory": "Project Opportunity",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "Commercial"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Opportunity / tender award",
+      "entryCriteria": "Appointment pack available",
+      "exitCriteria": "Go / no-go recorded",
+      "inputs": [
+        "Appointment",
+        "Draft scope",
+        "Commercial outline"
+      ],
+      "outputs": [
+        "Opportunity decision"
+      ],
+      "dependencies": [],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Stops the delivery team starting a job it cannot deliver.",
+      "when": "ST0 \u2014 Opportunity / tender award",
+      "how": "Complete Assess project opportunity against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-001",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-001",
+      "taskName": "Accept project handover",
+      "taskDescription": "Formally accept the project from the appointing party.",
+      "taskCategory": "Project Initiation",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Go decision",
+      "entryCriteria": "Opportunity accepted",
+      "exitCriteria": "Handover certificate accepted",
+      "inputs": [
+        "Handover pack"
+      ],
+      "outputs": [
+        "Accepted handover"
+      ],
+      "dependencies": [
+        "DTL-000"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Creates the legal and delivery start line.",
+      "when": "ST0 \u2014 Go decision",
+      "how": "Complete Accept project handover against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-002",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-002",
+      "taskName": "Review contract and appointment",
+      "taskDescription": "Confirm contract obligations that bind DTL, PDM and IM.",
+      "taskCategory": "Project Initiation",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "Legal"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Handover accepted",
+      "entryCriteria": "Contract issued",
+      "exitCriteria": "Contract obligations register",
+      "inputs": [
+        "Contract",
+        "Appointment"
+      ],
+      "outputs": [
+        "Obligations register"
+      ],
+      "dependencies": [
+        "DTL-001"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 3,
+      "suggestedLeadDays": 0,
+      "why": "Confirm contract obligations that bind DTL, PDM and IM.",
+      "when": "ST0 \u2014 Handover accepted",
+      "how": "Complete Review contract and appointment against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-003",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-003",
+      "taskName": "Review client requirements",
+      "taskDescription": "Confirm success criteria, constraints and interfaces.",
+      "taskCategory": "Project Initiation",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Contract reviewed",
+      "entryCriteria": "Requirements pack",
+      "exitCriteria": "Requirements accepted or queried",
+      "inputs": [
+        "Brief",
+        "OIR extract"
+      ],
+      "outputs": [
+        "Accepted requirements"
+      ],
+      "dependencies": [
+        "DTL-002"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 3,
+      "suggestedLeadDays": 0,
+      "why": "Confirm success criteria, constraints and interfaces.",
+      "when": "ST0 \u2014 Contract reviewed",
+      "how": "Complete Review client requirements against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-004",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-004",
+      "taskName": "Confirm budget envelope",
+      "taskDescription": "Confirm commercial envelope for delivery.",
+      "taskCategory": "Project Initiation",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "Commercial",
+        "PDM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Requirements accepted",
+      "entryCriteria": "Budget issued",
+      "exitCriteria": "Budget baseline noted",
+      "inputs": [
+        "Budget"
+      ],
+      "outputs": [
+        "Budget baseline"
+      ],
+      "dependencies": [
+        "DTL-003"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Confirm commercial envelope for delivery.",
+      "when": "ST0 \u2014 Requirements accepted",
+      "how": "Complete Confirm budget envelope against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-005",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-005",
+      "taskName": "Confirm high-level programme",
+      "taskDescription": "Accept outline dates before detailed planning.",
+      "taskCategory": "Project Initiation",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Budget noted",
+      "entryCriteria": "Outline programme",
+      "exitCriteria": "Programme envelope accepted",
+      "inputs": [
+        "Outline programme"
+      ],
+      "outputs": [
+        "Programme envelope"
+      ],
+      "dependencies": [
+        "DTL-004"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Accept outline dates before detailed planning.",
+      "when": "ST0 \u2014 Budget noted",
+      "how": "Complete Confirm high-level programme against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-006",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-006",
+      "taskName": "Review strategic risks",
+      "taskDescription": "Identify risks that block mobilisation.",
+      "taskCategory": "Project Initiation",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Programme envelope",
+      "entryCriteria": "Risk workshop",
+      "exitCriteria": "Strategic risk register",
+      "inputs": [
+        "Risks"
+      ],
+      "outputs": [
+        "Strategic risk register"
+      ],
+      "dependencies": [
+        "DTL-005"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Identify risks that block mobilisation.",
+      "when": "ST0 \u2014 Programme envelope",
+      "how": "Complete Review strategic risks against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-007",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-007",
+      "taskName": "Confirm success criteria",
+      "taskDescription": "Lock measurable success criteria.",
+      "taskCategory": "Project Initiation",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "Client",
+        "PDM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Risks reviewed",
+      "entryCriteria": "Criteria drafted",
+      "exitCriteria": "Success criteria approved",
+      "inputs": [
+        "Requirements"
+      ],
+      "outputs": [
+        "Success criteria"
+      ],
+      "dependencies": [
+        "DTL-006"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Lock measurable success criteria.",
+      "when": "ST0 \u2014 Risks reviewed",
+      "how": "Complete Confirm success criteria against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-008",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-008",
+      "taskName": "Create project governance structure",
+      "taskDescription": "Seat DTL, PDM, IM and approval rights.",
+      "taskCategory": "Mobilisation",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Success criteria locked",
+      "entryCriteria": "Seats named",
+      "exitCriteria": "Governance structure issued",
+      "inputs": [
+        "RACI",
+        "Organisation"
+      ],
+      "outputs": [
+        "Governance structure"
+      ],
+      "dependencies": [
+        "DTL-007"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Seat DTL, PDM, IM and approval rights.",
+      "when": "ST0 \u2014 Success criteria locked",
+      "how": "Complete Create project governance structure against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-009",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-009",
+      "taskName": "Appoint PDM",
+      "taskDescription": "Appoint the Project Delivery Manager.",
+      "taskCategory": "Mobilisation",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "HR",
+        "Client"
+      ],
+      "approvingRole": null,
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Governance issued",
+      "entryCriteria": "Candidate confirmed",
+      "exitCriteria": "PDM appointed",
+      "inputs": [
+        "CV / capacity"
+      ],
+      "outputs": [
+        "PDM appointment"
+      ],
+      "dependencies": [
+        "DTL-008"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Appoint the Project Delivery Manager.",
+      "when": "ST0 \u2014 Governance issued",
+      "how": "Complete Appoint PDM against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-010",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-010",
+      "taskName": "Appoint Information Manager",
+      "taskDescription": "Appoint the IM.",
+      "taskCategory": "Mobilisation",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM"
+      ],
+      "approvingRole": null,
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "PDM appointed",
+      "entryCriteria": "Candidate confirmed",
+      "exitCriteria": "IM appointed",
+      "inputs": [
+        "Capacity"
+      ],
+      "outputs": [
+        "IM appointment"
+      ],
+      "dependencies": [
+        "DTL-009"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Appoint the IM.",
+      "when": "ST0 \u2014 PDM appointed",
+      "how": "Complete Appoint Information Manager against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-011",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-011",
+      "taskName": "Confirm project team",
+      "taskDescription": "Confirm remaining delivery leadership.",
+      "taskCategory": "Mobilisation",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM"
+      ],
+      "approvingRole": null,
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "IM appointed",
+      "entryCriteria": "Team list",
+      "exitCriteria": "Team confirmed",
+      "inputs": [
+        "Organogram"
+      ],
+      "outputs": [
+        "Confirmed team"
+      ],
+      "dependencies": [
+        "DTL-010"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Confirm remaining delivery leadership.",
+      "when": "ST0 \u2014 IM appointed",
+      "how": "Complete Confirm project team against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-012",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-012",
+      "taskName": "Allocate resources",
+      "taskDescription": "Allocate leadership time and key resources.",
+      "taskCategory": "Mobilisation",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM"
+      ],
+      "approvingRole": null,
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Team confirmed",
+      "entryCriteria": "Resource offer",
+      "exitCriteria": "Resource allocation",
+      "inputs": [
+        "Capacity plan"
+      ],
+      "outputs": [
+        "Resource allocation"
+      ],
+      "dependencies": [
+        "DTL-011"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Allocate leadership time and key resources.",
+      "when": "ST0 \u2014 Team confirmed",
+      "how": "Complete Allocate resources against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-013",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-013",
+      "taskName": "Establish communication structure",
+      "taskDescription": "Set reporting and escalation paths.",
+      "taskCategory": "Mobilisation",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "Resources allocated",
+      "entryCriteria": "Comms plan draft",
+      "exitCriteria": "Comms structure live",
+      "inputs": [
+        "Stakeholders"
+      ],
+      "outputs": [
+        "Comms structure"
+      ],
+      "dependencies": [
+        "DTL-012"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Set reporting and escalation paths.",
+      "when": "ST0 \u2014 Resources allocated",
+      "how": "Complete Establish communication structure against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-014",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-014",
+      "taskName": "Approve project execution plan",
+      "taskDescription": "Approve PEP / delivery strategy pack.",
+      "taskCategory": "Mobilisation",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "PDM strategy ready",
+      "entryCriteria": "PEP submitted",
+      "exitCriteria": "PEP approved",
+      "inputs": [
+        "PEP",
+        "Delivery strategy"
+      ],
+      "outputs": [
+        "Approved PEP"
+      ],
+      "dependencies": [
+        "DTL-013",
+        "PDM-003"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 1,
+      "why": "Approve PEP / delivery strategy pack.",
+      "when": "ST0 \u2014 PDM strategy ready",
+      "how": "Complete Approve project execution plan against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-015",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-015",
+      "taskName": "Approve mobilisation readiness",
+      "taskDescription": "Gate: no setup before this approval.",
+      "taskCategory": "Mobilisation",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST0",
+      "stageName": "Initiate",
+      "trigger": "PEP approved",
+      "entryCriteria": "Readiness checklist",
+      "exitCriteria": "Mobilisation approved (DTL-015)",
+      "inputs": [
+        "Checklist"
+      ],
+      "outputs": [
+        "Mobilisation approval"
+      ],
+      "dependencies": [
+        "DTL-014"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Blocks PDM-001 and IM-001.",
+      "when": "ST0 \u2014 PEP approved",
+      "how": "Complete Approve mobilisation readiness against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-001 / IM-001",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-101",
+      "taskName": "Approve project governance (detailed)",
+      "taskDescription": "Approve detailed governance after PDM/IM configuration.",
+      "taskCategory": "Planning",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST1",
+      "stageName": "Plan",
+      "trigger": "IM project configured",
+      "entryCriteria": "Governance pack",
+      "exitCriteria": "Governance approved",
+      "inputs": [
+        "Governance pack"
+      ],
+      "outputs": [
+        "Approved governance"
+      ],
+      "dependencies": [
+        "IM-001",
+        "PDM-003"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Approve detailed governance after PDM/IM configuration.",
+      "when": "ST1 \u2014 IM project configured",
+      "how": "Complete Approve project governance (detailed) against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-102",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-102",
+      "taskName": "Approve baseline programme",
+      "taskDescription": "Approve the baseline used for controls.",
+      "taskCategory": "Planning",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST1",
+      "stageName": "Plan",
+      "trigger": "Production plan + MIDP draft",
+      "entryCriteria": "Baseline pack",
+      "exitCriteria": "Baseline approved",
+      "inputs": [
+        "PDM-103",
+        "IM-101"
+      ],
+      "outputs": [
+        "Baseline programme"
+      ],
+      "dependencies": [
+        "PDM-103",
+        "IM-101"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 1,
+      "why": "Approve the baseline used for controls.",
+      "when": "ST1 \u2014 Production plan + MIDP draft",
+      "how": "Complete Approve baseline programme against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-103",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-103",
+      "taskName": "Approve resource plan",
+      "taskDescription": "Approve task-team capacity.",
+      "taskCategory": "Planning",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST1",
+      "stageName": "Plan",
+      "trigger": "Owners assigned",
+      "entryCriteria": "Resource plan",
+      "exitCriteria": "Resource plan approved",
+      "inputs": [
+        "PDM-102"
+      ],
+      "outputs": [
+        "Approved resource plan"
+      ],
+      "dependencies": [
+        "PDM-102"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Approve task-team capacity.",
+      "when": "ST1 \u2014 Owners assigned",
+      "how": "Complete Approve resource plan against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-104",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-104",
+      "taskName": "Approve delivery strategy",
+      "taskDescription": "Approve how design and information will be delivered.",
+      "taskCategory": "Planning",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST1",
+      "stageName": "Plan",
+      "trigger": "PDM strategy",
+      "entryCriteria": "Strategy pack",
+      "exitCriteria": "Strategy approved",
+      "inputs": [
+        "PDM-003"
+      ],
+      "outputs": [
+        "Approved delivery strategy"
+      ],
+      "dependencies": [
+        "PDM-003"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Approve how design and information will be delivered.",
+      "when": "ST1 \u2014 PDM strategy",
+      "how": "Complete Approve delivery strategy against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-105",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-105",
+      "taskName": "Approve MIDP",
+      "taskDescription": "Approve the master information delivery plan.",
+      "taskCategory": "Planning",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "IM",
+        "PDM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST1",
+      "stageName": "Plan",
+      "trigger": "IM-104 complete",
+      "entryCriteria": "MIDP",
+      "exitCriteria": "MIDP approved by DTL",
+      "inputs": [
+        "MIDP"
+      ],
+      "outputs": [
+        "Approved MIDP"
+      ],
+      "dependencies": [
+        "IM-104"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Approve the master information delivery plan.",
+      "when": "ST1 \u2014 IM-104 complete",
+      "how": "Complete Approve MIDP against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-201",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-106",
+      "taskName": "Review commercial constraints",
+      "taskDescription": "Confirm commercial limits on production.",
+      "taskCategory": "Planning",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "Commercial",
+        "PDM"
+      ],
+      "approvingRole": null,
+      "stage": "ST1",
+      "stageName": "Plan",
+      "trigger": "Baseline in draft",
+      "entryCriteria": "Commercial note",
+      "exitCriteria": "Constraints logged",
+      "inputs": [
+        "Contract"
+      ],
+      "outputs": [
+        "Commercial constraints"
+      ],
+      "dependencies": [
+        "DTL-102"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Confirm commercial limits on production.",
+      "when": "ST1 \u2014 Baseline in draft",
+      "how": "Complete Review commercial constraints against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-201",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-201",
+      "taskName": "Review progress reports",
+      "taskDescription": "Review PDM/IM progress at concept.",
+      "taskCategory": "Production",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST2",
+      "stageName": "Concept",
+      "trigger": "Concept production started",
+      "entryCriteria": "Reports issued",
+      "exitCriteria": "Comments issued",
+      "inputs": [
+        "Progress reports"
+      ],
+      "outputs": [
+        "DTL comments"
+      ],
+      "dependencies": [
+        "PDM-201"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Review PDM/IM progress at concept.",
+      "when": "ST2 \u2014 Concept production started",
+      "how": "Complete Review progress reports against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-202",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-202",
+      "taskName": "Monitor task team performance",
+      "taskDescription": "Watch capacity and slippage.",
+      "taskCategory": "Production",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM"
+      ],
+      "approvingRole": null,
+      "stage": "ST2",
+      "stageName": "Concept",
+      "trigger": "Teams mobilised",
+      "entryCriteria": "Performance data",
+      "exitCriteria": "Actions logged",
+      "inputs": [
+        "Resource plan"
+      ],
+      "outputs": [
+        "Performance actions"
+      ],
+      "dependencies": [
+        "DTL-103"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Watch capacity and slippage.",
+      "when": "ST2 \u2014 Teams mobilised",
+      "how": "Complete Monitor task team performance against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-203",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-203",
+      "taskName": "Manage client communication",
+      "taskDescription": "Keep the appointing party informed.",
+      "taskCategory": "Coordination",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM"
+      ],
+      "approvingRole": null,
+      "stage": "ST2",
+      "stageName": "Concept",
+      "trigger": "Ongoing",
+      "entryCriteria": "Comms calendar",
+      "exitCriteria": "Record of communication",
+      "inputs": [
+        "Comms structure"
+      ],
+      "outputs": [
+        "Client record"
+      ],
+      "dependencies": [
+        "DTL-013"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Keep the appointing party informed.",
+      "when": "ST2 \u2014 Ongoing",
+      "how": "Complete Manage client communication against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-301",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-301",
+      "taskName": "Manage escalations",
+      "taskDescription": "Handle issues PDM cannot close.",
+      "taskCategory": "Design Management",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST3",
+      "stageName": "Coordinated Design",
+      "trigger": "Escalation raised",
+      "entryCriteria": "Issue brief",
+      "exitCriteria": "Decision recorded",
+      "inputs": [
+        "Issue"
+      ],
+      "outputs": [
+        "Escalation decision"
+      ],
+      "dependencies": [],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Handle issues PDM cannot close.",
+      "when": "ST3 \u2014 Escalation raised",
+      "how": "Complete Manage escalations against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-302",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-302",
+      "taskName": "Review change requests",
+      "taskDescription": "Review changes with commercial impact.",
+      "taskCategory": "Design Management",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "Commercial"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST3",
+      "stageName": "Coordinated Design",
+      "trigger": "Change raised",
+      "entryCriteria": "Change pack",
+      "exitCriteria": "Change decision",
+      "inputs": [
+        "Change"
+      ],
+      "outputs": [
+        "Change decision"
+      ],
+      "dependencies": [],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Review changes with commercial impact.",
+      "when": "ST3 \u2014 Change raised",
+      "how": "Complete Review change requests against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-303",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-303",
+      "taskName": "Monitor multi-discipline delivery",
+      "taskDescription": "Confirm PDM is coordinating interfaces.",
+      "taskCategory": "Coordination",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM"
+      ],
+      "approvingRole": null,
+      "stage": "ST3",
+      "stageName": "Coordinated Design",
+      "trigger": "Packages in production",
+      "entryCriteria": "Coordination report",
+      "exitCriteria": "Oversight note",
+      "inputs": [
+        "PDM-202"
+      ],
+      "outputs": [
+        "Oversight note"
+      ],
+      "dependencies": [
+        "PDM-202"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Confirm PDM is coordinating interfaces.",
+      "when": "ST3 \u2014 Packages in production",
+      "how": "Complete Monitor multi-discipline delivery against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-401",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-401",
+      "taskName": "Review stage-gate pack",
+      "taskDescription": "Read PDM recommendation and IM compliance.",
+      "taskCategory": "Approvals",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST4",
+      "stageName": "Review & Approval",
+      "trigger": "PDM-303 and IM-303",
+      "entryCriteria": "Gate pack",
+      "exitCriteria": "Gate pack reviewed",
+      "inputs": [
+        "Gate pack"
+      ],
+      "outputs": [
+        "Review record"
+      ],
+      "dependencies": [
+        "PDM-303",
+        "IM-303"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Read PDM recommendation and IM compliance.",
+      "when": "ST4 \u2014 PDM-303 and IM-303",
+      "how": "Complete Review stage-gate pack against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-402",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-402",
+      "taskName": "Approve stage gate",
+      "taskDescription": "Permit the next stage / issue. GATE.",
+      "taskCategory": "Approvals",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST4",
+      "stageName": "Review & Approval",
+      "trigger": "All package approvals",
+      "entryCriteria": "Gate pack complete",
+      "exitCriteria": "Stage gate approved or rejected",
+      "inputs": [
+        "All package approvals",
+        "IM compliance"
+      ],
+      "outputs": [
+        "Stage gate decision"
+      ],
+      "dependencies": [
+        "DTL-401"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Blocks Stage 5 issue.",
+      "when": "ST4 \u2014 All package approvals",
+      "how": "Complete Approve stage gate against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-501 / IM-401",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-403",
+      "taskName": "Reject stage gate and return",
+      "taskDescription": "Return the stage with corrective actions.",
+      "taskCategory": "Approvals",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST4",
+      "stageName": "Review & Approval",
+      "trigger": "Gate not ready",
+      "entryCriteria": "Findings",
+      "exitCriteria": "Rejection with actions",
+      "inputs": [
+        "Findings"
+      ],
+      "outputs": [
+        "Corrective actions"
+      ],
+      "dependencies": [
+        "DTL-401"
+      ],
+      "dependencyType": "FS",
+      "mandatory": false,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Return the stage with corrective actions.",
+      "when": "ST4 \u2014 Gate not ready",
+      "how": "Complete Reject stage gate and return against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "PDM-303",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-501",
+      "taskName": "Approve client issue",
+      "taskDescription": "Approve information leaving the delivery team.",
+      "taskCategory": "Issue",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST5",
+      "stageName": "Issue",
+      "trigger": "Stage gate approved",
+      "entryCriteria": "Issue pack",
+      "exitCriteria": "Client issue approved",
+      "inputs": [
+        "Issue pack"
+      ],
+      "outputs": [
+        "Issue approval"
+      ],
+      "dependencies": [
+        "DTL-402",
+        "PDM-501"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Approve information leaving the delivery team.",
+      "when": "ST5 \u2014 Stage gate approved",
+      "how": "Complete Approve client issue against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "IM-401",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-502",
+      "taskName": "Approve construction issue",
+      "taskDescription": "Approve construction information issue.",
+      "taskCategory": "Issue",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "CM"
+      ],
+      "approvingRole": null,
+      "stage": "ST5",
+      "stageName": "Issue",
+      "trigger": "Client issue path clear",
+      "entryCriteria": "C-issue pack",
+      "exitCriteria": "Construction issue approved",
+      "inputs": [
+        "C-issue pack"
+      ],
+      "outputs": [
+        "C-issue approval"
+      ],
+      "dependencies": [
+        "DTL-501",
+        "PDM-502"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Approve construction information issue.",
+      "when": "ST5 \u2014 Client issue path clear",
+      "how": "Complete Approve construction issue against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "IM-403",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-601",
+      "taskName": "Monitor construction information delivery",
+      "taskDescription": "Watch that revisions keep pace with site.",
+      "taskCategory": "Construction Support",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM",
+        "CM"
+      ],
+      "approvingRole": null,
+      "stage": "ST6",
+      "stageName": "Construction Support",
+      "trigger": "On site",
+      "entryCriteria": "Revision log",
+      "exitCriteria": "Oversight actions",
+      "inputs": [
+        "Registers"
+      ],
+      "outputs": [
+        "Oversight actions"
+      ],
+      "dependencies": [
+        "IM-601"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Watch that revisions keep pace with site.",
+      "when": "ST6 \u2014 On site",
+      "how": "Complete Monitor construction information delivery against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-602",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-602",
+      "taskName": "Review critical site risks",
+      "taskDescription": "Review risks that threaten safety or programme.",
+      "taskCategory": "Construction Support",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "CM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST6",
+      "stageName": "Construction Support",
+      "trigger": "Critical risk",
+      "entryCriteria": "Risk note",
+      "exitCriteria": "Decision",
+      "inputs": [
+        "Risk"
+      ],
+      "outputs": [
+        "Decision"
+      ],
+      "dependencies": [],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Review risks that threaten safety or programme.",
+      "when": "ST6 \u2014 Critical risk",
+      "how": "Complete Review critical site risks against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-603",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-603",
+      "taskName": "Approve major site changes",
+      "taskDescription": "Approve variations with design impact.",
+      "taskCategory": "Construction Support",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "CM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST6",
+      "stageName": "Construction Support",
+      "trigger": "Major change",
+      "entryCriteria": "Change pack",
+      "exitCriteria": "Approval",
+      "inputs": [
+        "Change"
+      ],
+      "outputs": [
+        "Approved change"
+      ],
+      "dependencies": [
+        "PDM-603"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Approve variations with design impact.",
+      "when": "ST6 \u2014 Major change",
+      "how": "Complete Approve major site changes against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "IM-602",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-604",
+      "taskName": "Manage resource conflicts",
+      "taskDescription": "Resolve capacity conflicts across teams.",
+      "taskCategory": "Construction Support",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM"
+      ],
+      "approvingRole": null,
+      "stage": "ST6",
+      "stageName": "Construction Support",
+      "trigger": "Conflict flagged",
+      "entryCriteria": "Capacity data",
+      "exitCriteria": "Allocation decision",
+      "inputs": [
+        "Resource plan"
+      ],
+      "outputs": [
+        "Allocation decision"
+      ],
+      "dependencies": [
+        "DTL-103"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Resolve capacity conflicts across teams.",
+      "when": "ST6 \u2014 Conflict flagged",
+      "how": "Complete Manage resource conflicts against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-701",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-701",
+      "taskName": "Approve handover strategy",
+      "taskDescription": "Approve how AIM and archive will be handed over.",
+      "taskCategory": "Handover",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM",
+        "FM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST7",
+      "stageName": "Handover / Closeout / Archive / Operations transition",
+      "trigger": "S6 complete enough",
+      "entryCriteria": "Handover strategy",
+      "exitCriteria": "Strategy approved",
+      "inputs": [
+        "Strategy"
+      ],
+      "outputs": [
+        "Approved handover strategy"
+      ],
+      "dependencies": [
+        "PDM-701",
+        "IM-701"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Approve how AIM and archive will be handed over.",
+      "when": "ST7 \u2014 S6 complete enough",
+      "how": "Complete Approve handover strategy against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-702",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-702",
+      "taskName": "Review asset information readiness",
+      "taskDescription": "Confirm AIM readiness with IM.",
+      "taskCategory": "Handover",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "IM",
+        "PDM"
+      ],
+      "approvingRole": null,
+      "stage": "ST7",
+      "stageName": "Handover / Closeout / Archive / Operations transition",
+      "trigger": "Strategy approved",
+      "entryCriteria": "AIM score",
+      "exitCriteria": "Readiness accepted or rejected",
+      "inputs": [
+        "AIM",
+        "AIR"
+      ],
+      "outputs": [
+        "Readiness view"
+      ],
+      "dependencies": [
+        "IM-702"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Confirm AIM readiness with IM.",
+      "when": "ST7 \u2014 Strategy approved",
+      "how": "Complete Review asset information readiness against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-703",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-703",
+      "taskName": "Review final deliverables",
+      "taskDescription": "Accept the handover set.",
+      "taskCategory": "Handover",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST7",
+      "stageName": "Handover / Closeout / Archive / Operations transition",
+      "trigger": "AIM reviewed",
+      "entryCriteria": "Final register",
+      "exitCriteria": "Final deliverables accepted",
+      "inputs": [
+        "Registers"
+      ],
+      "outputs": [
+        "Acceptance"
+      ],
+      "dependencies": [
+        "DTL-702"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Accept the handover set.",
+      "when": "ST7 \u2014 AIM reviewed",
+      "how": "Complete Review final deliverables against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-704",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-704",
+      "taskName": "Approve project close-out",
+      "taskDescription": "Close the delivery appointment.",
+      "taskCategory": "Closeout",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST7",
+      "stageName": "Handover / Closeout / Archive / Operations transition",
+      "trigger": "Deliverables accepted",
+      "entryCriteria": "Close-out pack",
+      "exitCriteria": "Close-out approved",
+      "inputs": [
+        "Close-out pack"
+      ],
+      "outputs": [
+        "Close-out approval"
+      ],
+      "dependencies": [
+        "DTL-703"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Close the delivery appointment.",
+      "when": "ST7 \u2014 Deliverables accepted",
+      "how": "Complete Approve project close-out against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-705",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-705",
+      "taskName": "Lessons learned",
+      "taskDescription": "Capture delivery lessons.",
+      "taskCategory": "Closeout",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST7",
+      "stageName": "Handover / Closeout / Archive / Operations transition",
+      "trigger": "Close-out approved",
+      "entryCriteria": "Workshop",
+      "exitCriteria": "Lessons record",
+      "inputs": [
+        "Issues log"
+      ],
+      "outputs": [
+        "Lessons"
+      ],
+      "dependencies": [
+        "DTL-704"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Capture delivery lessons.",
+      "when": "ST7 \u2014 Close-out approved",
+      "how": "Complete Lessons learned against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-706",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-706",
+      "taskName": "Performance review",
+      "taskDescription": "Review DTL/PDM/IM performance.",
+      "taskCategory": "Closeout",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "PDM",
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST7",
+      "stageName": "Handover / Closeout / Archive / Operations transition",
+      "trigger": "Lessons captured",
+      "entryCriteria": "KPIs",
+      "exitCriteria": "Performance note",
+      "inputs": [
+        "KPIs"
+      ],
+      "outputs": [
+        "Performance note"
+      ],
+      "dependencies": [
+        "DTL-705"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Review DTL/PDM/IM performance.",
+      "when": "ST7 \u2014 Lessons captured",
+      "how": "Complete Performance review against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-707",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-707",
+      "taskName": "Project closure approval",
+      "taskDescription": "Formal closure.",
+      "taskCategory": "Closeout",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "Client"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST7",
+      "stageName": "Handover / Closeout / Archive / Operations transition",
+      "trigger": "Performance reviewed",
+      "entryCriteria": "Closure pack",
+      "exitCriteria": "Project closed",
+      "inputs": [
+        "Pack"
+      ],
+      "outputs": [
+        "Closure"
+      ],
+      "dependencies": [
+        "DTL-706"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Formal closure.",
+      "when": "ST7 \u2014 Performance reviewed",
+      "how": "Complete Project closure approval against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-708",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-708",
+      "taskName": "Archive approval",
+      "taskDescription": "Approve IM archive lock.",
+      "taskCategory": "Archive",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "IM"
+      ],
+      "approvingRole": null,
+      "stage": "ST7",
+      "stageName": "Handover / Closeout / Archive / Operations transition",
+      "trigger": "Closure approved",
+      "entryCriteria": "Archive pack",
+      "exitCriteria": "Archive approved",
+      "inputs": [
+        "IM-703"
+      ],
+      "outputs": [
+        "Archive approval"
+      ],
+      "dependencies": [
+        "IM-703"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 1,
+      "suggestedLeadDays": 0,
+      "why": "Approve IM archive lock.",
+      "when": "ST7 \u2014 Closure approved",
+      "how": "Complete Archive approval against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "DTL-709",
+      "kpis": [],
+      "packageIntegration": null
+    },
+    {
+      "taskId": "DTL-709",
+      "taskName": "Operations transition",
+      "taskDescription": "Confirm FM / operator has the AIM.",
+      "taskCategory": "Operations Transition",
+      "responsibleRole": "DTL",
+      "consultedRoles": [
+        "FM",
+        "IM"
+      ],
+      "approvingRole": "Client",
+      "stage": "ST7",
+      "stageName": "Handover / Closeout / Archive / Operations transition",
+      "trigger": "Archive approved",
+      "entryCriteria": "AIM accepted by FM",
+      "exitCriteria": "Operations accepted",
+      "inputs": [
+        "AIM"
+      ],
+      "outputs": [
+        "Operations acceptance"
+      ],
+      "dependencies": [
+        "DTL-708"
+      ],
+      "dependencyType": "FS",
+      "mandatory": true,
+      "suggestedDurationDays": 2,
+      "suggestedLeadDays": 0,
+      "why": "Confirm FM / operator has the AIM.",
+      "when": "ST7 \u2014 Archive approved",
+      "how": "Complete Operations transition against the listed entry/exit criteria. Record evidence on the project.",
+      "whatNext": "\u2014",
+      "kpis": [],
+      "packageIntegration": null
+    }
+  ]
+}

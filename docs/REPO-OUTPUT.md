@@ -1,17 +1,15 @@
 # Repo output
 
-**App version: 3.40.13**
+**App version: 3.40.14**
 **Pages file:** app.html
-Open app.html?v=3413 after push. Badge **v3.40.13**.
+Open app.html?v=3414 after push. Badge **v3.40.14**.
 
 ## What changed on the app
 
 | Change | Where |
 |---|---|
-| Dependency-driven schedule (FS / SS / FF / GATE) | **My Role**, panel under PDOS |
-| Numbered DTL / PDM / IM activities with predecessors | Same Gantt |
-| Every scope package expands to Plan→…→Handover | Gold bars |
-| Default critical path in red | Same |
-| Forward-pass early start / early finish | Bar positions |
+| Framework v1.0 task libraries (DTL 46, PDM 47, IM 46) with IDs, entry/exit, deps | **My Role** stage lists now show e.g. PDM-101 Create scope packages |
+| Operating manuals | docs/framework/DTL-OPERATING-MANUAL.md (and PDM, IM) |
+| Combined JSON | role-tasks/ATANA-FRAMEWORK-v1.json |
 
-No production before DTL-002. No IM publish before PDM-302.
+This is the MVP core for tomorrow’s PDM / DTL / IM mobilisation.
