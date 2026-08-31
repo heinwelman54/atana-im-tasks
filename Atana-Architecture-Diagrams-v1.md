@@ -157,3 +157,55 @@ flowchart TD
   COMP --> DASH[Doors 85 percent]
   COMP --> AIR[AIR later]
 ```
+
+## 8. Ecosystem context (v1.0)
+
+```mermaid
+flowchart LR
+  Client --> Atana
+  Consultants --> Atana
+  Contractors --> Atana
+  FM --> Atana
+  Atana --> CDE[CDE P1]
+  Atana --> AUTH[Authoring P2]
+  Atana --> ERP[ERP P6]
+  Atana --> CMMS[CMMS P7]
+  Atana --> TWIN[Twin P8]
+  Atana --> M365[Teams / PBI / Copilot]
+```
+
+## 9. Stage 4 publish event map
+
+```mermaid
+sequenceDiagram
+  participant R as Revit
+  participant D as Docs
+  participant A as Atana
+  participant I as IDS
+  participant T as Teams
+  R->>D: publish model
+  D->>A: version.added
+  A->>I: run IDS
+  I->>A: compliance.result
+  A->>A: aim.completeness
+  alt below gate
+    A->>T: gate.blocked
+  end
+```
+
+## 10. Executive Command Center
+
+```mermaid
+flowchart LR
+  Personas --> ECC[ECC React Fluent]
+  ECC --> APIM
+  APIM --> Scores[ECC API scores]
+  APIM --> Domain[Atana domain API]
+  APIM --> GQL[GraphQL Neo4j]
+  APIM --> PBI[Power BI]
+  APIM --> Ask["/v1/ask"]
+  PDS[PDS OLTP] --> Ev[Events]
+  Ev --> Snap[ecc snapshots]
+  Snap --> Scores
+  Snap --> PBI
+```

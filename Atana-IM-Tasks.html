@@ -1738,6 +1738,7 @@
         <button data-wsview="aim">AIM</button>
         <button data-wsview="graph">Graph</button>
         <button data-wsview="decide">Decide</button>
+        <button data-wsview="ecc">Command</button>
         <button data-wsview="prjtools">Tools</button>
         <button data-wsview="prjdocs">Documents</button>
       </div>
@@ -2044,6 +2045,13 @@
         </div>
         <div id="atnDecideRoot"></div>
       </div>
+      <div class="ws-view" id="wsview-ecc">
+        <div class="card" style="margin-bottom:12px;">
+          <div class="chart-card-title">Executive command center</div>
+          <p class="section-sub" style="margin:0;">Single strip of truth from the same graph and AIM present/required scores. Full PBI module stays in docs/COMMAND-CENTER.md.</p>
+        </div>
+        <div id="atnEccRoot"></div>
+      </div>
     </section>
 
   </main>
@@ -2068,8 +2076,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = "3.6.1";
-const APP_BUILD = "2026-08-31-kge-ontology";
+const APP_VERSION = "3.6.2";
+const APP_BUILD = "2026-08-31-ecc-console";
 
 /** Atana IM Framework — path relative to app (same folder on GitHub Pages / local). */
 const IM_FRAMEWORK_URL = "Atana-IM-Framework.html";
@@ -12344,6 +12352,7 @@ function setActiveWsView(view){
     if(main === "aim" && typeof renderAtnAim === "function") renderAtnAim(project);
     if(main === "graph" && typeof renderAtnGraph === "function") renderAtnGraph(project);
     if(main === "decide" && typeof renderAtnDecide === "function") renderAtnDecide(project);
+    if(main === "ecc" && typeof renderAtnEcc === "function") renderAtnEcc(project);
     if(main === "prjtools" && typeof bindProjectTools === "function") bindProjectTools(project);
     if(main === "prjdocs" && typeof bindProjectDocs === "function") bindProjectDocs(project);
   } catch(e){ console.error(e); }
@@ -21130,6 +21139,91 @@ function renderAtnDecide(project){
   const go = document.getElementById("atnDecideAsk");
   if(go) go.onclick = () => ask((document.getElementById("atnDecideQ")||{}).value||"");
 }
+
+function renderAtnEcc(project){
+  const root = document.getElementById("atnEccRoot");
+  if(!root) return;
+  const loi = (typeof atnLoiForStage === "function") ? atnLoiForStage(project) : 4;
+  const sc = atnAimScore(loi);
+  const st = atnLoad();
+  const persona = st.eccPersona || "exec";
+  const dash = (ATN_DASHBOARDS || []).find(d => d.id === persona) || (ATN_DASHBOARDS||[])[0] || {id:"exec", role:"Executive", kpi:[], ask:"health"};
+  const missing = [];
+  try {
+    if(typeof atnPresent === "function"){
+      if(!atnPresent("d2","fire")) missing.push("Fire Rating · D-02 Comms");
+      if(!atnPresent("d3","iron")) missing.push("Ironmongery set · D-03");
+      if(!atnPresent("a1","hvac")) missing.push("HVAC Control Strategy · AHU-01");
+    }
+  } catch(e){}
+  const ih = sc.pct;
+  const cs = missing.length ? Math.max(0, sc.pct - missing.length * 8) : sc.pct;
+  const dh = sc.ready ? 88 : 64;
+  const rs = sc.pct;
+  const riskPts = Math.max(0, (typeof ATN_GATE === "number" ? ATN_GATE : 95) - sc.pct);
+  const ph = Math.round(0.30*ih + 0.25*dh + 0.20*cs + 0.15*Math.max(0,100-riskPts) + 0.10*(sc.ready?90:55));
+  function band(n, gate){
+    if(gate != null && n < gate) return {t:"Red", c:"var(--danger)"};
+    if(n >= 85) return {t:"Green", c:"var(--ok)"};
+    if(n >= 70) return {t:"Amber", c:"var(--gold-700)"};
+    return {t:"Red", c:"var(--danger)"};
+  }
+  const phB = band(ph);
+  const rsB = band(rs, typeof ATN_GATE === "number" ? ATN_GATE : 95);
+  const q = st.eccQ || "What is blocking Stage 4?";
+  const ans = atnAnswer(q);
+  const tiles = [
+    ["Project health", ph+"%", phB],
+    ["Information / AIM", ih+"%", band(ih)],
+    ["Stage readiness", rs+"%", rsB],
+    ["Compliance", cs+"%", band(cs)],
+    ["Delivery", dh+"%", band(dh)],
+    ["Open gaps", String(missing.length), missing.length ? {t:"Red", c:"var(--danger)"} : {t:"Green", c:"var(--ok)"}]
+  ];
+  const personas = (ATN_DASHBOARDS||[]).map(d =>
+    `<button type="button" class="atn-pin${d.id===persona?" active":""}" data-ecc-p="${d.id}">${atnEsc(d.role)}</button>`
+  ).join("");
+  const waterfall = [
+    ["OIR","Safe building", "ok"],
+    ["PIR","Compartmentation known", "ok"],
+    ["EIR","Fire-rated openings at S4", "ok"],
+    ["AIR","Fire Rating on every door", missing.some(m=>/Fire/.test(m))?"warn":"ok"],
+    ["AIM", sc.have+" / "+sc.req+" at LOI "+loi, sc.ready?"ok":"warn"],
+    ["IDS", missing.length?"Fails on missing attrs":"Pass", missing.length?"warn":"ok"]
+  ].map(r => `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--slate-100);">
+      <strong>${r[0]}</strong><span class="atn-muted">${atnEsc(r[1])}</span>
+      <span style="color:${r[2]==="ok"?"var(--ok)":"var(--danger)"}">${r[2]==="ok"?"Ready":"Gap"}</span>
+    </div>`).join("");
+  root.innerHTML = `
+    <div class="segmented" style="margin-bottom:10px;">${personas}</div>
+    <p class="atn-muted" style="margin:0 0 10px;">Persona: ${atnEsc(dash.role)}. KPIs: ${(dash.kpi||[]).map(atnEsc).join(" · ")||"Health"}.</p>
+    <div class="atn-grid atn-2">
+      ${tiles.map(t => atnCard(t[0], `<p style="font-size:22px;font-weight:700;margin:0;color:${t[2].c}">${t[1]}</p><p class="atn-muted">${t[2].t}</p>`)).join("")}
+    </div>
+    <div class="card" style="margin-top:10px;">
+      <div class="chart-card-title">Information waterfall · OIR to IDS</div>
+      ${waterfall}
+    </div>
+    <div class="card" style="margin-top:10px;">
+      <div class="chart-card-title">Assets not handover-ready</div>
+      ${missing.length ? missing.map(m => `<div style="padding:8px 0;border-bottom:1px solid var(--slate-100);">${atnEsc(m)}</div>`).join("") : `<p class="atn-muted">All seeded assets meet LOI ${loi}.</p>`}
+    </div>
+    <div class="card" style="margin-top:10px;">
+      <div class="chart-card-title">Executive copilot</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;">
+        ${["What is blocking Stage 4?","Which assets will fail handover?","What is the current project health?","Show traceability from OIR to Asset.","Generate a recovery plan for Stage 4."].map(c => `<button type="button" class="atn-pin" data-ecc-q="${atnEsc(c)}">${atnEsc(c)}</button>`).join("")}
+      </div>
+      <div class="atn-ask"><input id="atnEccQ" value="${atnEsc(q)}" /><button type="button" class="btn btn-gold" id="atnEccAsk">Ask</button></div>
+      <p class="atn-trace" style="margin-top:10px;" id="atnEccA">${atnEsc(ans)}</p>
+    </div>
+    <p class="atn-muted" style="margin-top:12px;">Scores use the live AIM present/required engine. Portfolio, Power BI and warehouse views are specified in docs/COMMAND-CENTER.md — not this console.</p>`;
+  root.querySelectorAll("[data-ecc-p]").forEach(b => b.onclick = () => { atnSave({eccPersona:b.getAttribute("data-ecc-p")}); renderAtnEcc(project); });
+  function ask(v){ atnSave({eccQ:v, eccPersona:persona}); renderAtnEcc(project); }
+  root.querySelectorAll("[data-ecc-q]").forEach(b => b.onclick = () => ask(b.getAttribute("data-ecc-q")));
+  const go = document.getElementById("atnEccAsk");
+  if(go) go.onclick = () => ask((document.getElementById("atnEccQ")||{}).value || q);
+}
+
 
 </script>
 </body>

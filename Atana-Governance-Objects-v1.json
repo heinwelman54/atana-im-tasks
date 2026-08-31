@@ -1,0 +1,54 @@
+{
+  "title": "Atana Governance Objects",
+  "version": "1.0",
+  "updated": "2026-08-31",
+  "principles": [
+    "One Owner per object version",
+    "Custodian is not Owner",
+    "Catalogues are organisation events",
+    "AI recommends; a named human accepts",
+    "Admin tiers SYSADMIN > ORGADMIN > PROJECTADMIN > TTM",
+    "Precedence USER > ASSET > PROJECT > ORGANISATION > SYSTEM"
+  ],
+  "seats": ["Owner", "Custodian", "Approver", "Contributor", "Reviewer", "Consumer"],
+  "deliveryRoles": ["AP", "AO", "PDM", "IM", "DM", "DTL", "TTM", "TTIM", "IA", "PR", "FM", "OPS"],
+  "stewardRoles": ["OGB", "PIM", "CS", "TS", "GS", "AIG", "TWS", "AS", "SS", "SP"],
+  "adminTiers": ["SYSADMIN", "ORGADMIN", "PROJECTADMIN", "TTM"],
+  "frrm": {"O": "Originate", "A": "Approve", "V": "Verify", "R": "Review", "P": "Publish"},
+  "objects": {
+    "OIR": {"owner": "AP", "custodian": "PIM|IM", "approver": "AP", "contributor": ["IM", "PIM"], "reviewer": ["AO"], "consumer": ["ALL_APPOINTED"]},
+    "PIR": {"owner": "AP", "custodian": "IM", "approver": "AP", "contributor": ["IM", "PDM"], "reviewer": ["AO", "DTL"], "consumer": ["TASK_TEAMS"]},
+    "EIR": {"owner": "AP", "custodian": "IM", "approver": "AP", "contributor": ["IM", "PDM", "DTL"], "reviewer": ["PDM"], "consumer": ["ALL_APPOINTED"], "note": "Post-award change is a variation"},
+    "AIR": {"owner": "AO", "custodian": "IM>FM", "approver": "AO", "contributor": ["IM", "TS", "DTL", "TTIM"], "reviewer": ["FM", "CS"], "consumer": ["IA", "TWIN", "CMMS"]},
+    "AIM": {"owner": "AO", "custodian": "IM>FM", "approver": "AO@handover|IM@snapshot", "contributor": ["IA", "TTIM"], "reviewer": ["IM", "FM"], "consumer": ["TWIN", "CMMS", "EXEC"]},
+    "IDS": {"owner": "TS@spec|IM@run", "custodian": "IM", "approver": "TS|IM", "contributor": ["TTIM", "IA", "TS"], "reviewer": ["DTL"], "consumer": ["GRAPH", "DECIDE"]},
+    "ScopePackage": {"owner": "TTM", "custodian": "TTIM", "approver": "TTM+IM", "contributor": ["DTL", "IA"], "reviewer": ["IM", "PDM"], "consumer": ["IA", "PDM"]},
+    "InformationTemplate": {"owner": "TS", "custodian": "TS", "approver": "OGB|TS", "contributor": ["IM", "DTL", "CS"], "reviewer": ["CS", "AO"], "consumer": ["ALL_PROJECTS"]},
+    "InformationRequirement": {"owner": "PARENT", "custodian": "IM", "approver": "PARENT", "contributor": ["TTIM", "TS"], "reviewer": ["DTL"], "consumer": ["IA", "IDS"]},
+    "DeliverablePlan": {"owner": "TTM", "custodian": "TTIM", "approver": "TTM+IM", "contributor": ["IA"], "reviewer": ["PR", "TTIM"], "consumer": ["PROJECT"]},
+    "DeliverableFile": {"owner": "CDE", "custodian": "DM", "approver": "IM+PDM", "contributor": ["IA"], "reviewer": ["PR"], "consumer": ["PROJECT"]},
+    "Workflow": {"owner": "ORGADMIN", "custodian": "IM", "approver": "OGB", "contributor": ["PROJECTADMIN"], "reviewer": ["PDM", "DM"], "consumer": ["ALL_DELIVERY"]},
+    "KnowledgeGraphSchema": {"owner": "GS", "custodian": "GS", "approver": "GS+OGB", "contributor": ["GS"], "reviewer": ["AIG"], "consumer": ["DECIDE", "COPILOT"]},
+    "KnowledgeGraphData": {"owner": "IM", "custodian": "IM", "approver": "IM", "contributor": ["ENGINES", "IM"], "reviewer": ["AIG"], "consumer": ["DECIDE"]},
+    "AIRecommendation": {"owner": "AIG@policy", "custodian": "IM", "approver": "NAMED_BY_CLASS", "contributor": ["AGENTS", "DECIDE"], "reviewer": ["IM"], "consumer": ["ASSIGNEE"]},
+    "AssetLibrary": {"owner": "AS", "custodian": "AS", "approver": "OGB|AS", "contributor": ["IM", "DTL"], "reviewer": ["CS"], "consumer": ["ALL_PROJECTS"]},
+    "SystemLibrary": {"owner": "SS", "custodian": "SS", "approver": "OGB|SS", "contributor": ["IM", "DTL"], "reviewer": ["CS"], "consumer": ["ALL_PROJECTS"]},
+    "SpaceLibrary": {"owner": "SP", "custodian": "SP", "approver": "OGB|SP", "contributor": ["IM"], "reviewer": ["CS"], "consumer": ["ALL_PROJECTS"]},
+    "ClassificationLibrary": {"owner": "CS", "custodian": "CS", "approver": "OGB", "contributor": ["TS", "AS", "SS", "SP"], "reviewer": ["IM"], "consumer": ["ALL_ENGINES"]}
+  },
+  "aiClasses": {
+    "A_Inform": {"approver": null, "autoApply": false},
+    "B_Assign": {"approver": "IM", "autoApply": false},
+    "C_Plan": {"approver": "IM+PDM", "autoApply": false},
+    "D_Gate": {"approver": "IM", "autoApply": "raise-only"},
+    "E_Mutate": {"approver": "TS+OGB", "autoApply": false},
+    "F_Handover": {"approver": "AO", "autoApply": false}
+  },
+  "escalation": [
+    {"level": 1, "slaDays": 1, "path": "TTIM>IM"},
+    {"level": 2, "slaDays": 3, "path": "IM>PDM"},
+    {"level": 3, "slaDays": 5, "path": "PDM>AP"},
+    {"level": 4, "slaDays": 10, "path": "AP>OGB"},
+    {"level": 5, "slaDays": 0, "path": "OGB+SYSADMIN"}
+  ]
+}

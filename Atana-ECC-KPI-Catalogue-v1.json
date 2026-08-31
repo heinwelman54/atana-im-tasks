@@ -1,0 +1,26 @@
+{
+  "title": "Atana ECC KPI Catalogue",
+  "version": "1.0",
+  "kpis": [
+    {"kpi_id": "ph", "label": "Project Health", "grain": "project", "formula": "PH", "persona": ["executive", "project-director"]},
+    {"kpi_id": "poh", "label": "Portfolio Health", "grain": "portfolio", "formula": "PoH", "persona": ["executive", "portfolio-manager"]},
+    {"kpi_id": "ih", "label": "Information Health", "grain": "project", "formula": "IH", "persona": ["information-manager", "client"]},
+    {"kpi_id": "cs", "label": "Compliance", "grain": "project", "formula": "CS", "persona": ["information-manager"]},
+    {"kpi_id": "dh", "label": "Delivery Health", "grain": "project", "formula": "DH", "persona": ["pdm", "project-manager"]},
+    {"kpi_id": "rs", "label": "Stage Readiness", "grain": "project+stage", "formula": "RS", "persona": ["project-director"]},
+    {"kpi_id": "ah", "label": "Asset Health", "grain": "asset", "formula": "AH", "persona": ["asset-owner", "facility-manager"]},
+    {"kpi_id": "or", "label": "Operational Readiness", "grain": "project", "formula": "OR", "persona": ["operations-manager", "facility-manager"]},
+    {"kpi_id": "tr", "label": "Twin Readiness", "grain": "project", "formula": "TR", "persona": ["digital-twin-manager"]},
+    {"kpi_id": "oir", "label": "OIR coverage", "grain": "project", "formula": "OIR_cov", "persona": ["client"]},
+    {"kpi_id": "pir", "label": "PIR coverage", "grain": "project", "formula": "PIR_cov", "persona": ["client"]},
+    {"kpi_id": "eir", "label": "EIR coverage", "grain": "project", "formula": "EIR_cov", "persona": ["client"]},
+    {"kpi_id": "air", "label": "AIR coverage", "grain": "project", "formula": "AIR_cov", "persona": ["asset-owner"]},
+    {"kpi_id": "aim", "label": "AIM completeness", "grain": "project", "formula": "AIM_pct", "persona": ["asset-owner"]},
+    {"kpi_id": "ids", "label": "IDS pass", "grain": "project", "formula": "IDS_pct", "persona": ["information-manager"]},
+    {"kpi_id": "gate", "label": "Gate threshold", "grain": "project+stage", "formula": "setting", "persona": ["information-manager"]},
+    {"kpi_id": "p1", "label": "Open P1", "grain": "project", "formula": "count", "persona": ["executive"]},
+    {"kpi_id": "blk", "label": "Blocked packages", "grain": "project", "formula": "count", "persona": ["project-manager"]},
+    {"kpi_id": "redn", "label": "Red projects", "grain": "portfolio", "formula": "count PH<70", "persona": ["portfolio-manager"]},
+    {"kpi_id": "fc_delay", "label": "Forecast delay days", "grain": "project", "formula": "forecast", "persona": ["project-manager"]}
+  ]
+}

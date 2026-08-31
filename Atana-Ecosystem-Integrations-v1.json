@@ -1,0 +1,71 @@
+{
+  "title": "Atana Ecosystem Integrations",
+  "version": "1.0",
+  "updated": "2026-08-31",
+  "principle": "Do not redesign OIR/PIR/EIR/AIR/AIM. Classify each product and bind fields.",
+  "systemClasses": {
+    "systemOfRecord": "Authoritative write and durable ID for a named entity or field",
+    "systemOfReference": "Trusted copy or live view; rebuildable from SoR",
+    "systemOfEngagement": "Where people act; never silent SoR",
+    "systemOfIntelligence": "Inference that must cite SoR"
+  },
+  "atanaSystemOfRecord": [
+    "Organisation", "Project", "Breakdown", "OIR", "PIR", "EIR", "AIR",
+    "InformationTemplate", "InformationRequirement", "ScopeProductionPackage",
+    "DeliverablePlan", "MIDP", "TIDP", "WorkflowState", "IDS", "ComplianceResult",
+    "AIMCompleteness", "KnowledgeGraph", "Decision", "Action", "Risk",
+    "ConnectorBinding", "ConflictRecord"
+  ],
+  "patterns": [
+    {"id": "P1", "name": "CDE", "masterDefault": "external.fileVersion", "atanaOwns": "deliverablePlan"},
+    {"id": "P2", "name": "Authoring", "masterDefault": "external.elementId", "atanaOwns": "requirementAndAssetId"},
+    {"id": "P3", "name": "Collaboration", "masterDefault": "atana.decision", "atanaOwns": "decision"},
+    {"id": "P4", "name": "Analytics", "masterDefault": "atana", "direction": "out"},
+    {"id": "P5", "name": "IntelligenceRuntime", "masterDefault": "atana", "class": "systemOfIntelligence"},
+    {"id": "P6", "name": "ERP", "masterDefault": "external.commercial", "atanaOwns": "projectId"},
+    {"id": "P7", "name": "CMMS", "masterDefault": "external.workOrder", "atanaOwns": "assetId"},
+    {"id": "P8", "name": "Twin", "masterDefault": "external.telemetry", "atanaOwns": "assetIdAndNameplate"}
+  ],
+  "products": [
+    {"id": "acc", "name": "Autodesk Construction Cloud", "pattern": "P1", "primaryApi": "APS", "direction": "bidirectional-limited", "fileSor": true, "wave": 1},
+    {"id": "docs", "name": "Autodesk Docs", "pattern": "P1", "primaryApi": "APS Data Management", "direction": "in+ensureFolder", "fileSor": true, "wave": 1},
+    {"id": "revit", "name": "Revit", "pattern": "P2", "primaryApi": "pyRevit + Design Automation later", "direction": "bidirectional-params", "fileSor": false, "wave": 2},
+    {"id": "navisworks", "name": "Navisworks", "pattern": "P2", "primaryApi": "XML/NWD export + APS Model Coordination", "direction": "in", "wave": 2},
+    {"id": "civil3d", "name": "Civil 3D", "pattern": "P2", "primaryApi": "property sets + publish", "direction": "bidirectional-params", "wave": 2},
+    {"id": "plant3d", "name": "Plant 3D", "pattern": "P2", "primaryApi": "Data Manager extract", "direction": "in", "tagMasterPolicy": "project", "wave": 3},
+    {"id": "bcpro", "name": "BIM Collaborate Pro", "pattern": "P2", "primaryApi": "APS Model Coordination", "direction": "in", "wave": 2},
+    {"id": "sharepoint", "name": "SharePoint", "pattern": "P1", "primaryApi": "Microsoft Graph", "direction": "in", "modeDefault": "reference", "wave": 1},
+    {"id": "teams", "name": "Microsoft Teams", "pattern": "P3", "primaryApi": "Graph + bot", "direction": "out", "wave": 3},
+    {"id": "powerautomate", "name": "Power Automate", "pattern": "P3", "primaryApi": "Custom connector /v1", "direction": "bidirectional-scoped", "wave": 3},
+    {"id": "powerbi", "name": "Power BI", "pattern": "P4", "primaryApi": "Warehouse views", "direction": "out", "wave": 3},
+    {"id": "aifoundry", "name": "Azure AI Foundry", "pattern": "P5", "primaryApi": "Foundry agents + Atana tools", "direction": "tool-calls", "wave": 5},
+    {"id": "aoai", "name": "Azure OpenAI", "pattern": "P5", "primaryApi": "Azure OpenAI", "direction": "service-only", "wave": 5},
+    {"id": "aisearch", "name": "Azure AI Search", "pattern": "P5", "primaryApi": "Azure AI Search", "direction": "out", "wave": 5},
+    {"id": "mscogilot", "name": "Microsoft Copilot", "pattern": "P5", "primaryApi": "Copilot plugin", "direction": "in-ask", "wave": 5},
+    {"id": "d365", "name": "Dynamics 365", "pattern": "P6", "primaryApi": "Dataverse", "direction": "in+case-out", "wave": 4},
+    {"id": "sap", "name": "SAP", "pattern": "P6", "primaryApi": "BTP Event Mesh + OData", "direction": "in", "wave": 4},
+    {"id": "maximo", "name": "IBM Maximo", "pattern": "P7", "primaryApi": "MAS REST", "direction": "handover-out+wo-in", "wave": 4},
+    {"id": "hexagon", "name": "Hexagon", "pattern": "P7", "primaryApi": "SDx/EAM", "direction": "binding", "wave": 5},
+    {"id": "aveva", "name": "Aveva", "pattern": "P7", "primaryApi": "NET/APM", "direction": "binding", "wave": 5},
+    {"id": "projectwise", "name": "Bentley ProjectWise", "pattern": "P1", "primaryApi": "WSG", "direction": "in+ensureFolder", "fileSor": true, "wave": 3},
+    {"id": "dalux", "name": "Dalux", "pattern": "P1", "primaryApi": "Dalux API", "direction": "in", "wave": 3},
+    {"id": "asite", "name": "Asite", "pattern": "P1", "primaryApi": "Asite open API", "direction": "in+ensureFolder", "fileSor": true, "wave": 3},
+    {"id": "procore", "name": "Procore", "pattern": "P3", "primaryApi": "Procore REST", "direction": "in", "wave": 3},
+    {"id": "cmms", "name": "Generic CMMS", "pattern": "P7", "primaryApi": "ICmmSAdapter", "direction": "handover-out+wo-in", "wave": 4},
+    {"id": "twin", "name": "Digital twin platforms", "pattern": "P8", "primaryApi": "ADT / vendor", "direction": "snapshot-out+alert-in", "wave": 5}
+  ],
+  "bindingKeys": {
+    "project": "atana.projectId <-> external.projectId",
+    "container": "iso19650Name + external.lineageUrn",
+    "element": "ifcGuid | revitUniqueId + containerId",
+    "asset": "atana.assetId <-> external.assetnum",
+    "person": "entraObjectId"
+  },
+  "policies": {
+    "primaryCde": "Exactly one file SoR per project",
+    "lastWriteWins": false,
+    "opsWinsAfterHandover": "optional, operating fields only",
+    "naming.enforce": "opt-in before any CDE rename/write",
+    "secretsInPwa": false
+  }
+}

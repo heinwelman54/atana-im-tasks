@@ -1,51 +1,28 @@
 # Atana IM
 
-ISO 19650 information-management toolkit.
+ISO 19650 information-management tool.
 
 Open `Atana-IM-Tasks.html` (keep `Atana-IM-Framework.html` in the same folder).
 Or use `index.html` / `app.html` as the PWA entry.
 
-**App version 3.6.1** — original single-file IM tool (no TanStack App Builder).
-ITE, AIR builder, AIM present-vs-required, Knowledge Graph Engine, and Decide
-are inside `Atana-IM-Tasks.html`. See `docs/KGE.md`.
+**App version 3.6.2** — 3.6.1 engines plus **Command** tab. Open a project → segmented bar → **Command**. See `docs/REPO-OUTPUT.md`.
 
-## Workspace tabs (after you open a project)
+**Ecosystem architecture v1.0** — how information flows across CDE, authoring, M365, ERP, CMMS and twins. See `docs/ECOSYSTEM.md` and `Atana-Ecosystem-Architecture-v1.0.docx`. Contracts: `Atana-Ecosystem-*-v1.json`. Not implemented as live write-back in the HTML tool.
 
-IM Tasks · Planner · DPoW · MIDP · ITE · AIR · AIM · Graph · Decide · Tools · Documents · WBS
+**Operating model v1.0** — who owns each object and how the organisation runs Atana. See `docs/OPERATING-MODEL.md`, `Atana-Operating-Model-v1.0.docx`, `Atana-Governance-RACI-v1.0.xlsx`, `Atana-Governance-Objects-v1.json`.
 
-## What 3.6.1 added inside the original tool
+**Executive Command Center v1.0** — consumer app (React + Fluent), not a new SoR. See `docs/COMMAND-CENTER.md`, `Atana-Executive-Command-Center-v1.0.docx`, `Atana-ECC-Analytics.sql`, `Atana-ECC-*-v1.json`, `Atana-ECC-KPI-Catalogue-v1.0.xlsx`.
 
-| Area | What it does |
-| --- | --- |
-| **ITE** | Information Template Editor — templates, attributes, LOI |
-| **AIR builder** | Asset Information Requirements per asset type; IDS JSON / CSV export |
-| **AIM** | Present vs required attributes; 95% completeness gate |
-| **Graph** | Operational in-memory graph: Trace, Impact, Ask, Queries, Dashboards, Schema |
-| **Decide** | Health, actions, risk, recovery plan, Copilot answers from the same graph |
-
-Parked (not in this file): ACC/SharePoint CDE write-back, live digital twin,
-multi-agent AI, executive command center, Neo4j runtime.
+Workspace tabs after you open a project: IM Tasks, Planner, DPoW, MIDP, ITE, AIR, AIM, Graph, Decide, Command, Tools, Documents.
 
 ## Push to GitHub
 
 ```bash
-git init
-git add .
-git commit -m "Atana IM 3.6.1 — original tool + KGE"
-git branch -M main
 git remote add origin git@github.com:<you>/atana-im.git
 git push -u origin main
 ```
 
-GitHub Pages: enable Pages on `main` / root. `.nojekyll` is included.
+## Notes
 
-## Repo contents
-
-- `Atana-IM-Tasks.html` — operational IM tool + KGE (3.6.1)
-- `Atana-IM-Framework.html` — governance brain (roles, CDE, Forma, RACI)
-- `app.html` / `index.html` / `manifest.json` / `sw.js` / `icons/` — PWA shell
-- `asset-naming-tool.html` + `asset-naming-data.json`
-- Schemas and specs: AIM, IRE, DGE, enterprise SQL, JSON schemas, platform docs
-- `role-tasks/` — IM, DTL, PDM, TTM, ZZ task packs
-- pyRevit: `Atana_Asset_Classify_PyRevit.py`, `Atana_ProjectSync_pyRevit.py`
-- `docs/KGE.md` — ontology, queries, impact, production target
+# Atana IM Tasks v3.5.2
+Fixed Project Sync IronPython string syntax errors

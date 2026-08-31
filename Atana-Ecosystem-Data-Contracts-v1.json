@@ -1,0 +1,81 @@
+{
+  "title": "Atana Ecosystem Data Contracts",
+  "version": "1.0",
+  "common": ["tenantId", "projectId", "schemaVersion", "updatedAt"],
+  "contracts": {
+    "ProjectBinding": {
+      "atanaProjectId": "uuid",
+      "primaryCde": "docs|projectwise|asite|dalux|sharepoint|none",
+      "connectors": [{"connectorId": "string", "externalProjectId": "string", "mode": "reference|sor"}]
+    },
+    "ContainerRef": {
+      "deliverablePlanId": "uuid",
+      "isoName": "string",
+      "cde": "string",
+      "lineageUrn": "string",
+      "revision": "string",
+      "state": "WIP|SHARED|PUBLISHED|ARCHIVED",
+      "hash": "string",
+      "uri": "string"
+    },
+    "DeliverablePlan": {
+      "id": "uuid",
+      "packageId": "uuid",
+      "form": "DR|M3|RP|CA|SH|SP|DS|RG|SC",
+      "stage": "string",
+      "required": true,
+      "originator": "string"
+    },
+    "RequirementSpec": {
+      "id": "uuid",
+      "kind": "OIR|PIR|EIR|AIR|IR",
+      "templateId": "uuid",
+      "attribute": "string",
+      "loi": 4,
+      "ids": "object"
+    },
+    "Observation": {
+      "id": "uuid",
+      "subject": {"kind": "Asset|Element|Container", "id": "string"},
+      "attribute": "string",
+      "loi": 4,
+      "present": true,
+      "value": {},
+      "sourceSystem": "revit|docs|maximo|manual",
+      "observedAt": "datetime",
+      "external": {}
+    },
+    "ComplianceResult": {
+      "id": "uuid",
+      "specId": "uuid",
+      "subjectId": "string",
+      "passed": false,
+      "missing": ["Fire Rating"],
+      "runId": "uuid"
+    },
+    "AssetRecord": {
+      "assetId": "uuid",
+      "label": "D-02 Comms",
+      "typeId": "door",
+      "ifcGuid": "string",
+      "external": {"maximoAssetnum": "string", "twinId": "string"},
+      "completeness": {"loi": 4, "present": 11, "required": 12, "percent": 91.7}
+    },
+    "DecisionAction": {
+      "id": "uuid",
+      "kind": "Action|Risk|Recommendation",
+      "title": "Capture Fire Rating on D-02",
+      "priority": "P1",
+      "assigneeRole": "information-author"
+    },
+    "ConflictRecord": {
+      "id": "uuid",
+      "field": "Fire Rating",
+      "left": {"system": "revit", "value": "FD30"},
+      "right": {"system": "aim", "value": "FD60"},
+      "state": "open|accepted-left|accepted-right"
+    }
+  },
+  "completenessFormula": "present / required at named LOI",
+  "stage4DefaultGate": 0.95
+}

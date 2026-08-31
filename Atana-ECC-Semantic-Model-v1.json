@@ -1,0 +1,45 @@
+{
+  "title": "Atana ECC Power BI semantic model",
+  "version": "1.0",
+  "mode": "Import 15min for executive strip; DirectQuery optional on Premium for asset grain",
+  "facts": [
+    "fact_project_score",
+    "fact_asset_score",
+    "fact_requirement_coverage",
+    "fact_deliverable_status",
+    "fact_risk",
+    "fact_forecast"
+  ],
+  "dimensions": [
+    "dim_date",
+    "dim_org",
+    "dim_portfolio",
+    "dim_project",
+    "dim_stage",
+    "dim_task_team",
+    "dim_asset_type",
+    "dim_persona",
+    "dim_score_version"
+  ],
+  "relationships": [
+    "fact_project_score.project_id -> dim_project.project_id",
+    "fact_project_score.as_of_date -> dim_date.date",
+    "fact_project_score.stage -> dim_stage.stage",
+    "fact_asset_score.project_id -> dim_project.project_id",
+    "fact_asset_score.asset_type -> dim_asset_type.asset_type",
+    "dim_project.portfolio_id -> dim_portfolio.portfolio_id"
+  ],
+  "measures": {
+    "PH": "AVERAGE(fact_project_score[ph])",
+    "PoH": "DIVIDE(SUMX(dim_project, [PH] * dim_project[weight]), SUM(dim_project[weight]))",
+    "IH": "AVERAGE(fact_project_score[ih])",
+    "CS": "AVERAGE(fact_project_score[cs])",
+    "DH": "AVERAGE(fact_project_score[dh])",
+    "RS": "AVERAGE(fact_project_score[rs])",
+    "AIM%": "DIVIDE(SUM(fact_asset_score[present]), SUM(fact_asset_score[required]))",
+    "Red Projects": "CALCULATE(DISTINCTCOUNT(dim_project[project_id]), fact_project_score[ph] < 70)",
+    "P1 Open": "SUM(fact_project_score[p1_open])"
+  },
+  "rls": "ecc.acl filtered by USERPRINCIPALNAME() and persona",
+  "rule": "Measure names must equal kpi_id. PBI must match ecc.fn / views. Drift is a defect."
+}

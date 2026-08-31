@@ -1,0 +1,54 @@
+{
+  "title": "Atana Ecosystem Events",
+  "version": "1.0",
+  "spec": "CloudEvents 1.0",
+  "transport": {
+    "fanout": "Azure Event Grid",
+    "work": "Azure Service Bus topics",
+    "inbox": "PostgreSQL outbox / inbox",
+    "delivery": "at-least-once",
+    "idempotency": ["eventId", "entityId"]
+  },
+  "envelope": {
+    "specversion": "1.0",
+    "id": "ulid",
+    "source": "atana.{service}",
+    "type": "atana.{domain}.{action}.v1",
+    "subject": "tenant/{tenantId}/project/{projectId}/...",
+    "time": "ISO-8601",
+    "dataschema": "https://atana.local/contracts/{name}-v1.json",
+    "datacontenttype": "application/json"
+  },
+  "emittedByAtana": [
+    {"type": "atana.requirement.published.v1", "when": "AIR/IR locked for a stage"},
+    {"type": "atana.plan.midp.generated.v1", "when": "MIDP committed"},
+    {"type": "atana.deliverable.state.changed.v1", "when": "WIP Shared Published Archive"},
+    {"type": "atana.compliance.result.recorded.v1", "when": "IDS or observation stored"},
+    {"type": "atana.aim.completeness.changed.v1", "when": "present vs required moved"},
+    {"type": "atana.gate.blocked.v1", "when": "stage gate below threshold"},
+    {"type": "atana.decision.raised.v1", "when": "action or risk created"},
+    {"type": "atana.conflict.opened.v1", "when": "two SoRs disagree"},
+    {"type": "atana.mapping.failed.v1", "when": "adapter cannot bind identity"}
+  ],
+  "consumedFromForeign": [
+    {"source": "acc-docs", "type": "vendor.version.added", "action": "refresh ContainerRef"},
+    {"source": "acc-docs", "type": "vendor.review.closed", "action": "refresh workflow observation"},
+    {"source": "revit-pyrevit", "type": "vendor.parameters.pushed", "action": "upsert Observation"},
+    {"source": "navis-bcpro", "type": "vendor.clash.completed", "action": "issue + IMPACTS edge"},
+    {"source": "sharepoint", "type": "graph.item.updated", "action": "refresh document SoRef"},
+    {"source": "powerautomate", "type": "vendor.approval.completed", "action": "advance workflow if FRRM allows"},
+    {"source": "maximo", "type": "vendor.workorder.completed", "action": "ops Observation"},
+    {"source": "twin", "type": "vendor.telemetry.threshold", "action": "recommendation only"},
+    {"source": "erp", "type": "vendor.wbs.changed", "action": "tag package"}
+  ],
+  "webhooks": {
+    "inbound": "POST /v1/hooks/{connectorId}",
+    "verify": ["vendor signature", "timestamp skew <= 300s"],
+    "rawRetentionDays": 14,
+    "outbound": {
+      "auth": "HMAC per subscription",
+      "timeoutSeconds": 3,
+      "retryMinutes": [1, 5, 30, 120]
+    }
+  }
+}

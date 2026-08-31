@@ -1,0 +1,42 @@
+{
+  "title": "Atana Ecosystem API",
+  "version": "1.0",
+  "base": "/v1",
+  "auth": {
+    "people": "Entra ID OIDC",
+    "connectors": "app registration client credentials",
+    "scopes": [
+      "atana.read",
+      "atana.plan.write",
+      "atana.compliance.write",
+      "atana.aim.write",
+      "atana.admin"
+    ]
+  },
+  "conventions": {
+    "errors": "RFC 7807",
+    "idempotencyHeader": "Idempotency-Key",
+    "pagination": "cursor",
+    "tenant": "from token + explicit tenantId check"
+  },
+  "routes": [
+    {"method": "GET", "path": "/projects/{id}/bindings", "scope": "atana.read"},
+    {"method": "PUT", "path": "/projects/{id}/bindings/{connector}", "scope": "atana.admin"},
+    {"method": "GET", "path": "/projects/{id}/midp", "scope": "atana.read"},
+    {"method": "POST", "path": "/projects/{id}/midp/generate", "scope": "atana.plan.write"},
+    {"method": "GET", "path": "/projects/{id}/containers", "scope": "atana.read"},
+    {"method": "POST", "path": "/observations", "scope": "atana.compliance.write"},
+    {"method": "POST", "path": "/ids/runs", "scope": "atana.compliance.write"},
+    {"method": "GET", "path": "/aim/assets/{id}", "scope": "atana.read"},
+    {"method": "GET", "path": "/graph/why/{nodeId}", "scope": "atana.read"},
+    {"method": "GET", "path": "/graph/impact/{nodeId}", "scope": "atana.read"},
+    {"method": "POST", "path": "/ask", "scope": "atana.read"},
+    {"method": "GET", "path": "/conflicts", "scope": "atana.read"},
+    {"method": "POST", "path": "/hooks/{connectorId}", "scope": "connector"}
+  ],
+  "graphql": {
+    "path": "/graphql",
+    "mode": "read-mostly Knowledge Graph",
+    "runtime": "production Neo4j — not the HTML file"
+  }
+}
