@@ -1,0 +1,181 @@
+{
+  "$comment": "Atana JSON Schemas v1.0 — companion to Enterprise Schema and Architecture Pack",
+  "project": {
+    "$id": "https://atana.local/schemas/project.json",
+    "type": "object",
+    "required": ["projectNumber", "projectName", "originator"],
+    "properties": {
+      "projectId": { "type": "string", "format": "uuid" },
+      "orgId": { "type": "string", "format": "uuid" },
+      "projectNumber": { "type": "string" },
+      "projectName": { "type": "string" },
+      "clientName": { "type": "string" },
+      "originator": { "type": "string", "default": "ATA" },
+      "projectType": { "type": "string" },
+      "currentStage": { "type": "string", "default": "S3" },
+      "catalogueVersionId": { "type": "string" }
+    },
+    "example": {
+      "projectNumber": "MD6264",
+      "projectName": "DSM",
+      "originator": "ATA",
+      "currentStage": "S3"
+    }
+  },
+  "spatialBreakdown": {
+    "type": "object",
+    "required": ["code", "label"],
+    "properties": {
+      "code": { "type": "string", "examples": ["SI", "00", "01", "R1"] },
+      "label": { "type": "string" },
+      "selected": { "type": "boolean", "default": true }
+    }
+  },
+  "functionalBreakdown": {
+    "type": "object",
+    "required": ["code", "label"],
+    "properties": {
+      "code": { "type": "string" },
+      "label": { "type": "string" },
+      "selected": { "type": "boolean", "default": true }
+    }
+  },
+  "taskTeam": {
+    "type": "object",
+    "required": ["code", "label", "generationModel"],
+    "properties": {
+      "code": { "type": "string" },
+      "label": { "type": "string" },
+      "generationModel": { "enum": ["SPATIAL", "SYSTEM", "SITE", "DOCUMENT", "SPACE"] },
+      "selected": { "type": "boolean" }
+    }
+  },
+  "system": {
+    "type": "object",
+    "required": ["ssCode", "ssName"],
+    "properties": {
+      "ssCode": { "type": "string" },
+      "ssName": { "type": "string" },
+      "ownerRo": { "type": "string" },
+      "status": { "enum": ["DRAFT", "ACTIVE", "RETIRED"] }
+    }
+  },
+  "asset": {
+    "type": "object",
+    "required": ["name"],
+    "properties": {
+      "name": { "type": "string" },
+      "ssCode": { "type": "string" },
+      "ownerRo": { "type": "string" }
+    }
+  },
+  "space": {
+    "type": "object",
+    "required": ["slCode", "slName"],
+    "properties": {
+      "slCode": { "type": "string" },
+      "slName": { "type": "string" }
+    }
+  },
+  "package": {
+    "type": "object",
+    "required": ["packageId", "type", "title"],
+    "properties": {
+      "packageId": { "type": "string" },
+      "type": { "enum": ["LAYOUT", "DESIGN", "DOCUMENTATION"] },
+      "title": { "type": "string" },
+      "subject": { "type": "string" },
+      "model": { "enum": ["SPATIAL", "SYSTEM", "SITE", "DOCUMENT", "SPACE"] },
+      "locked": { "type": "boolean" },
+      "items": { "type": "array", "items": { "$ref": "#/deliverableTemplate" } }
+    }
+  },
+  "deliverableTemplate": {
+    "type": "object",
+    "required": ["type", "desc"],
+    "properties": {
+      "type": { "type": "string" },
+      "desc": { "type": "string" },
+      "form": { "type": "string" },
+      "container": { "type": "string" },
+      "stageRule": { "enum": ["required", "optional", "tender"] }
+    }
+  },
+  "deliverable": {
+    "type": "object",
+    "required": ["isoNumber", "description", "form", "role"],
+    "properties": {
+      "isoNumber": { "type": "string" },
+      "description": { "type": "string" },
+      "form": { "type": "string" },
+      "container": { "type": "string" },
+      "role": { "type": "string" },
+      "functional": { "type": "string" },
+      "spatial": { "type": "string" },
+      "packageTitle": { "type": "string" },
+      "irLevel": { "enum": ["L1", "L2", "L3", "L4"] },
+      "genStatus": { "enum": ["MANDATORY", "OPTIONAL", "PROJECT_MANDATORY", "USER_ADDED", "USER_REMOVED"] },
+      "wfState": { "enum": ["WIP", "PEER_REVIEW", "SHARED", "TTM_APPROVAL", "PUBLISHED", "ARCHIVED"] },
+      "triggeredBy": { "type": "string" },
+      "generatedFrom": { "type": "string" }
+    },
+    "example": {
+      "isoNumber": "MD6264-ATA-01-00-DR-ME-1001",
+      "description": "HVAC LAYOUT - GROUND FLOOR",
+      "form": "DR",
+      "container": "DRAWING",
+      "role": "ME",
+      "functional": "01",
+      "spatial": "00",
+      "irLevel": "L2",
+      "wfState": "WIP",
+      "triggeredBy": "ME-HVAC-001",
+      "generatedFrom": "GROUND FLOOR"
+    }
+  },
+  "rule": {
+    "type": "object",
+    "required": ["id", "type", "trigger"],
+    "properties": {
+      "id": { "type": "string" },
+      "type": { "enum": ["SYSTEM", "ASSET", "SPACE", "STAGE", "OPTIONAL", "DEPENDENCY"] },
+      "trigger": { "enum": ["SYSTEM_EXISTS", "ASSET_EXISTS", "SPACE_CLASS", "STAGE_IS", "OPTIONAL_ENABLED", "TEAM_SELECTED"] },
+      "role": { "type": "string" },
+      "subject": { "type": "string" },
+      "outputPackage": { "type": "string" },
+      "children": { "type": "array", "items": { "type": "string" } },
+      "version": { "type": "string" }
+    },
+    "example": {
+      "id": "ME-HVAC-001",
+      "type": "SYSTEM",
+      "trigger": "SYSTEM_EXISTS",
+      "role": "ME",
+      "subject": "HVAC",
+      "outputPackage": "HVAC PACKAGE",
+      "children": ["HVAC CALCULATIONS"]
+    }
+  },
+  "workflowTransition": {
+    "type": "object",
+    "required": ["deliverableId", "toState"],
+    "properties": {
+      "deliverableId": { "type": "string" },
+      "fromState": { "type": "string" },
+      "toState": { "type": "string" },
+      "actorRole": { "type": "string" },
+      "reason": { "type": "string" }
+    }
+  },
+  "generationRun": {
+    "type": "object",
+    "required": ["projectId", "stageId"],
+    "properties": {
+      "runId": { "type": "string" },
+      "projectId": { "type": "string" },
+      "stageId": { "type": "string" },
+      "includeOptional": { "type": "boolean" },
+      "pinnedRuleVersion": { "type": "string" }
+    }
+  }
+}

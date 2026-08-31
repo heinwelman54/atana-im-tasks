@@ -1,0 +1,48 @@
+{
+  "$comment": "Atana AIM Engine JSON v1.0",
+  "assetType": {
+    "type": "object",
+    "required": ["typeCode", "typeName"],
+    "properties": {
+      "typeCode": { "type": "string", "examples": ["DOOR"] },
+      "typeName": { "type": "string" },
+      "roCode": { "type": "string" },
+      "ssCode": { "type": "string" },
+      "ifcEntity": { "type": "string", "examples": ["IfcDoor"] },
+      "irIds": { "type": "array", "items": { "type": "string" } },
+      "requiredDeliverables": { "type": "array", "items": { "type": "string" } }
+    },
+    "example": {
+      "typeCode": "DOOR",
+      "typeName": "Door",
+      "roCode": "AR",
+      "ssCode": "Ss_25_30_20",
+      "ifcEntity": "IfcDoor",
+      "requiredInformation": ["FireRating", "Manufacturer", "ModelNumber", "AcousticRating", "AssetIdentifier"],
+      "requiredDeliverables": ["DOOR SCHEDULE", "DOOR DETAILS"]
+    }
+  },
+  "aimAsset": {
+    "type": "object",
+    "required": ["projectId", "assetTypeId"],
+    "properties": {
+      "assetId": { "type": "string" },
+      "mark": { "type": "string", "examples": ["DR-01"] },
+      "sppId": { "type": "string" },
+      "fbCode": { "type": "string" },
+      "slCode": { "type": "string" },
+      "ifcGuid": { "type": "string" },
+      "status": { "enum": ["PLANNED", "MODELLED", "VERIFIED", "HANDED"] }
+    }
+  },
+  "completeness": {
+    "type": "object",
+    "properties": {
+      "assetId": { "type": "string" },
+      "requiredN": { "type": "integer" },
+      "presentN": { "type": "integer" },
+      "completenessPct": { "type": "number" },
+      "missing": { "type": "array", "items": { "type": "string" } }
+    }
+  }
+}

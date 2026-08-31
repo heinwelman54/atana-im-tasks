@@ -1,0 +1,60 @@
+{
+  "$comment": "Atana Information Requirements Engine JSON v1.0",
+  "informationRequirement": {
+    "type": "object",
+    "required": ["roCode", "category", "attributeName"],
+    "properties": {
+      "irId": { "type": "string", "format": "uuid" },
+      "roCode": { "type": "string", "examples": ["AR"] },
+      "category": { "type": "string", "examples": ["DOORS"] },
+      "typeName": { "type": "string" },
+      "attributeName": { "type": "string", "examples": ["Fire Rating"] },
+      "parameterName": { "type": "string" },
+      "dataType": { "type": "string" },
+      "unit": { "type": "string" },
+      "ifcPset": { "type": "string" },
+      "parameterType": { "type": "string" },
+      "loi2": { "type": "boolean" },
+      "loi3": { "type": "boolean" },
+      "loi4": { "type": "boolean" },
+      "loi5": { "type": "boolean" }
+    }
+  },
+  "scopeProductionPackage": {
+    "type": "object",
+    "required": ["ssCode", "ssName", "roCode"],
+    "properties": {
+      "sppId": { "type": "string" },
+      "projectId": { "type": "string" },
+      "ssCode": { "type": "string", "examples": ["Ss_25_10_20"] },
+      "ssName": { "type": "string" },
+      "roCode": { "type": "string" },
+      "fbCode": { "type": "string" },
+      "stages": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": { "lod": { "type": "string" }, "loi": { "type": "string" } }
+        }
+      },
+      "irIds": { "type": "array", "items": { "type": "string" } },
+      "deliverableIds": { "type": "array", "items": { "type": "string" } }
+    },
+    "example": {
+      "ssCode": "Ss_25_10_20",
+      "ssName": "Curtain walling systems",
+      "roCode": "AR",
+      "stages": { "S3": { "lod": "LOD 3", "loi": "LOI 3" } }
+    }
+  },
+  "loiCompliance": {
+    "type": "object",
+    "properties": {
+      "sppId": { "type": "string" },
+      "requiredN": { "type": "integer" },
+      "presentN": { "type": "integer" },
+      "compliancePct": { "type": "number" },
+      "missing": { "type": "array", "items": { "type": "string" } }
+    }
+  }
+}

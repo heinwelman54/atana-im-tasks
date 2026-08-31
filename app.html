@@ -1124,6 +1124,22 @@
   .loi-pill{font-size:9px;padding:2px 7px;border-radius:999px;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;cursor:pointer;}
   .loi-pill.open{background:var(--purple-950);color:#fff;}
   .loi-detail{font-size:10px;color:var(--slate-500);margin-top:4px;padding:6px;background:var(--slate-50);border-radius:6px;}
+  .ir-modal-back{position:fixed;inset:0;background:rgba(28,25,23,.45);z-index:80;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto;}
+  .ir-modal{background:#fff;border-radius:12px;box-shadow:0 16px 40px rgba(28,25,23,.25);max-width:920px;width:100%;max-height:calc(100vh - 48px);display:flex;flex-direction:column;border:1px solid var(--slate-100);}
+  .ir-modal-head{padding:14px 16px 10px;border-bottom:1px solid var(--slate-100);display:flex;justify-content:space-between;gap:12px;align-items:flex-start;}
+  .ir-modal-head h3{margin:0;font-size:16px;color:var(--purple-950);}
+  .ir-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+  .ir-meta span{font-size:10px;background:var(--slate-50);border:1px solid var(--slate-100);border-radius:999px;padding:2px 8px;font-family:var(--mono);}
+  .ir-tabs{display:flex;gap:4px;padding:8px 12px 0;border-bottom:1px solid var(--slate-100);flex-wrap:wrap;}
+  .ir-tab{border:0;background:transparent;padding:8px 10px;font-size:12px;font-weight:600;color:var(--slate-500);cursor:pointer;border-bottom:2px solid transparent;}
+  .ir-tab.on{color:var(--purple-900);border-bottom-color:var(--purple-700);}
+  .ir-body{padding:12px 16px 16px;overflow:auto;}
+  .ir-table{width:100%;border-collapse:collapse;font-size:11px;}
+  .ir-table th,.ir-table td{border-bottom:1px solid var(--slate-100);padding:5px 6px;text-align:left;}
+  .ir-table th{color:var(--slate-500);font-size:10px;text-transform:uppercase;}
+  .ir-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#d6d3d1;}
+  .ir-dot.on{background:#16a34a;}
+
   .dpow-timeline{overflow:auto;border:1px solid var(--slate-100);border-radius:10px;background:#fff;}
   .dpow-tl-row{display:grid;grid-template-columns:180px 1fr;min-height:28px;border-bottom:1px solid var(--slate-50);align-items:center;}
   .dpow-tl-label{font-size:11px;padding:4px 8px;color:var(--purple-950);}
@@ -1611,6 +1627,66 @@
           <div class="tool-name">EIR / AIR skeleton</div>
           <div class="tool-desc">Optional skeleton for appointing-party requirements structure.</div>
         </div>
+        <a class="tool-card" id="tplPlatformSpec" href="Atana-Platform-Specification-v1.0.docx" download style="text-decoration:none;color:inherit;">
+          <div class="tool-ic">SPEC</div>
+          <div class="tool-name">Platform specification v1.0</div>
+          <div class="tool-desc">PRD, architecture, ISO 19650 map, APIs, rule engine and UI journeys. Implementation pack.</div>
+        </a>
+        <a class="tool-card" id="tplEnterpriseSql" href="Atana-Enterprise-Schema-v1.sql" download style="text-decoration:none;color:inherit;">
+          <div class="tool-ic">SQL</div>
+          <div class="tool-name">Enterprise database schema</div>
+          <div class="tool-desc">PostgreSQL DDL for multi-org projects, catalogues, generation runs, workflow and audit.</div>
+        </a>
+        <a class="tool-card" id="tplArchPack" href="Atana-Architecture-Pack-v1.0.docx" download style="text-decoration:none;color:inherit;">
+          <div class="tool-ic">ARCH</div>
+          <div class="tool-name">Architecture pack v1.0</div>
+          <div class="tool-desc">Rule engine, ERD, wizard, generation flow, ISO 19650 map, Copilot boundary.</div>
+        </a>
+        <a class="tool-card" id="tplJsonSchema" href="Atana-JSON-Schemas-v1.json" download style="text-decoration:none;color:inherit;">
+          <div class="tool-ic">JSON</div>
+          <div class="tool-name">JSON schemas v1</div>
+          <div class="tool-desc">API and Copilot payloads for project, rules, packages and deliverables.</div>
+        </a>
+        <a class="tool-card" id="tplMermaid" href="Atana-Architecture-Diagrams-v1.md" download style="text-decoration:none;color:inherit;">
+          <div class="tool-ic">ERD</div>
+          <div class="tool-name">Mermaid diagrams</div>
+          <div class="tool-desc">ERD, rule flow, generation workflow, ISO states, Copilot path.</div>
+        </a>
+        <a class="tool-card" id="tplImplArch" href="Atana-Implementation-Architecture-v1.0.docx" download style="text-decoration:none;color:inherit;">
+          <div class="tool-ic">IMPL</div>
+          <div class="tool-name">Implementation architecture</div>
+          <div class="tool-desc">Stack, tenancy, events, Azure, engines, warehouse. Rules frozen.</div>
+        </a>
+        <a class="tool-card" id="tplBacklog" href="Atana-Backlog-AzureDevOps-v1.xlsx" download style="text-decoration:none;color:inherit;">
+          <div class="tool-ic">ADO</div>
+          <div class="tool-name">Azure DevOps backlog</div>
+          <div class="tool-desc">Epics, stories, AC, phases, parking lot, ADO import sheet.</div>
+        </a>
+        <a class="tool-card" id="tplAim" href="Atana-AIM-Specification-v1.0.docx" download style="text-decoration:none;color:inherit;">
+          <div class="tool-ic">AIM</div>
+          <div class="tool-name">Asset Information Model engine</div>
+          <div class="tool-desc">Asset types, completeness %, dashboard. IR lives on the asset.</div>
+        </a>
+        <a class="tool-card" id="tplIre" href="Atana-IRE-Specification-v1.0.docx" download style="text-decoration:none;color:inherit;">
+          <div class="tool-ic">IRE</div>
+          <div class="tool-name">Information Requirements Engine</div>
+          <div class="tool-desc">Scope packages, IR entity, compliance %, APIs. DPoW is the front-end.</div>
+        </a>
+        <a class="tool-card" id="tplSdp" href="Atana-Solution-Design-Package-v1.0.docx" download style="text-decoration:none;color:inherit;">
+          <div class="tool-ic">SDP</div>
+          <div class="tool-name">Solution design package</div>
+          <div class="tool-desc">.NET 9, Fluent UI, Azure, entities, APIs, tests, roadmap. Team handoff.</div>
+        </a>
+        <a class="tool-card" id="tplRoadmap" href="Atana-Roadmap-3Year-v1.xlsx" download style="text-decoration:none;color:inherit;">
+          <div class="tool-ic">MAP</div>
+          <div class="tool-name">3-year roadmap</div>
+          <div class="tool-desc">MVP → v3 / enterprise. Prioritisation and parking lot.</div>
+        </a>
+        <a class="tool-card" id="tplSql11" href="Atana-Enterprise-Schema-v1.1.sql" download style="text-decoration:none;color:inherit;">
+          <div class="tool-ic">SQL</div>
+          <div class="tool-name">Schema v1.1 + RLS</div>
+          <div class="tool-desc">Row level security, numbering proc, workflow, seed teams and rules.</div>
+        </a>
       </div>
       <div class="card" style="margin-top:14px;" id="governanceCard">
         <div class="chart-card-title" style="margin-bottom:6px;">Governance brain</div>
@@ -2397,8 +2473,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.39.1";
-const APP_BUILD = "2026-08-28-gen-midp-fix";
+const APP_VERSION = "3.40.2";
+const APP_BUILD = "2026-08-31-aim-spec";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -2781,6 +2857,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 /** Atana IM Framework — path relative to app (same folder on GitHub Pages / local). */
 const IM_FRAMEWORK_URL = "Atana-IM-Framework.html";
+const ATANA_PLATFORM_SPEC_URL = "Atana-Platform-Specification-v1.0.docx";
+const ATANA_ENTERPRISE_SCHEMA_URL = "Atana-Enterprise-Schema-v1.sql";
 /** Structured hooks for future compliance AI agent (governance brain). */
 const GOVERNANCE_BRAIN = {
   frameworkUrl: IM_FRAMEWORK_URL,
@@ -23369,6 +23447,106 @@ function renderDpowTimeline(project, dpow, schedule, roles){
     <p class="section-sub" style="padding:8px 12px;">Scheduled finish-to-start by dependency order (site/AR → ST → civil → MEP…). Markers: <span class="ms-chip ms-peer">PEER REVIEW</span> <span class="ms-chip ms-qa">QA REVIEW</span> <span class="ms-chip ms-sub">WORK STAGE SUBMITTAL</span></p>
   </div>`;
 }
+
+function currentDpowStageId(project){
+  return (project && (project.currentStage || project.workStage || project.stage)) || "S3";
+}
+function productionPackagesForScope(project, scope){
+  if(typeof getProductionPackages !== "function" || !scope) return [];
+  const ss = String(scope.uniclass || scope.code || "");
+  const ro = String(scope.role || "");
+  return getProductionPackages(project).filter(function(p){
+    const pss = String(p.ss || p.ssCode || p.uniclass || p.code || "");
+    const pro = String(p.ro || p.role || "");
+    const ssOk = !ss || pss === ss || pss.indexOf(ss) === 0 || ss.indexOf(pss) === 0;
+    const roOk = !ro || !pro || pro === ro;
+    return ssOk && roOk;
+  });
+}
+function deliverablesForScope(project, scope){
+  const rows = (typeof getImportedPlanRows === "function" ? getImportedPlanRows(project) : [])
+    .concat((project && project.generatedMidp) || []);
+  const ro = String(scope.role || "").toUpperCase();
+  const name = String(scope.name || "").toUpperCase();
+  const tokens = name.split(/\s+/).filter(w => w.length > 3).slice(0, 3);
+  return rows.filter(function(r){
+    if(ro && String(r.role || r.ro || r.taskTeam || "").toUpperCase() !== ro) return false;
+    if(!tokens.length) return true;
+    const d = String(r.description || r.title || "").toUpperCase();
+    return tokens.some(t => d.indexOf(t) >= 0);
+  }).slice(0, 40);
+}
+function renderScopeIrModal(project, scope){
+  const existing = document.getElementById("irModalBack");
+  if(existing) existing.remove();
+  if(!scope) return;
+  const stageId = currentDpowStageId(project);
+  const st = (scope.stages && scope.stages[stageId]) || {};
+  const attrs = (typeof loiParamsForScope === "function") ? loiParamsForScope(scope, stageId) : [];
+  const packs = productionPackagesForScope(project, scope);
+  const dels = deliverablesForScope(project, scope);
+  const tab = window.__irTab || "overview";
+  const lod = st.lod || scope.defaultLod || "LOD 3";
+  const loi = st.loi || ("LOI " + (typeof loiNumberForStage === "function" ? loiNumberForStage(stageId) : "3"));
+  function attrTable(){
+    if(!attrs.length) return `<p class="section-sub">No LOI catalogue rows matched this scope. Import the LOI workbook later (parking lot: full LOI import engine).</p>`;
+    const stages = ["2","3","4","5"];
+    const head = `<tr><th>Attribute</th><th>Category</th><th>Type</th><th>Unit</th>${stages.map(s=>`<th>LOI ${s}</th>`).join("")}</tr>`;
+    const body = attrs.map(a => `<tr>
+      <td>${escapeHtml(a.p||"")}</td>
+      <td>${escapeHtml(a.c||"")}</td>
+      <td>${escapeHtml(a.t||"—")}</td>
+      <td>${escapeHtml(a.u||"—")}</td>
+      ${stages.map(s => `<td><span class="ir-dot ${(a.l && a.l[s]) ? "on":""}"></span></td>`).join("")}
+    </tr>`).join("");
+    return `<table class="ir-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  }
+  const panels = {
+    overview: `<p class="section-sub" style="margin-top:0;">Scope production package is the persistent object. DPoW is the IR view of that package for the current work stage.</p>
+      <p><strong>${packs.length}</strong> production package match(es). <strong>${attrs.length}</strong> LOI attributes. <strong>${dels.length}</strong> related deliverables (capped).</p>
+      ${packs.length ? `<ul>${packs.slice(0,8).map(pk => `<li><code>${escapeHtml(pk.id || pk.ppId || "")}</code> ${escapeHtml(pk.ss || "")} · ${escapeHtml(pk.fb || "")}</li>`).join("")}</ul>` : `<p class="section-sub">No production package yet — generate from FB + Ss in Production.</p>`}`,
+    deliverables: dels.length ? `<table class="ir-table"><thead><tr><th>Number</th><th>Description</th><th>Form</th><th>Stage</th></tr></thead><tbody>${dels.map(d => `<tr><td>${escapeHtml(d.isoNumber||d.number||d.id||"")}</td><td>${escapeHtml(d.description||d.title||"")}</td><td>${escapeHtml(d.form||"")}</td><td>${escapeHtml(d.stage||d.stageId||"")}</td></tr>`).join("")}</tbody></table>` : `<p class="section-sub">No matching MIDP/TIDP rows for this team + scope name.</p>`,
+    lod: `<p>Current work stage <strong>${escapeHtml(stageId)}</strong></p><p>LOD <strong>${escapeHtml(lod)}</strong> · LOI <strong>${escapeHtml(loi)}</strong></p><p class="section-sub">Change LOD/LOI on the DPoW grid cells. Values persist on the scope package, not as a new package per stage.</p>`,
+    attributes: attrTable(),
+    workflow: `<p class="section-sub">IA authors model parameters · TTIM verifies classification · PR reviews · TTM approves package. Workflow states stay on the information container, not on the Ss code.</p>`
+  };
+  const back = document.createElement("div");
+  back.id = "irModalBack";
+  back.className = "ir-modal-back";
+  back.innerHTML = `<div class="ir-modal" role="dialog" aria-modal="true">
+    <div class="ir-modal-head">
+      <div>
+        <h3>${escapeHtml(scope.name || scope.uniclass || "Scope")}</h3>
+        <div class="ir-meta">
+          <span>${escapeHtml(scope.uniclass || scope.code || "")}</span>
+          <span>${escapeHtml(scope.role || "—")}</span>
+          <span>${escapeHtml(stageId)}</span>
+          <span>${escapeHtml(lod)}</span>
+          <span>${escapeHtml(loi)}</span>
+        </div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-xs" id="irModalClose">Close</button>
+    </div>
+    <div class="ir-tabs">
+      ${["overview","deliverables","lod","attributes","workflow"].map(t => `<button type="button" class="ir-tab ${tab===t?"on":""}" data-ir-tab="${t}">${t.toUpperCase()}</button>`).join("")}
+    </div>
+    <div class="ir-body">${panels[tab] || panels.overview}</div>
+  </div>`;
+  document.body.appendChild(back);
+  back.addEventListener("click", ev => { if(ev.target === back) back.remove(); });
+  back.querySelector("#irModalClose").onclick = () => back.remove();
+  back.querySelectorAll("[data-ir-tab]").forEach(btn => {
+    btn.onclick = () => { window.__irTab = btn.getAttribute("data-ir-tab"); renderScopeIrModal(project, scope); };
+  });
+}
+function openScopeIrFromDpow(project, idx){
+  const dpow = ensureProjectDpow(project);
+  const scope = dpow.scopes[idx];
+  if(!scope) return;
+  window.__irTab = window.__irTab || "attributes";
+  renderScopeIrModal(project, scope);
+}
+
 function renderDpow(project){
   const el = document.getElementById("dpowRoot");
   if(!el || !project) return;
@@ -23497,18 +23675,15 @@ function renderDpow(project){
     // Always MIDP-linked
     sc.midpLinked = true;
     return sectionRow + `<tr class="dpow-row-drag ${roleInactive?"ss-inactive":""} ${teamCollapsed?"dpow-team-collapsed":""}" draggable="${roleInactive?"false":"true"}" data-dpow-idx="${idx}" data-dpow-team="${escapeHtml(sc.role||"_")}">
-      <td><div class="dpow-code">${escapeHtml(sc.uniclass || sc.code)}</div></td>
+      <td><div class="dpow-code" data-ir-open="${idx}" style="cursor:pointer;">${escapeHtml(sc.uniclass || sc.code)}</div></td>
       <td>
-        <div class="dpow-scope-name">${escapeHtml(sc.name)}</div>
+        <div class="dpow-scope-name" data-ir-open="${idx}" style="cursor:pointer;">${escapeHtml(sc.name)}</div>
         ${(() => {
-          // LOI parameter pills from first stage with LOD set, else LOD 2
           const lod = (getHierarchy().map(s => (sc.stages[s.id]||{}).lod).find(x => x)) || "LOD 2";
-          const params = (typeof LOI_PARAM_PRESETS !== "undefined" && LOI_PARAM_PRESETS[lod]) ? LOI_PARAM_PRESETS[lod] : ["ObjectType"];
-          const open = !!(window.__loiOpen && window.__loiOpen[sc.id]);
+          const nAttr = (typeof loiParamsForScope === "function") ? loiParamsForScope(sc, currentDpowStageId(project)).length : 0;
           return `<div class="loi-pills">
-            <button type="button" class="loi-pill ${open?"open":""}" data-loi-toggle="${escapeHtml(sc.id)}" title="Level of information need">${params.length} params · ${escapeHtml(lod)}</button>
-          </div>
-          ${open ? `<div class="loi-detail">${params.map(p => "• " + escapeHtml(p)).join("<br>")}<div style="margin-top:4px;opacity:0.8;">IFC property requirements (LOI need). Full IDS export later.</div></div>` : ""}`;
+            <button type="button" class="loi-pill" data-ir-open="${idx}" title="Information requirements">${nAttr} IR attributes · ${escapeHtml(lod)}</button>
+          </div>`;
         })()}
       </td>
       <td><select data-dpow-role="${idx}" ${roleInactive?"disabled":""}><option value="">—</option>${roleOpts}</select></td>
@@ -23716,14 +23891,12 @@ function renderDpow(project){
   el.querySelectorAll("[data-dpow-mode]").forEach(btn => {
     btn.onclick = () => { window.__dpowMode = btn.getAttribute("data-dpow-mode"); renderDpow(project); };
   });
-  if(!window.__loiOpen) window.__loiOpen = {};
-  el.querySelectorAll("[data-loi-toggle]").forEach(btn => {
-    btn.onclick = (ev) => {
+  el.querySelectorAll("[data-ir-open]").forEach(btn => {
+    btn.addEventListener("click", ev => {
       ev.stopPropagation();
-      const id = btn.getAttribute("data-loi-toggle");
-      window.__loiOpen[id] = !window.__loiOpen[id];
-      renderDpow(project);
-    };
+      const idx = parseInt(btn.getAttribute("data-ir-open"), 10);
+      if(!isNaN(idx)) openScopeIrFromDpow(project, idx);
+    });
   });
   const batchBtn = document.getElementById("dpow-batch-apply");
   if(batchBtn){
