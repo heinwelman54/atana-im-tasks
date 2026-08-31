@@ -1478,8 +1478,15 @@
   .role-pill.ghost{background:#e5e7eb;color:#6b7280;}
   .role-pill.zz{background:#fef3c7;color:#92400e;}
 
-  #wsSegmented{flex-wrap:wrap;border-radius:16px;gap:4px;}
-  #wsSegmented button{flex:0 0 auto;min-height:44px;padding:9px 12px;}
+  #wsSegmented{display:flex;flex-wrap:nowrap;width:100%;box-sizing:border-box;border-radius:16px;gap:2px;overflow-x:auto;}
+  #wsSegmented button{flex:1 1 0;min-width:0;min-height:42px;padding:8px 4px;font-size:12px;white-space:nowrap;}
+  .atn-stepper{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 14px;}
+  .atn-step{display:flex;align-items:center;gap:8px;border:0;background:#f3f0f6;border-radius:999px;padding:6px 10px 6px 6px;cursor:pointer;font:inherit;color:var(--ink);}
+  .atn-step.on{background:#3e0b3b;color:#fff;}
+  .atn-step-num{width:24px;height:24px;border-radius:50%;background:#fff;color:#3e0b3b;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;}
+  .atn-step.on .atn-step-num{background:#d5c427;color:#3e0b3b;}
+  .atn-step.done .atn-step-num{background:#2f7d5a;color:#fff;}
+  .atn-step-lbl{font-size:12px;font-weight:700;}
   .atn-grid{display:grid;gap:10px;}
   .atn-2{grid-template-columns:1fr;}
   @media(min-width:720px){.atn-2{grid-template-columns:1fr 1fr;}}
@@ -2103,6 +2110,7 @@
         <div style="display:flex;gap:12px;align-items:flex-start;">
           <nav id="psdNav" style="flex:0 0 200px;position:sticky;top:8px;"></nav>
           <div style="flex:1;min-width:0;">
+            <div id="psdGuideRoot"></div>
             <div id="psdMyWork"></div>
             <div id="psdWorkbench"></div>
             <div id="psdScopeDash"></div>
@@ -2533,8 +2541,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.40.3";
-const APP_BUILD = "2026-08-31-ecc-on-apphtml";
+const APP_VERSION = "3.40.4";
+const APP_BUILD = "2026-08-31-guided-setup";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -14762,15 +14770,15 @@ function renderPsdNav(project){
   if(!host) return;
   const view = window.__psdView || "scope";
   const items = [
-    ["work", "My Work", "Today · role"],
-    ["bench", "Package workbench", "One package"],
-    ["scope", "PROJECT / Scope", "FB · Systems"],
-    ["wizard", "Project setup", "Tell Atana about the project"],
-    ["gov", "Governance", "Who can change it"],
-    ["how", "Methodology", "How Atana works"],
-    ["production", "Production", "Packages · TIDP"],
-    ["verify", "Verification", "Deps · Interfaces · Model"],
-    ["information", "Information", "DRF · IP · Exchange"]
+    ["wizard", "1 Project setup", "Name · place · teams · generate"],
+    ["gov", "2 Governance", "Who may change catalogues"],
+    ["scope", "3 Scope", "FB · systems confirmed"],
+    ["production", "4 Production", "Packages · TIDP"],
+    ["verify", "5 Verification", "Deps · interfaces · model"],
+    ["information", "6 Information", "DRF · IP · exchange"],
+    ["how", "7 Methodology", "Due diligence spine"],
+    ["work", "8 My Work", "Today for your role"],
+    ["bench", "9 Workbench", "One package"]
   ];
   let html = '<div class="card" style="padding:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
   html += '<div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#6d28d9;margin-bottom:8px;">PROJECT</div>';
@@ -14865,12 +14873,14 @@ function renderScopeWizard(project){
   let html = '<div class="card" style="padding:14px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
   html += '<div style="font-size:13px;font-weight:800;color:#5b2d8e;margin-bottom:4px;">Project setup — tell Atana about the project</div>';
   html += '<p class="section-sub" style="margin:0 0 10px;">Do not pick deliverables. Describe where / what / who / when. The engine generates the MIDP.</p>';
-  html += '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">';
+  html += '<div class="atn-stepper">';
   steps.forEach(function(label, idx){
     const s = idx + 1;
-    html += '<span style="padding:4px 8px;border-radius:999px;font-size:10px;' + (wz.step===s?'background:#5b2d8e;color:#fff;':'background:#f3f0f6;') + '">' + s + ' ' + label + '</span>';
+    const on = wz.step===s ? " on" : (wz.step>s ? " done" : "");
+    html += '<button type="button" class="atn-step' + on + '" data-wz-step="' + s + '"><span class="atn-step-num">' + s + '</span><span class="atn-step-lbl">' + label + '</span></button>';
   });
   html += '</div>';
+  html += '<p class="section-sub">IM / PDM / admin: complete 1→10 in order. Each number is a diligence gate. Do not skip Generate until teams and systems are true.</p>';
 
   if(wz.step === 1){
     html += '<label style="font-size:11px;font-weight:700;">Project name</label>';
@@ -14958,6 +14968,13 @@ function renderScopeWizard(project){
   });
   const back = document.getElementById("wzBack");
   if(back) back.onclick = function(){ persistInputs(); wz.step = Math.max(1, wz.step - 1); renderScopeWizard(project); };
+  host.querySelectorAll("[data-wz-step]").forEach(function(b){
+    b.onclick = function(){
+      window.__setupWz.step = parseInt(b.getAttribute("data-wz-step"), 10) || 1;
+      renderScopeWizard(project);
+    };
+  });
+
   const next = document.getElementById("wzNext");
   if(next) next.onclick = function(){ persistInputs(); wz.step = Math.min(10, wz.step + 1); renderScopeWizard(project); };
   const go = document.getElementById("wzGo");
@@ -15018,20 +15035,111 @@ function renderScopeWizard(project){
   };
 }
 
+
+function atnRolePlaybook(role){
+  const r = String(role || "IM").toUpperCase();
+  const books = {
+    IM: [
+      ["Confirm appointment and open the project", "wizard"],
+      ["Set governance seats (owner / custodian / approver)", "gov"],
+      ["Run project setup 1–10 and generate MIDP", "wizard"],
+      ["Check packages exist per FB + Ss", "production"],
+      ["Issue the information gate with PDM", "verify"],
+      ["Keep AIM present vs required honest", "information"]
+    ],
+    PDM: [
+      ["Confirm project name, client and stages", "wizard"],
+      ["Confirm task teams are appointed", "wizard"],
+      ["Review generated packages vs programme", "production"],
+      ["Lock packages that must not be removed", "gov"],
+      ["Agree the Stage gate with IM", "verify"]
+    ],
+    TTM: [
+      ["Confirm your task team is selected in setup", "wizard"],
+      ["Confirm FB / systems that your team owns", "scope"],
+      ["Open Production and review your packages", "production"],
+      ["Build the TIDP: model, coordinate, verify, review, approve", "production"],
+      ["Assign information authors on each activity", "work"],
+      ["Declare dependencies and interfaces", "verify"],
+      ["Do not skip Verify before Shared", "verify"]
+    ],
+    TTIM: [
+      ["Filter My Work to your team IR / IDS queue", "work"],
+      ["Check every package has required attributes", "bench"],
+      ["Raise missing AIR / template gaps to IM", "information"],
+      ["Close verification activities before TTM approves", "verify"]
+    ],
+    IA: [
+      ["Open My Work — only your author activities", "work"],
+      ["Open the package workbench for the next deliverable", "bench"],
+      ["Capture required parameters before sharing", "information"],
+      ["Submit for peer review — do not self-publish", "verify"]
+    ],
+    PR: [
+      ["Open pending Review activities", "work"],
+      ["Reject back to WIP or pass to Shared", "verify"]
+    ],
+    DTL: [
+      ["Confirm discipline systems in scope", "scope"],
+      ["Review technical fitness of packages", "production"],
+      ["Sign technical review before TTM", "verify"]
+    ],
+    FM: [
+      ["Watch AIM completeness for operate-stage LOI", "information"],
+      ["Do not edit AIR types — propose to IM", "gov"]
+    ]
+  };
+  return books[r] || books.TTM;
+}
+function renderRoleGuide(project){
+  const host = document.getElementById("psdGuideRoot");
+  if(!host) return;
+  const view = window.__psdView || "wizard";
+  const role = (typeof currentFuncRoleCode === "function" ? currentFuncRoleCode(project) : "IM");
+  const steps = atnRolePlaybook(role);
+  let html = '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div style="font-size:12px;font-weight:800;color:#3e0b3b;">Guided sequence · ' + (role || "IM") + '</div>';
+  html += '<p class="section-sub" style="margin:4px 0 8px;">Same methodology for every role. Task team managers complete their own scope and TIDP in this order.</p>';
+  html += '<div class="atn-stepper">';
+  steps.forEach(function(s, i){
+    html += '<button type="button" class="atn-step" data-guide-go="' + s[1] + '"><span class="atn-step-num">' + (i+1) + '</span><span class="atn-step-lbl">' + s[0] + '</span></button>';
+  });
+  html += '</div></div>';
+  host.innerHTML = html;
+  host.querySelectorAll("[data-guide-go]").forEach(function(b){
+    b.onclick = function(){
+      window.__psdView = b.getAttribute("data-guide-go");
+      renderMethodView(project);
+    };
+  });
+}
+
 function renderMethodView(project){
-  if(!window.__psdView) window.__psdView = "work";
+  if(!window.__psdView) window.__psdView = "wizard";
   const view = window.__psdView;
-  renderPsdNav(project);
-  renderMyWorkDashboard(project);
-  renderPackageWorkbench(project);
-  renderAssetScopeDashboard(project);
+  try { renderPsdNav(project); } catch(e){ console.error(e); }
+  try { if(typeof renderRoleGuide === "function") renderRoleGuide(project); } catch(e){ console.error(e); }
+  try { renderMyWorkDashboard(project); } catch(e){ console.error(e); }
+  try { renderPackageWorkbench(project); } catch(e){ console.error(e); }
+  try { renderAssetScopeDashboard(project); } catch(e){ console.error(e); }
   const how = document.getElementById("methodHowRoot");
   const wiz = document.getElementById("scopeWizardRoot");
+  const gov = document.getElementById("govAdminRoot");
   if(view === "how" || view === "verify" || view === "information" || view === "production"){
-    if(typeof renderHowAtanaWorks === "function") renderHowAtanaWorks(project);
+    try { if(typeof renderHowAtanaWorks === "function") renderHowAtanaWorks(project); } catch(e){ console.error(e); }
   } else if(how) how.innerHTML = "";
-  if(view === "wizard") renderScopeWizard(project);
-  else if(wiz) wiz.innerHTML = "";
+  if(view === "wizard"){
+    try { renderScopeWizard(project); } catch(e){
+      console.error(e);
+      if(wiz) wiz.innerHTML = '<div class="card" style="padding:14px;"><strong>Project setup failed to render.</strong><p class="section-sub">' + (e && e.message ? e.message : e) + '</p></div>';
+    }
+  } else if(wiz) wiz.innerHTML = "";
+  if(view === "gov"){
+    try { if(typeof renderGovernanceAdmin === "function") renderGovernanceAdmin(project); } catch(e){
+      console.error(e);
+      if(gov) gov.innerHTML = '<div class="card" style="padding:14px;"><strong>Governance failed to render.</strong><p class="section-sub">' + (e && e.message ? e.message : e) + '</p></div>';
+    }
+  } else if(gov) gov.innerHTML = "";
 }
 
 function renderProductionWbs(project){

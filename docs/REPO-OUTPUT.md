@@ -1,34 +1,27 @@
 # Repo output
 
-**Live GitHub Pages file:** `app.html`  
-**Visible badge version: 3.40.3**  
-**Build:** `2026-08-31-ecc-on-apphtml`
+**App version: 3.40.4**  
+**File GitHub Pages serves:** `app.html`  
+**Build:** `2026-08-31-guided-setup`
 
-`https://heinwelman54.github.io/atana-im-tasks/app.html` loads **`app.html`**, not `Atana-IM-Tasks.html`. Earlier 3.6.x edits never appeared because Pages was still serving 3.40.2 `app.html`.
+Push `app.html`, `index.html`, `sw.js` then open  
+`https://heinwelman54.github.io/atana-im-tasks/app.html?v=3404`  
+Hard refresh. Badge must read **v3.40.4**.
 
-## What changed on the app (3.40.3)
+## What changed on the app
 
-| Change | Where to find it |
+| Change | Where |
 |---|---|
-| Badge **v3.40.3** | Top-right of the purple bar (was v3.40.2) |
-| New tabs **ITE, AIR, AIM, Graph, Decide, Command** | Open a **project** → purple segmented bar after **MIDP** |
-| ITE | Project → **ITE** |
-| AIR builder + IDS export | Project → **AIR** |
-| AIM present vs required, 95% gate | Project → **AIM** |
-| Graph | Project → **Graph** |
-| Decide Copilot | Project → **Decide** |
-| Command Center scores + copilot | Project → **Command** |
+| Top menu stretches across the page | Purple/white segmented bar under the workspace header |
+| Project setup is a numbered 1–10 diligence wizard | **How Atana Works** tab → left rail **1 Project setup** |
+| Governance now renders (was unwired) | Left rail **2 Governance** |
+| Left rail is a numbered methodology sequence 1–9 | How Atana Works left column |
+| Role playbook with numbered steps | Yellow/white card at top of How Atana Works. Changes with IM / PDM / TTM / TTIM / IA / PR / DTL / FM |
+| TTM sequence includes scope + TIDP in order | Same card when the active function role is TTM |
 
-Existing 3.40.2 screens stay: IM Tasks, Planner, How Atana Works, DPoW, MIDP, Tools, Documents, Models, Forma.
+## How to use the guide
 
-## You will not see this until you push
-
-GitHub Pages only updates after `app.html`, `index.html`, and `sw.js` are on `main`.
-
-```bash
-git add app.html index.html sw.js Atana-IM-Tasks.html README.md docs/REPO-OUTPUT.md
-git commit -m "v3.40.3 Command Center + ITE/AIR/AIM/Graph/Decide on app.html"
-git push origin main
-```
-
-Then open `https://heinwelman54.github.io/atana-im-tasks/app.html?v=3403` and hard-refresh (Ctrl+Shift+R). If the badge is still 3.40.2 you are on a cached copy.
+1. Open a project.
+2. Click **How Atana Works** on the top bar.
+3. Follow the left rail **1 → 9**.
+4. Switch function role (team / who-am-I control already in the app) — the numbered card at the top changes to that role’s sequence.
