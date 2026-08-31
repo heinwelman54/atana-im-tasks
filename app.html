@@ -1496,6 +1496,10 @@
   .atn-ask input{flex:1;min-width:180px;min-height:44px;border:1px solid var(--slate-300);border-radius:10px;padding:0 12px;font:inherit;}
   .atn-trace{font-family:var(--mono);font-size:12px;line-height:1.55;white-space:pre-wrap;}
   .atn-bar{height:8px;background:var(--slate-100);border-radius:99px;overflow:hidden;margin-top:8px;}
+
+  .atn-ss-card:active{cursor:grabbing;}
+  .atn-dpow-col{transition:outline .15s ease;}
+
 </style>
 <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js" crossorigin="anonymous"></script>
 </head>
@@ -1994,6 +1998,7 @@
       </div>
       <div class="segmented" id="wsSegmented">
         <button class="active" data-wsview="imtasks">IM Tasks</button>
+        <button data-wsview="roleos">My Role</button>
         <button data-wsview="planner">IM Planner</button>
         <button data-wsview="method">How Atana Works</button>
         <button data-wsview="dpow">DPoW</button>
@@ -2004,6 +2009,7 @@
         <button data-wsview="graph">Graph</button>
         <button data-wsview="decide">Decide</button>
         <button data-wsview="ecc">Command</button>
+        <button data-wsview="agents">Agents</button>
         <button data-wsview="prjtools">Tools</button>
         <button data-wsview="prjdocs">Documents</button>
         <button data-wsview="models">Models</button>
@@ -2026,6 +2032,9 @@
           <div class="card" id="subsectionRings"></div>
           <div class="card" style="margin-top:14px;" id="timesheetCard"></div>
         </div>
+      </div>
+      <div class="ws-view" id="wsview-roleos">
+        <div id="atnRoleOsRoot"></div>
       </div>
       <div class="ws-view" id="wsview-planner">
         <div class="segmented" id="plannerSub" style="margin-bottom:12px;">
@@ -2168,7 +2177,12 @@
         </div>
         <div id="dpowTeamFilter"></div>
         <div id="dpowRoot"></div>
+        <div id="dpowLoinBoard"></div>
       </div><!-- /wsview-dpow -->
+
+            <div class="ws-view" id="wsview-agents">
+        <div id="atnAgentsRoot"></div>
+      </div>
 
             <div class="ws-view" id="wsview-prjtools">
         <div class="segmented" id="prjtoolsSub" style="margin-bottom:12px;">
@@ -2541,8 +2555,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.40.4";
-const APP_BUILD = "2026-08-31-guided-setup";
+const APP_VERSION = "3.40.13";
+const APP_BUILD = "2026-09-01-sched";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -22242,6 +22256,8 @@ function setActiveWsView(view){
     if(main === "graph" && typeof renderAtnGraph === "function") renderAtnGraph(project);
     if(main === "decide" && typeof renderAtnDecide === "function") renderAtnDecide(project);
     if(main === "ecc" && typeof renderAtnEcc === "function") renderAtnEcc(project);
+    if(main === "agents" && typeof renderAtnAgents === "function") renderAtnAgents(project);
+    if(main === "roleos" && typeof renderAtnRoleOs === "function") renderAtnRoleOs(project);
     if(main === "prjtools" && typeof bindProjectTools === "function") bindProjectTools(project);
     if(main === "prjdocs" && typeof bindProjectDocs === "function") bindProjectDocs(project);
     if(main === "models" && typeof renderModelsViewer === "function") renderModelsViewer(project);
@@ -24115,6 +24131,7 @@ function renderDpow(project){
       renderDpow(project);
     };
   });
+  try { renderDpowLoinBoard(project); } catch(e){ console.error(e); }
 }
 
 function dpowAddScope(project){
@@ -27481,7 +27498,7 @@ function catalogEditorHtml(list, idPrefix, title){
     <div class="field catalog-block" style="margin-bottom:14px;">
       <label style="margin-bottom:4px;">${title}</label>
       <p class="section-sub" style="margin:0 0 8px;">Edit value &amp; description. Activate for a batch under MIDP only.</p>
-      <div class="catalog-list" style="max-height:220px;overflow:auto;border:1px solid var(--slate-100);border-radius:10px;padding:4px 6px;">${rows || '<span class="section-sub">None yet</span>'}</div>
+      <div class="catalog-list" id="cat-list-${idPrefix}" style="max-height:220px;overflow:auto;border:1px solid var(--slate-100);border-radius:10px;padding:4px 6px;">${rows || '<span class="section-sub">None yet</span>'}</div>
       <div class="catalog-add" style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
         <div class="row" style="display:flex;gap:8px;align-items:center;">
           <input type="text" id="cat-code-${idPrefix}" class="mono" placeholder="Value" style="width:88px;flex:0 0 88px;" title="Value (FORMA code)">
@@ -27552,6 +27569,42 @@ function projectInfoFieldsHtml(project){
     </div>
   `;
 }
+
+function atnLiveProject(){
+  try {
+    if(typeof projectById === "function" && typeof currentProjectId !== "undefined")
+      return projectById(currentProjectId);
+  } catch(e){}
+  return null;
+}
+function atnApplyCatalogLive(cat){
+  window.__midpCatalogDraft = cat;
+  window.__editProjectDirty = true;
+  const p = atnLiveProject();
+  if(p){
+    p.midpCatalog = JSON.parse(JSON.stringify(cat));
+    try {
+      if(typeof saveData === "function") saveData(typeof DATA !== "undefined" ? DATA : null);
+      else if(typeof saveProjects === "function") saveProjects();
+    } catch(e){}
+    try { showToast("Task teams / catalogue updated"); } catch(e){}
+  }
+}
+function atnRequestCloseSheet(){
+  const dirty = !!window.__editProjectDirty;
+  const sheetOpen = document.getElementById("overlay") && document.getElementById("overlay").classList.contains("open");
+  const isEdit = !!(document.getElementById("f-p-save") && document.getElementById("sheet") && document.getElementById("sheet").innerText.indexOf("Edit project") >= 0);
+  if(sheetOpen && isEdit && dirty){
+    const go = confirm("You have unsaved project settings.\n\nOK = Save and close\nCancel = Stay on this tab");
+    if(!go) return false;
+    const btn = document.getElementById("f-p-save");
+    if(btn){ btn.click(); return true; }
+  }
+  closeSheet();
+  window.__editProjectDirty = false;
+  return true;
+}
+
 function bindCatalogEditors(initialCatalog){
   const cat = JSON.parse(JSON.stringify(normalizeMidpCatalog(initialCatalog)));
   const keyMap = { func: "functionalList", level: "levels", role: "roles", orig: "originators", form: "forms", status: "statuses", rev: "revisions", phase: "phases" };
@@ -27596,7 +27649,7 @@ function bindCatalogEditors(initialCatalog){
       const descEl = document.getElementById("cat-desc-" + prefix);
       if(descEl) descEl.value = "";
       redraw(prefix);
-      window.__midpCatalogDraft = cat;
+      atnApplyCatalogLive(cat);
       return;
     }
     const delBtn = e.target.closest("[data-cat-del]");
@@ -27608,7 +27661,7 @@ function bindCatalogEditors(initialCatalog){
       if(!confirm("Delete " + (item.code || "this item") + " — " + (item.label || "") + "?")) return;
       cat[keyMap[prefix]].splice(idx, 1);
       redraw(prefix);
-      window.__midpCatalogDraft = cat;
+      atnApplyCatalogLive(cat);
       return;
     }
     const editBtn = e.target.closest("[data-cat-edit]");
@@ -27640,7 +27693,7 @@ function bindCatalogEditors(initialCatalog){
         }
       }
       redraw(prefix);
-      window.__midpCatalogDraft = cat;
+      atnApplyCatalogLive(cat);
       return;
     }
   };
@@ -29334,13 +29387,19 @@ function openEditProjectSheet(project){
     if(want){
       const btn = document.querySelector('#sheet [data-sptab="'+want+'"]');
       if(btn) btn.click();
-      window.__editProjectTab = null;
     }
   } catch(e){}
   try{ bindScopeModeToggles(document.getElementById("sheet")); }catch(e){}
   bindStageSetupLiveSync();
   try { bindStageSetupExtras(project); } catch(e){ console.warn(e); }
   bindCatalogEditors(project.midpCatalog);
+  window.__editProjectDirty = false;
+  const _sheet = document.getElementById("sheet");
+  if(_sheet && !_sheet.dataset.dirtyBound){
+    _sheet.dataset.dirtyBound = "1";
+    _sheet.addEventListener("input", function(){ window.__editProjectDirty = true; });
+    _sheet.addEventListener("change", function(){ window.__editProjectDirty = true; });
+  }
   bindProjectTeamPanel(project);
   bindAddressSearch();
   bindProjectImageFields(project);
@@ -29530,6 +29589,7 @@ function openEditProjectSheet(project){
       delete project.midp.levels;
     }
     saveData(DATA);
+    window.__editProjectDirty = false;
     closeSheet();
     renderProjects();
     try { renderWorkspace(); } catch(e){ console.warn(e); }
@@ -31091,7 +31151,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
   document.getElementById("overlay").addEventListener("click", e => {
-    if(e.target.id === "overlay") closeSheet();
+    if(e.target.id === "overlay"){
+      if(typeof atnRequestCloseSheet === "function") atnRequestCloseSheet();
+      else closeSheet();
+    }
   });
 
   // Register service worker (skip SharePoint/sandbox srcdoc — SW is blocked there)
@@ -31712,6 +31775,1115 @@ function renderAtnEcc(project){
 }
 
 
+
+
+
+/* ========== 3.40.5 FB spatial + LOIN maturity + DPoW packages ========== */
+function atnSsGlyph(ss, name){
+  const s = String(ss||"") + " " + String(name||"");
+  const u = s.toUpperCase();
+  if(/DOOR/.test(u)) return "🚪";
+  if(/WINDOW|GLAZ/.test(u)) return "🪟";
+  if(/HVAC|VENTIL|AHU|DUCT|COOL|HEAT/.test(u)) return "🌬️";
+  if(/LIGHT|POWER|ELECTR|CABLE|LV |HV |SWITCH/.test(u)) return "⚡";
+  if(/FIRE DET|FIRE ALARM|SMOKE/.test(u)) return "🚨";
+  if(/FIRE PROT|SPRINK/.test(u)) return "🔥";
+  if(/WATER|DRAIN|SOIL|WASTE|PLUMB/.test(u)) return "💧";
+  if(/CIVIL|ROAD|PAVE|SITE RETIC|EARTH/.test(u)) return "🛣️";
+  if(/STRUCT|CONCRETE|STEEL|FRAME/.test(u)) return "🏗️";
+  if(/LIFT|ELEVAT/.test(u)) return "🛗";
+  if(/CCTV|ACCESS|SECUR/.test(u)) return "🎥";
+  return "📦";
+}
+function atnEnsureFbSpatial(project){
+  if(!project.fbSpatial || typeof project.fbSpatial !== "object") project.fbSpatial = {};
+  const levels = ((project.midpCatalog && project.midpCatalog.levels) || []).filter(function(l){ return l && l.selected !== false; });
+  const fbs = (typeof selectedFunctionalBreakdowns === "function") ? selectedFunctionalBreakdowns(project) : ((project.midpCatalog && project.midpCatalog.functionalList) || []);
+  fbs.forEach(function(fb){
+    const code = String(fb.code||"").toUpperCase();
+    if(!code) return;
+    if(!Array.isArray(project.fbSpatial[code]) || !project.fbSpatial[code].length){
+      project.fbSpatial[code] = levels.map(function(l){ return l.code; });
+    }
+  });
+  return project.fbSpatial;
+}
+const ATN_LOIN_RULES = {
+  AR: {
+    S2: { due:["Concept GA","Planning diagrams"], mature:[], hold:["Door schedule","Ironmongery schedule","Finishes schedule"], model:"Massing / outline only" },
+    S3: { due:["Coordination GA","Space layout"], mature:["Concept GA"], hold:["Door schedule"], model:"Spatial coordination — rooms, shafts, entries. No door schedule." },
+    S4: { due:["Door schedule","Ironmongery schedule","Finishes schedule","Details"], mature:["Coordination GA"], hold:[], model:"Technical architectural model" },
+    S5: { due:["Construction issue set"], mature:["Door schedule","Details"], hold:[], model:"Construction" },
+    S6: { due:["As-built drawings"], mature:["Door schedule"], hold:[], model:"As-built" }
+  },
+  ME: {
+    S2: { due:["Schematic line diagram"], mature:[], hold:["Plant schedule","Detailed duct model"], model:"No coordination model. Schematic lines only." },
+    S3: { due:["Developed schematic","Peer review + sign-off before model","Spatial coordination model"], mature:["Schematic line diagram"], hold:["Plant schedule","Detailed fittings"], model:"After schematic sign-off: service zones, main reticulation + sizing, shafts, building entries. Not detailed equipment." },
+    S4: { due:["Detailed model","Plant schedule","Equipment datasheets"], mature:["Developed schematic","Coordination model"], hold:[], model:"Detailed MEP model" },
+    S5: { due:["Shop / install information"], mature:["Detailed model","Plant schedule"], hold:[], model:"Construction" },
+    S6: { due:["As-built model + AIM"], mature:["Plant schedule"], hold:[], model:"As-built / AIM" }
+  },
+  EE: {
+    S2: { due:["Single-line / schematic"], mature:[], hold:["DB schedule","Lighting layout detailed"], model:"Schematic only" },
+    S3: { due:["Developed schematic","Peer review + sign-off","Spatial coordination — containment, shafts, incoming"], mature:["Single-line / schematic"], hold:["DB schedule"], model:"Mains, containment zones, shafts, building intake. Not small-power detail." },
+    S4: { due:["Detailed model","DB / lighting / small-power schedules"], mature:["Coordination model"], hold:[], model:"Technical electrical model" },
+    S5: { due:["Install issue"], mature:["Schedules"], hold:[], model:"Construction" },
+    S6: { due:["As-built + AIM"], mature:["Schedules"], hold:[], model:"As-built" }
+  },
+  CV: {
+    S2: { due:["Site concept / levels"], mature:[], hold:["Setting-out schedule"], model:"Outline site" },
+    S3: { due:["Coordination site layout"], mature:["Site concept"], hold:[], model:"Primary routes, incoming services corridors" },
+    S4: { due:["Detailed site model + setting-out"], mature:["Coordination site layout"], hold:[], model:"Technical civil" },
+    S5: { due:["Construction issue"], mature:["Setting-out"], hold:[], model:"Construction" },
+    S6: { due:["As-built"], mature:[], hold:[], model:"As-built" }
+  }
+};
+ATN_LOIN_RULES.FP = ATN_LOIN_RULES.ME;
+ATN_LOIN_RULES.FD = ATN_LOIN_RULES.ME;
+ATN_LOIN_RULES.HE = ATN_LOIN_RULES.ME;
+ATN_LOIN_RULES.PD = ATN_LOIN_RULES.ME;
+ATN_LOIN_RULES.YS = ATN_LOIN_RULES.EE;
+function atnLoinRule(role, stage){
+  const book = ATN_LOIN_RULES[String(role||"").toUpperCase()] || ATN_LOIN_RULES.ME;
+  const sid = String(stage||"S3").toUpperCase().replace(/^WS/,"S");
+  return book[sid] || book.S3;
+}
+const ATN_LOI_PARAMS = {
+  S2: ["ATA_ZZ_ProjectStage","ATA_ZZ_WorkStage","ATA_ME_FlowAir","ATA_EE_PowerNominal"],
+  S3: ["ATA_ZZ_Clearance","ATA_ME_WidthDuct","ATA_ME_HeightDuct","ATA_PD_DiameterNominal","ATA_EE_Volt","ATA_ZZ_Area"],
+  S4: ["ATA_ZZ_EquipmentID","ATA_ME_FlowSupplyAir","ATA_ME_CoolingTotal","ATA_ME_HeatingTotal","ATA_EE_CurrentInput","ATA_EE_PowerRequired","ATA_ZZ_Weight"],
+  S5: ["ATA_ZZ_EquipmentID","ATA_ZZ_SheetStatus","ATA_ZZ_SheetState"],
+  S6: ["ATA_ZZ_EquipmentID","ATA_ZZ_SheetStatus","ATA_ZZ_SheetState"]
+};
+function atnRebuildTidpForPackage(project, pp){
+  if(!project || !pp) return;
+  if(!project.production) project.production = (typeof normalizeProductionState === "function") ? normalizeProductionState(null) : { tidpRows: [] };
+  if(!Array.isArray(project.production.tidpRows)) project.production.tidpRows = [];
+  project.production.tidpRows = project.production.tidpRows.filter(function(r){ return String(r.ppId) !== String(pp.id); });
+  const stageId = project.currentStageId || "S3";
+  const wmm = (typeof WORKSTAGE_MATURITY_DEFAULTS !== "undefined" && WORKSTAGE_MATURITY_DEFAULTS[stageId]) ? WORKSTAGE_MATURITY_DEFAULTS[stageId] : { lod:"3", loi:"3", docs:[] };
+  const seed = (typeof DEFAULT_TIDP_SEED !== "undefined") ? DEFAULT_TIDP_SEED : [
+    { category:"AUT", activity:"Model", air:"AIR-MODEL" },
+    { category:"AUT", activity:"Coordinate", air:"AIR-COORD" },
+    { category:"VER", activity:"Verify", air:"AIR-VER" },
+    { category:"REV", activity:"Review", air:"AIR-REV" },
+    { category:"APP", activity:"Approve", air:"AIR-APP" }
+  ];
+  seed.forEach(function(s){
+    const id = (typeof nextTidpId === "function") ? nextTidpId(project) : ("TR-" + pp.id + "-" + s.activity);
+    let row = {
+      id: id, ppId: pp.id, fb: pp.fb, ss: pp.ss, workstage: stageId, ro: pp.ro,
+      category: s.category, activity: s.activity, targetLod: wmm.lod, targetLoi: wmm.loi,
+      targetDocs: (wmm.docs||[]).slice(), status: (typeof TIDP_STATUS !== "undefined" ? TIDP_STATUS.CREATED : "created"),
+      airRef: s.air
+    };
+    if(typeof normalizeTidpRow === "function") row = normalizeTidpRow(row) || row;
+    if(typeof applyFrrmToTidpRow === "function") row = applyFrrmToTidpRow(row);
+    project.production.tidpRows.push(row);
+  });
+}
+function atnMovePackageRole(project, ppId, newRo){
+  const packs = (typeof getProductionPackages === "function") ? getProductionPackages(project) : ((project.production && project.production.packages) || []);
+  const pp = packs.filter(function(p){ return String(p.id) === String(ppId); })[0];
+  if(!pp) return false;
+  const old = pp.ro;
+  if(String(old) === String(newRo)) return false;
+  pp.ro = newRo;
+  pp.roLabel = newRo;
+  atnRebuildTidpForPackage(project, pp);
+  try { if(typeof saveData === "function") saveData(typeof DATA !== "undefined" ? DATA : null); else if(typeof saveProjects === "function") saveProjects(); } catch(e){}
+  try { showToast((pp.name || pp.ss) + " moved " + old + " → " + newRo + ". TIDP rebuilt for that package."); } catch(e){}
+  return true;
+}
+function renderDpowLoinBoard(project){
+  const host = document.getElementById("dpowLoinBoard");
+  if(!host || !project) return;
+  atnEnsureFbSpatial(project);
+  const packs = ((typeof getProductionPackages === "function") ? getProductionPackages(project) : []).filter(function(p){
+    return String(p.fb||"").toUpperCase() !== "XX";
+  });
+  const roles = {};
+  packs.forEach(function(p){ const r = p.ro || "ZZ"; if(!roles[r]) roles[r] = []; roles[r].push(p); });
+  const fbs = Object.keys(project.fbSpatial||{});
+  const allLevels = ((project.midpCatalog && project.midpCatalog.levels) || []);
+  let html = '<div class="card" style="margin:12px 0;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div class="section-title">Production packages on the DPoW</div>';
+  html += '<p class="section-sub">Each card is a procured-asset system (Uniclass Ss) that federates into the model. Drag a package onto another task team to move scope — TIDP rows for that package rebuild immediately. Spatial grids are per FB, not one list for the whole project.</p>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:10px;margin:10px 0;">';
+  fbs.forEach(function(fb){
+    const sel = project.fbSpatial[fb] || [];
+    html += '<div style="border:1px solid #e9d5ff;border-radius:10px;padding:8px 10px;min-width:180px;"><div style="font-weight:800;font-size:12px;">FB' + fb + ' spatial</div>';
+    allLevels.forEach(function(lv){
+      const on = sel.indexOf(lv.code) >= 0;
+      html += '<label style="display:flex;gap:6px;align-items:center;font-size:12px;margin-top:3px;"><input type="checkbox" data-fb-sp="'+fb+'" data-lv="'+lv.code+'" '+(on?"checked":"")+'> '+ (lv.code||"") + ' ' + (lv.label||"") + '</label>';
+    });
+    html += '</div>';
+  });
+  html += '</div>';
+  const stage = project.currentStageId || "S4";
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">';
+  Object.keys(roles).sort().forEach(function(ro){
+    const rule = atnLoinRule(ro, stage);
+    html += '<div class="atn-dpow-col" data-drop-ro="'+ro+'" style="background:#f7f5f6;border-radius:12px;padding:10px;min-height:120px;">';
+    html += '<div style="font-weight:800;font-size:13px;margin-bottom:4px;">'+ro+' · '+stage+'</div>';
+    html += '<div style="font-size:11px;color:#6d28d9;margin-bottom:6px;">Due now: '+(rule.due||[]).join(" · ")+'</div>';
+    html += '<div style="font-size:11px;color:#847918;margin-bottom:6px;">Mature / reuse: '+(rule.mature||[]).join(" · ") + '</div>';
+    html += '<div style="font-size:11px;color:#b5442e;margin-bottom:8px;">Not this stage: '+(rule.hold||[]).join(" · ")+'</div>';
+    roles[ro].forEach(function(p){
+      html += '<div draggable="true" data-pp-drag="'+p.id+'" class="atn-ss-card" style="background:#fff;border:1px solid #e9d5ff;border-radius:10px;padding:8px;margin-bottom:6px;cursor:grab;">';
+      html += '<div style="font-size:22px;line-height:1;">'+atnSsGlyph(p.ss,p.name)+'</div>';
+      html += '<div style="font-size:12px;font-weight:700;">'+String(p.ss||"")+'</div>';
+      html += '<div style="font-size:11px;color:#555;">'+String(p.name||p.ss||"")+' · FB'+String(p.fb||"")+'</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+  html += '</div></div>';
+  host.innerHTML = html;
+  host.querySelectorAll("[data-fb-sp]").forEach(function(cb){
+    cb.onchange = function(){
+      const fb = cb.getAttribute("data-fb-sp");
+      const lv = cb.getAttribute("data-lv");
+      const cur = project.fbSpatial[fb] || [];
+      if(cb.checked){ if(cur.indexOf(lv)<0) cur.push(lv); }
+      else project.fbSpatial[fb] = cur.filter(function(x){ return x !== lv; });
+      project.fbSpatial[fb] = project.fbSpatial[fb] || cur;
+      try { if(typeof saveProjects === "function") saveProjects(); } catch(e){}
+    };
+  });
+  host.querySelectorAll("[data-pp-drag]").forEach(function(card){
+    card.addEventListener("dragstart", function(ev){
+      ev.dataTransfer.setData("text/plain", card.getAttribute("data-pp-drag"));
+      ev.dataTransfer.effectAllowed = "move";
+    });
+  });
+  host.querySelectorAll("[data-drop-ro]").forEach(function(col){
+    col.addEventListener("dragover", function(ev){ ev.preventDefault(); col.style.outline = "2px solid #d5c427"; });
+    col.addEventListener("dragleave", function(){ col.style.outline = ""; });
+    col.addEventListener("drop", function(ev){
+      ev.preventDefault();
+      col.style.outline = "";
+      const id = ev.dataTransfer.getData("text/plain");
+      if(atnMovePackageRole(project, id, col.getAttribute("data-drop-ro"))){
+        if(typeof renderDpow === "function") renderDpow(project);
+        else renderDpowLoinBoard(project);
+        if(typeof renderProductionWbs === "function") try { renderProductionWbs(project); } catch(e){}
+      }
+    });
+  });
+}
+function atnLoinModalExtra(project, scope, stageId){
+  const role = (scope && scope.role) || "ME";
+  const rule = atnLoinRule(role, stageId);
+  const params = ATN_LOI_PARAMS[String(stageId||"S3").toUpperCase()] || ATN_LOI_PARAMS.S3;
+  const fb = String((scope && (scope.fb || scope.functional)) || "");
+  atnEnsureFbSpatial(project);
+  const spat = (fb && project.fbSpatial[fb]) || project.fbSpatial[Object.keys(project.fbSpatial)[0]] || [];
+  return '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;">'
+    + '<div style="font-weight:800;font-size:12px;">LOIN at '+String(stageId)+'</div>'
+    + '<p style="font-size:13px;margin:6px 0;"><strong>Model intent:</strong> '+rule.model+'</p>'
+    + '<p style="font-size:12px;"><strong>Due this stage</strong> — new or first issue: '+(rule.due.join(", ")||"—")+'</p>'
+    + '<p style="font-size:12px;"><strong>Mature / reuse</strong> — same container, higher LOI: '+(rule.mature.join(", ")||"—")+'</p>'
+    + '<p style="font-size:12px;"><strong>Not planned yet</strong>: '+(rule.hold.join(", ")||"—")+'</p>'
+    + '<p style="font-size:12px;"><strong>Spatial for this FB</strong> ('+(fb||"project")+'): '+(spat.join(", ")||"set on DPoW board")+'</p>'
+    + '<p style="font-size:12px;"><strong>LOI parameters (ATA_)</strong>: '+params.join(", ")+'</p>'
+    + '</div>';
+}
+(function atnWrapScopeModal(){
+  if(typeof renderScopeIrModal !== "function") return;
+  const prev = renderScopeIrModal;
+  window.renderScopeIrModal = function(project, scope){
+    prev(project, scope);
+    const body = document.querySelector("#irModalBack .ir-body");
+    if(!body || !scope) return;
+    const stageId = project.currentStageId || "S4";
+    body.insertAdjacentHTML("beforeend", atnLoinModalExtra(project, scope, stageId));
+  };
+})();
+
+
+
+/* ========== 3.40.7 Atana Multi-Agent Platform (operational in this PWA) ========== */
+const ATN_AGENT_CLASS = { A:"Inform", B:"Assign", C:"Plan", D:"Gate", E:"Mutate", F:"Handover" };
+const ATN_AGENTS = [
+  { id:"IM", name:"Information Manager Agent", purpose:"Own the information chain OIR→AIM and keep the graph honest.",
+    duties:["Maintain OIR/PIR/EIR/AIR links","Issue information gates","Escalate AIR gaps"],
+    sources:["OIR","PIR","EIR","AIR","AIM","MIDP","Graph"], graph:"ATN_CHAIN + TRACES_TO",
+    actions:["explain-gap","propose-oir-link","open-gate"], perm:"IM", hitl:"D+", class:"D" },
+  { id:"MIDP", name:"MIDP Agent", purpose:"Generate and keep the master information delivery plan.",
+    duties:["Create task teams","Create scope packages","Seed deliverables and workflows","Build RACI"],
+    sources:["DPoW","Production packages","Catalog roles","Work stages"], graph:"Package CONTAINS Deliverable",
+    actions:["generate-midp","seed-packages"], perm:"IM,PDM", hitl:"E", class:"E" },
+  { id:"TIDP", name:"TIDP Agent", purpose:"Keep each task team's delivery plan aligned to packages.",
+    duties:["Seed Model/Coordinate/Verify/Review/Approve","Rebuild TIDP when package role moves"],
+    sources:["packages","tidpRows","LOIN rules"], graph:"Package GENERATES TIDP",
+    actions:["rebuild-tidp"], perm:"TTM,TTIM", hitl:"C", class:"C" },
+  { id:"AIR", name:"AIR Agent", purpose:"Answer what information is required for an asset or system.",
+    duties:["Trace AIR→template→IDS→LOI→asset","List missing attributes"],
+    sources:["AIR","ITE","IDS","ATA_ parameters"], graph:"REQUIRES / BINDS",
+    actions:["explain-air"], perm:"any", hitl:"A", class:"A" },
+  { id:"AIM", name:"AIM Agent", purpose:"Score present vs required AIM at the stage LOI.",
+    duties:["Compute AIM%","List assets not handover-ready"],
+    sources:["AIM engine","stage LOI"], graph:"Asset TRACES_TO AIM",
+    actions:["aim-score"], perm:"IM,FM", hitl:"A", class:"A" },
+  { id:"IDS", name:"IDS Agent", purpose:"Validate information containers against IDS specs.",
+    duties:["Run IDS checks","Export fail rows"],
+    sources:["IDS","parameters","models"], graph:"Deliverable BINDS IDS",
+    actions:["ids-gaps"], perm:"TTIM,IM", hitl:"B", class:"B" },
+  { id:"COMP", name:"Compliance Agent", purpose:"Explain why a discipline is non-compliant.",
+    duties:["Missing attributes","Missing approvals","IDS failures"],
+    sources:["compliance engine","TIDP status","IDS"], graph:"BLOCKS / IMPACTS",
+    actions:["why-low"], perm:"IM,TTM", hitl:"A", class:"A" },
+  { id:"ASSET", name:"Asset Agent", purpose:"Treat each Ss package as a procured asset in the federation.",
+    duties:["Map package→asset type","Flag AIM gaps per asset"],
+    sources:["packages","AIM","Uniclass Ss"], graph:"Package → Asset",
+    actions:["asset-gaps"], perm:"FM,IM", hitl:"A", class:"A" },
+  { id:"WF", name:"Workflow Agent", purpose:"Move containers WIP→Shared→Published with gates.",
+    duties:["Propose next state","Block skip-verify"],
+    sources:["TIDP","approvals"], graph:"BLOCKS Stage 4",
+    actions:["next-gate"], perm:"PR,TTM", hitl:"D", class:"D" },
+  { id:"PM", name:"Project Manager Agent", purpose:"Surface what is blocking the current stage.",
+    duties:["Stage blockers","Team load","Package ownership"],
+    sources:["MIDP","TIDP","DPoW"], graph:"IMPACTS",
+    actions:["blockers"], perm:"PDM,PM", hitl:"A", class:"A" },
+  { id:"EX", name:"Executive Agent", purpose:"Portfolio and project health in one sentence.",
+    duties:["Health scores","Top risks","Readiness"],
+    sources:["ECC health","AIM%","gates"], graph:"health queries",
+    actions:["exec-brief"], perm:"Exec", hitl:"A", class:"A" },
+  { id:"FM", name:"Facility Manager Agent", purpose:"Operate-stage readiness and AIM completeness.",
+    duties:["Handover readiness","Missing operate attributes"],
+    sources:["AIM","OIR operate"], graph:"AIM → Ops",
+    actions:["fm-ready"], perm:"FM", hitl:"A", class:"A" },
+  { id:"TWIN", name:"Digital Twin Agent", purpose:"Parked twin strategy — AIM + sensors later.",
+    duties:["Declare twin readiness","Do not invent telemetry"],
+    sources:["AIM"], graph:"Asset → Twin (planned)",
+    actions:["twin-ready"], perm:"IM", hitl:"A", class:"A" },
+  { id:"PORT", name:"Portfolio Intelligence Agent", purpose:"Cross-project patterns when more than one project exists.",
+    duties:["Benchmark AIM%","Repeat risk types"],
+    sources:["all projects"], graph:"portfolio",
+    actions:["portfolio"], perm:"Exec", hitl:"A", class:"A" }
+];
+
+function atnAgentAudit(project, row){
+  if(!project) return;
+  if(!Array.isArray(project.atnAgentAudit)) project.atnAgentAudit = [];
+  project.atnAgentAudit.push(Object.assign({ at: new Date().toISOString() }, row));
+  if(project.atnAgentAudit.length > 80) project.atnAgentAudit = project.atnAgentAudit.slice(-80);
+}
+function atnAgentMemory(project){
+  if(!project.atnAgentMemory) project.atnAgentMemory = { lastAgent:"IM", facts:[] };
+  return project.atnAgentMemory;
+}
+function atnRouteAgent(q){
+  const s = String(q||"").toLowerCase();
+  if(/midp|pump station|generate plan|task team/.test(s)) return "MIDP";
+  if(/tidp|my team plan/.test(s)) return "TIDP";
+  if(/ahu|what information|air |required for/.test(s)) return "AIR";
+  if(/aim%|handover ready|present vs/.test(s)) return "AIM";
+  if(/ids |ids\b|validate/.test(s)) return "IDS";
+  if(/compliance|why is .* low|hvac compliance/.test(s)) return "COMP";
+  if(/asset |ss package/.test(s)) return "ASSET";
+  if(/workflow|shared|published|approve/.test(s)) return "WF";
+  if(/blocking|stage 4|programme/.test(s)) return "PM";
+  if(/portfolio|highest risk/.test(s)) return "EX";
+  if(/facility|operate|fm /.test(s)) return "FM";
+  if(/twin|sensor/.test(s)) return "TWIN";
+  if(/benchmark|across projects/.test(s)) return "PORT";
+  if(/oir|pir|eir|information manager/.test(s)) return "IM";
+  return "IM";
+}
+function atnAgentRun(project, agentId, question){
+  const agent = ATN_AGENTS.filter(function(a){ return a.id === agentId; })[0] || ATN_AGENTS[0];
+  const packs = (typeof getProductionPackages === "function" && project) ? getProductionPackages(project) : [];
+  const tidp = (project && project.production && project.production.tidpRows) || [];
+  const roles = ((project && project.midpCatalog && project.midpCatalog.roles) || []).filter(function(r){ return r.selected !== false; });
+  const aim = (typeof atnAimScore === "function" && project) ? atnAimScore(project) : null;
+  const mem = atnAgentMemory(project || {});
+  let text = "";
+  let proposals = [];
+  if(agentId === "MIDP"){
+    text = "MIDP Agent — I will not invent a new engine. I use the existing generator.\n";
+    text += "Task teams selected: " + (roles.map(function(r){ return r.code; }).join(", ") || "none") + "\n";
+    text += "Production packages: " + packs.length + "\n";
+    text += "TIDP rows: " + tidp.length + "\n";
+    text += "Proposed action: run Generate (creates packages, deliverable requirements, workflows, RACI on existing engines).";
+    proposals.push({ class:"E", label:"Generate MIDP now", action:"generate-midp" });
+  } else if(agentId === "AIR"){
+    text = "AIR Agent — required information is traced OIR→PIR→EIR→AIR→Template→IDS→LOI.\n";
+    if(typeof atnAnswer === "function"){
+      try { text += "\n" + atnAnswer(project, question || "What information is required?"); } catch(e){ text += String(e); }
+    } else {
+      text += "Ask for a system (e.g. AHU / HVAC). Missing AIR bindings show as graph REQUIRES edges.";
+    }
+  } else if(agentId === "COMP"){
+    text = "Compliance Agent — HVAC/discipline health is missing attributes, missing approvals, or IDS fails.\n";
+    const open = tidp.filter(function(r){ return String(r.status||"").toLowerCase() !== "closed"; });
+    text += "Open TIDP activities: " + open.length + " of " + tidp.length + ".\n";
+    if(typeof atnAnswer === "function"){
+      try { text += atnAnswer(project, question || "Why is compliance low?"); } catch(e){}
+    }
+  } else if(agentId === "AIM" || agentId === "FM" || agentId === "TWIN"){
+    text = agent.name + "\nAIM present/required: " + (aim && aim.pct != null ? aim.pct + "%" : "run AIM tab") + "\n";
+    text += "Stage 4 gate remains 95%. Twin agent does not invent sensor data — parked.";
+  } else if(agentId === "TIDP"){
+    text = "TIDP Agent — each package keeps Model → Coordinate → Verify → Review → Approve.\nRows: " + tidp.length;
+    proposals.push({ class:"C", label:"Rebuild TIDP from packages", action:"rebuild-tidp" });
+  } else if(agentId === "EX" || agentId === "PORT"){
+    const all = (typeof DATA !== "undefined" && DATA && DATA.projects) ? DATA.projects : (project ? [project] : []);
+    text = agent.name + " — " + all.length + " project(s) in memory.\n";
+    all.slice(0, 8).forEach(function(p){
+      const sc = (typeof atnAimScore === "function") ? atnAimScore(p) : null;
+      text += "• " + (p.name || p.code || "project") + " AIM " + (sc && sc.pct != null ? sc.pct + "%" : "—") + "\n";
+    });
+  } else if(agentId === "PM" || agentId === "WF"){
+    text = agent.name + " — current stage " + ((project && project.currentStageId) || "S3") + ".\n";
+    text += "Open verification activities: " + tidp.filter(function(r){ return /verif/i.test(r.activity||"") && String(r.status||"") !== "closed"; }).length + "\n";
+    text += "Do not skip Verify before Shared (Workflow Agent class D).";
+  } else if(agentId === "ASSET"){
+    text = "Asset Agent — " + packs.length + " Ss production packages (procured assets in the federation).\n";
+    packs.slice(0, 12).forEach(function(p){ text += "• " + (p.ss||"") + " " + (p.name||"") + " [" + (p.ro||"") + "] FB" + (p.fb||"") + "\n"; });
+  } else if(agentId === "IDS"){
+    text = "IDS Agent — specifications live on the IDS engine. Export fail rows from ITE/IDS. No write-back to ACC in this build.";
+  } else {
+    text = "Information Manager Agent — chain is OIR → PIR → EIR → AIR → Template → IR → Package → Deliverable → IDS → AIM.\n";
+    if(typeof atnAnswer === "function"){
+      try { text += atnAnswer(project, question || "What is missing?"); } catch(e){}
+    }
+  }
+  mem.lastAgent = agentId;
+  mem.facts = (mem.facts || []).concat(String(question||"").slice(0,120)).slice(-12);
+  atnAgentAudit(project, { agent: agentId, q: question, class: agent.class, mode: "propose" });
+  return { agent: agent, text: text, proposals: proposals };
+}
+function atnAgentExecute(project, action){
+  if(action === "generate-midp"){
+    try { if(typeof generate === "function") generate(); } catch(e){ return "Generate failed: " + e; }
+    try { if(typeof persistMidpToProject === "function") persistMidpToProject(); } catch(e){}
+    atnAgentAudit(project, { agent:"MIDP", action:action, class:"E", mode:"execute" });
+    return "MIDP generated on the existing engine. Open the MIDP tab.";
+  }
+  if(action === "rebuild-tidp"){
+    try { if(typeof ensureTidpRowsForProject === "function") ensureTidpRowsForProject(project, { force:true }); } catch(e){ return String(e); }
+    atnAgentAudit(project, { agent:"TIDP", action:action, class:"C", mode:"execute" });
+    return "TIDP rebuilt from production packages.";
+  }
+  return "No executor for " + action;
+}
+function renderAtnAgents(project){
+  const host = document.getElementById("atnAgentsRoot");
+  if(!host) return;
+  const mem = atnAgentMemory(project || {});
+  const hist = (project && project.atnAgentAudit) || [];
+  let html = '<div class="card" style="padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div class="section-title">Multi-agent platform</div>';
+  html += '<p class="section-sub">User → Agent → Atana engines → information. Agents do not replace OIR/PIR/EIR/AIR/AIM/IDS. Class D–F actions need Approve.</p>';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin:10px 0;">';
+  ATN_AGENTS.forEach(function(a){
+    html += '<button type="button" class="atn-step" data-ag="'+a.id+'" style="text-align:left;"><span class="atn-step-num">'+a.id+'</span><span class="atn-step-lbl">'+a.name.replace(" Agent","")+'</span></button>';
+  });
+  html += '</div>';
+  html += '<textarea id="atnAgQ" placeholder="Create a MIDP for a pump station.  /  What information is required for AHUs?  /  Why is HVAC compliance low?" style="width:100%;min-height:64px;padding:8px;border-radius:10px;border:1px solid #e9d5ff;"></textarea>';
+  html += '<div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;">';
+  html += '<button type="button" class="btn btn-gold" id="atnAgAsk">Ask orchestrator</button>';
+  html += '<span class="section-sub">Last agent: '+(mem.lastAgent||"—")+'</span></div>';
+  html += '<pre id="atnAgOut" style="white-space:pre-wrap;font-size:13px;background:#faf5ff;border-radius:10px;padding:10px;min-height:80px;"></pre>';
+  html += '<div id="atnAgProp"></div>';
+  html += '<div class="section-sub" style="margin-top:10px;">Audit (human-in-the-loop)</div>';
+  html += '<div style="font-size:12px;max-height:140px;overflow:auto;">';
+  hist.slice(-8).reverse().forEach(function(r){
+    html += '<div>'+escapeHtml((r.at||"").slice(11,19))+' · '+escapeHtml(r.agent||"")+' · '+escapeHtml(r.mode||"")+' · '+escapeHtml(r.action||r.q||"")+'</div>';
+  });
+  html += '</div></div>';
+  host.innerHTML = html;
+  host.querySelectorAll("[data-ag]").forEach(function(b){
+    b.onclick = function(){
+      const id = b.getAttribute("data-ag");
+      const q = document.getElementById("atnAgQ");
+      if(q && !q.value) q.value = ATN_AGENTS.filter(function(a){ return a.id===id; })[0].purpose;
+      const out = atnAgentRun(project, id, q && q.value);
+      paintAgentOut(project, out);
+    };
+  });
+  const ask = document.getElementById("atnAgAsk");
+  if(ask) ask.onclick = function(){
+    const q = (document.getElementById("atnAgQ")||{}).value || "";
+    const id = atnRouteAgent(q);
+    paintAgentOut(project, atnAgentRun(project, id, q));
+  };
+  function paintAgentOut(project, out){
+    const pre = document.getElementById("atnAgOut");
+    if(pre) pre.textContent = out.agent.name + " · class " + out.agent.class + " (" + ATN_AGENT_CLASS[out.agent.class] + ")\n\n" + out.text;
+    const box = document.getElementById("atnAgProp");
+    if(!box) return;
+    if(!out.proposals.length){ box.innerHTML = ""; return; }
+    box.innerHTML = out.proposals.map(function(p,i){
+      return '<div style="margin-top:8px;">Proposed <strong>'+p.label+'</strong> (class '+p.class+') '+
+        '<button type="button" class="btn btn-gold btn-xs" data-ag-run="'+p.action+'">Approve</button> '+
+        '<button type="button" class="btn btn-ghost btn-xs" data-ag-no="1">Reject</button></div>';
+    }).join("");
+    box.querySelectorAll("[data-ag-run]").forEach(function(b){
+      b.onclick = function(){
+        const msg = atnAgentExecute(project, b.getAttribute("data-ag-run"));
+        const pre = document.getElementById("atnAgOut");
+        if(pre) pre.textContent += "\n\nEXECUTED: " + msg;
+        try { if(typeof saveProjects === "function") saveProjects(); } catch(e){}
+      };
+    });
+  }
+}
+
+
+
+
+/* ========== 3.40.9 Functional Role Task Engine (DTL / PDM / IM framework) ========== */
+const ATN_ROLE_CATALOGUE = [
+  { id:"DTL", name:"Delivery Team Lead", aka:"Project Manager" },
+  { id:"PDM", name:"Project Delivery Manager", aka:"Design Manager" },
+  { id:"IM", name:"Information Manager", aka:"ISO 19650 backbone" },
+  { id:"DM", name:"Document Manager", aka:"CDE" },
+  { id:"TTM", name:"Task Team Manager", aka:"Discipline lead" },
+  { id:"TTIM", name:"Task Team Information Manager", aka:"" },
+  { id:"IA", name:"Information Author", aka:"" },
+  { id:"PR", name:"Peer Reviewer", aka:"" },
+  { id:"CM", name:"Construction Manager", aka:"" },
+  { id:"RE", name:"Resident Engineer", aka:"" }
+];
+const ATN_RW_PHASES = ["MOBILISATION","PLANNING","PRODUCTION","REVIEW","APPROVAL","ISSUE","CONSTRUCTION","HANDOVER","CLOSEOUT"];
+function atnRT(group, phase, name, stage, trigger, depends, approval){
+  return { group:group, phase:phase, name:name, stage:stage, trigger:trigger, depends:depends||[], approval:approval||null, kind:"generic" };
+}
+const ATN_ROLE_TASK_LIB = {
+  DTL: [
+    atnRT("01 Project Opportunity & Start-up","MOBILISATION","Review Appointment","S1","Opportunity",[],null),
+    atnRT("01 Project Opportunity & Start-up","MOBILISATION","Review Contract","S1","Appointment in",["Review Appointment"],null),
+    atnRT("01 Project Opportunity & Start-up","MOBILISATION","Review Scope","S1","Contract reviewed",["Review Contract"],null),
+    atnRT("01 Project Opportunity & Start-up","MOBILISATION","Confirm Budget","S1","Scope reviewed",["Review Scope"],null),
+    atnRT("01 Project Opportunity & Start-up","MOBILISATION","Confirm Programme","S1","Budget confirmed",["Confirm Budget"],null),
+    atnRT("01 Project Opportunity & Start-up","MOBILISATION","Review Risks","S1","Programme confirmed",["Confirm Programme"],null),
+    atnRT("01 Project Opportunity & Start-up","MOBILISATION","Confirm Success Criteria","S1","Risks reviewed",["Review Risks"],null),
+    atnRT("01 Project Opportunity & Start-up","MOBILISATION","Accept Project Handover","S1","Criteria confirmed",["Confirm Success Criteria"],null),
+    atnRT("01 Project Opportunity & Start-up","MOBILISATION","Create Project Governance Structure","S1","Handover accepted",["Accept Project Handover"],null),
+    atnRT("02 Mobilisation","MOBILISATION","Appoint PDM","S1","Governance exists",["Create Project Governance Structure"],null),
+    atnRT("02 Mobilisation","MOBILISATION","Appoint Information Manager","S1","PDM appointed",["Appoint PDM"],null),
+    atnRT("02 Mobilisation","MOBILISATION","Confirm Project Team","S1","IM appointed",["Appoint Information Manager"],null),
+    atnRT("02 Mobilisation","MOBILISATION","Allocate Resources","S1","Team confirmed",["Confirm Project Team"],null),
+    atnRT("02 Mobilisation","MOBILISATION","Establish Communication Structure","S1","Resources allocated",["Allocate Resources"],null),
+    atnRT("02 Mobilisation","APPROVAL","Approve Project Execution Plan","S1","Comms established",["Establish Communication Structure"],"Client"),
+    atnRT("02 Mobilisation","APPROVAL","Approve Mobilisation Readiness","S1","PEP approved",["Approve Project Execution Plan"],"Client"),
+    atnRT("03 Planning","PLANNING","Review Project Programme","S2","Mobilised",["Approve Mobilisation Readiness"],null),
+    atnRT("03 Planning","APPROVAL","Approve Delivery Strategy","S2","Programme reviewed",["Review Project Programme"],"Client"),
+    atnRT("03 Planning","PLANNING","Review Resource Plan","S2","Strategy approved",["Approve Delivery Strategy"],null),
+    atnRT("03 Planning","PLANNING","Review Risk Register","S2","Resources reviewed",["Review Resource Plan"],null),
+    atnRT("03 Planning","PLANNING","Review Commercial Constraints","S2","Risks reviewed",["Review Risk Register"],null),
+    atnRT("03 Planning","APPROVAL","Approve Project Baselines","S2","Commercial reviewed",["Review Commercial Constraints"],"Client"),
+    atnRT("04 Design Delivery Oversight","REVIEW","Review Progress Reports","S3","Production started",["Approve Project Baselines"],null),
+    atnRT("04 Design Delivery Oversight","REVIEW","Monitor Task Team Performance","S3","Reports in",["Review Progress Reports"],null),
+    atnRT("04 Design Delivery Oversight","REVIEW","Manage Escalations","S3","Issue raised",[],null),
+    atnRT("04 Design Delivery Oversight","REVIEW","Review Change Requests","S3","Change raised",[],null),
+    atnRT("04 Design Delivery Oversight","APPROVAL","Approve Stage Gate Readiness","S3","PDM gate pack",["Monitor Task Team Performance"],"Client"),
+    atnRT("04 Design Delivery Oversight","REVIEW","Manage Client Communication","S3","Ongoing",[],null),
+    atnRT("05 Construction Support","CONSTRUCTION","Monitor Construction Information Delivery","S5","S4 issued",["Approve Stage Gate Readiness"],null),
+    atnRT("05 Construction Support","CONSTRUCTION","Review Critical Risks","S5","On site",[],null),
+    atnRT("05 Construction Support","APPROVAL","Approve Major Changes","S5","Change pack",[],"Client"),
+    atnRT("05 Construction Support","CONSTRUCTION","Manage Resource Conflicts","S5","Conflict flagged",[],null),
+    atnRT("06 Handover","HANDOVER","Approve Handover Strategy","S6","AIM drafting",[],"Client"),
+    atnRT("06 Handover","HANDOVER","Review Asset Information Readiness","S6","Strategy approved",["Approve Handover Strategy"],null),
+    atnRT("06 Handover","HANDOVER","Review Final Deliverables","S6","AIM reviewed",["Review Asset Information Readiness"],null),
+    atnRT("06 Handover","APPROVAL","Approve Project Close-Out","S6","Deliverables accepted",["Review Final Deliverables"],"Client"),
+    atnRT("07 Closeout","CLOSEOUT","Lessons Learned","S6","Close-out approved",["Approve Project Close-Out"],null),
+    atnRT("07 Closeout","CLOSEOUT","Performance Review","S6","Lessons captured",["Lessons Learned"],null),
+    atnRT("07 Closeout","APPROVAL","Project Closure Approval","S6","Review done",["Performance Review"],"Client"),
+    atnRT("07 Closeout","CLOSEOUT","Archive Approval","S6","Closure approved",["Project Closure Approval"],"IM")
+  ],
+  PDM: [
+    atnRT("01 Project Mobilisation","MOBILISATION","Receive Project Handover","S1","DTL accepted project",[],null),
+    atnRT("01 Project Mobilisation","MOBILISATION","Review Contract Requirements","S1","Handover received",["Receive Project Handover"],null),
+    atnRT("01 Project Mobilisation","MOBILISATION","Review Client Requirements","S1","Contract reviewed",["Review Contract Requirements"],null),
+    atnRT("01 Project Mobilisation","MOBILISATION","Review OIR","S1","Client requirements in",["Review Client Requirements"],null),
+    atnRT("01 Project Mobilisation","MOBILISATION","Review PIR","S1","OIR reviewed",["Review OIR"],null),
+    atnRT("01 Project Mobilisation","MOBILISATION","Review EIR","S1","PIR reviewed",["Review PIR"],null),
+    atnRT("01 Project Mobilisation","PLANNING","Confirm Delivery Strategy","S1","EIR reviewed",["Review EIR"],"DTL"),
+    atnRT("01 Project Mobilisation","PLANNING","Confirm Design Strategy","S1","Delivery strategy",["Confirm Delivery Strategy"],"DTL"),
+    atnRT("01 Project Mobilisation","MOBILISATION","Establish Design Governance","S1","Design strategy",["Confirm Design Strategy"],null),
+    atnRT("02 Information Planning","PLANNING","Review MIDP","S2","IM generated MIDP",["Establish Design Governance"],null),
+    atnRT("02 Information Planning","PLANNING","Review TIDPs","S2","MIDP reviewed",["Review MIDP"],null),
+    atnRT("02 Information Planning","PLANNING","Review Information Requirements","S2","TIDPs reviewed",["Review TIDPs"],null),
+    atnRT("02 Information Planning","PLANNING","Review Scope Production Packages","S2","IRs reviewed",["Review Information Requirements"],null),
+    atnRT("02 Information Planning","PLANNING","Review Stage Deliverables","S2","Packages reviewed",["Review Scope Production Packages"],null),
+    atnRT("02 Information Planning","APPROVAL","Approve Delivery Breakdown","S2","Deliverables reviewed",["Review Stage Deliverables"],"DTL"),
+    atnRT("03 Production Planning","PLANNING","Identify Task Teams","S2","Breakdown approved",["Approve Delivery Breakdown"],null),
+    atnRT("03 Production Planning","PLANNING","Confirm Design Scope","S2","Teams identified",["Identify Task Teams"],null),
+    atnRT("03 Production Planning","PLANNING","Review Scope Packages","S2","Scope confirmed",["Confirm Design Scope"],null),
+    atnRT("03 Production Planning","APPROVAL","Approve Production Strategy","S2","Packages reviewed",["Review Scope Packages"],"DTL"),
+    atnRT("03 Production Planning","PLANNING","Confirm Production Sequencing","S2","Strategy approved",["Approve Production Strategy"],null),
+    atnRT("03 Production Planning","PLANNING","Confirm Design Programme","S2","Sequence confirmed",["Confirm Production Sequencing"],null),
+    atnRT("03 Production Planning","PLANNING","Review Dependencies","S2","Programme confirmed",["Confirm Design Programme"],null),
+    atnRT("04 Task Team Mobilisation","MOBILISATION","Appoint Task Team Managers","S2","Dependencies known",["Review Dependencies"],"DTL"),
+    atnRT("04 Task Team Mobilisation","PLANNING","Review Resource Availability","S2","TTMs appointed",["Appoint Task Team Managers"],null),
+    atnRT("04 Task Team Mobilisation","APPROVAL","Approve Production Responsibilities","S2","Resources reviewed",["Review Resource Availability"],"DTL"),
+    atnRT("04 Task Team Mobilisation","PLANNING","Review Delivery Risks","S2","Responsibilities approved",["Approve Production Responsibilities"],null),
+    atnRT("04 Task Team Mobilisation","APPROVAL","Approve Package Ownership","S2","Risks reviewed",["Review Delivery Risks"],"DTL"),
+    atnRT("05 Design Coordination","REVIEW","Review Discipline Progress","S3","Ownership approved",["Approve Package Ownership"],null),
+    atnRT("05 Design Coordination","REVIEW","Review Interface Risks","S3","Progress reviewed",["Review Discipline Progress"],null),
+    atnRT("05 Design Coordination","REVIEW","Review Scope Gaps","S3","Interfaces reviewed",["Review Interface Risks"],null),
+    atnRT("05 Design Coordination","REVIEW","Review Scope Overlaps","S3","Gaps reviewed",["Review Scope Gaps"],null),
+    atnRT("05 Design Coordination","REVIEW","Resolve Delivery Conflicts","S3","Overlaps reviewed",["Review Scope Overlaps"],null),
+    atnRT("05 Design Coordination","REVIEW","Review Package Readiness","S3","Conflicts resolved",["Resolve Delivery Conflicts"],null),
+    atnRT("06 Production Package Oversight","PRODUCTION","Monitor Package Development","S3","Packages in flight",["Review Package Readiness"],null),
+    atnRT("06 Production Package Oversight","REVIEW","Review Package Metrics","S3","Development monitored",["Monitor Package Development"],null),
+    atnRT("06 Production Package Oversight","REVIEW","Review Deliverable Quality","S3","Metrics reviewed",["Review Package Metrics"],null),
+    atnRT("06 Production Package Oversight","REVIEW","Review Information Completeness","S3","Quality reviewed",["Review Deliverable Quality"],null),
+    atnRT("06 Production Package Oversight","REVIEW","Review Compliance Dashboards","S3","Completeness reviewed",["Review Information Completeness"],null),
+    atnRT("07 Stage Gate Reviews","REVIEW","Review Stage Deliverables","S3","Compliance reviewed",["Review Compliance Dashboards"],null),
+    atnRT("07 Stage Gate Reviews","REVIEW","Review Information Readiness","S3","Deliverables reviewed",["Review Stage Deliverables"],null),
+    atnRT("07 Stage Gate Reviews","REVIEW","Review Scope Completion","S3","Readiness reviewed",["Review Information Readiness"],null),
+    atnRT("07 Stage Gate Reviews","APPROVAL","Approve Stage Gate","S3","Scope complete",["Review Scope Completion"],"DTL"),
+    atnRT("07 Stage Gate Reviews","APPROVAL","Reject Stage Gate","S3","Not ready",[],"DTL"),
+    atnRT("07 Stage Gate Reviews","ISSUE","Issue Corrective Actions","S3","Gate rejected",["Reject Stage Gate"],null),
+    atnRT("08 Issue & Release","ISSUE","Approve Design Submissions","S3","Gate approved",["Approve Stage Gate"],"DTL"),
+    atnRT("08 Issue & Release","ISSUE","Approve Information Releases","S3","Submissions approved",["Approve Design Submissions"],"IM"),
+    atnRT("08 Issue & Release","ISSUE","Approve Client Deliveries","S3","Releases approved",["Approve Information Releases"],"DTL"),
+    atnRT("08 Issue & Release","ISSUE","Approve Construction Issue Packages","S4","S4 ready",["Approve Client Deliveries"],"CM"),
+    atnRT("09 Construction Support","CONSTRUCTION","Review Design Queries","S5","On site",[],null),
+    atnRT("09 Construction Support","CONSTRUCTION","Review Site Changes","S5","Query / RFI",[],null),
+    atnRT("09 Construction Support","CONSTRUCTION","Review Design Deviations","S5","Change found",[],null),
+    atnRT("09 Construction Support","APPROVAL","Approve Revisions","S5","Deviation accepted",["Review Design Deviations"],"DTL"),
+    atnRT("10 Handover","HANDOVER","Review AIM Readiness","S6","Install complete",[],null),
+    atnRT("10 Handover","HANDOVER","Review Asset Information","S6","AIM reviewed",["Review AIM Readiness"],null),
+    atnRT("10 Handover","HANDOVER","Review Handover Deliverables","S6","Assets reviewed",["Review Asset Information"],null),
+    atnRT("10 Handover","APPROVAL","Approve Design Completion","S6","Handover pack",["Review Handover Deliverables"],"DTL")
+  ],
+  IM: [
+    atnRT("01 Information Mobilisation","MOBILISATION","Create Project Information Environment","S1","Project created",[],null),
+    atnRT("01 Information Mobilisation","MOBILISATION","Configure Project","S1","CDE exists",["Create Project Information Environment"],null),
+    atnRT("01 Information Mobilisation","MOBILISATION","Setup Functional Breakdown","S1","Project configured",["Configure Project"],null),
+    atnRT("01 Information Mobilisation","MOBILISATION","Setup Spatial Breakdown","S1","FBs selected",["Setup Functional Breakdown"],null),
+    atnRT("01 Information Mobilisation","MOBILISATION","Setup Task Teams","S1","Spatials per FB",["Setup Spatial Breakdown"],null),
+    atnRT("01 Information Mobilisation","MOBILISATION","Configure Templates","S1","Teams on",["Setup Task Teams"],null),
+    atnRT("01 Information Mobilisation","MOBILISATION","Configure Workflows","S1","Templates on",["Configure Templates"],null),
+    atnRT("02 Information Planning","PLANNING","Create MIDP","S2","Workflows on",["Configure Workflows"],null),
+    atnRT("02 Information Planning","PLANNING","Create TIDPs","S2","MIDP created",["Create MIDP"],null),
+    atnRT("02 Information Planning","PLANNING","Review Information Exchanges","S2","TIDPs created",["Create TIDPs"],null),
+    atnRT("02 Information Planning","PLANNING","Configure Information Requirements","S2","Exchanges reviewed",["Review Information Exchanges"],null),
+    atnRT("02 Information Planning","PLANNING","Configure Information Templates","S2","IRs configured",["Configure Information Requirements"],null),
+    atnRT("02 Information Planning","PLANNING","Configure Scope Production Packages","S2","Templates configured",["Configure Information Templates"],null),
+    atnRT("03 Information Governance","PLANNING","Manage Information Standards","S2","Packages configured",["Configure Scope Production Packages"],null),
+    atnRT("03 Information Governance","PLANNING","Manage Classification","S2","Standards live",["Manage Information Standards"],null),
+    atnRT("03 Information Governance","PLANNING","Manage Naming Conventions","S2","Classification live",["Manage Classification"],null),
+    atnRT("03 Information Governance","PLANNING","Manage Numbering","S2","Naming live",["Manage Naming Conventions"],null),
+    atnRT("03 Information Governance","PLANNING","Manage Metadata","S2","Numbering live",["Manage Numbering"],null),
+    atnRT("03 Information Governance","PLANNING","Manage Templates","S2","Metadata live",["Manage Metadata"],null),
+    atnRT("04 Information Production Support","PRODUCTION","Monitor Information Production","S3","Planning complete",["Manage Templates"],null),
+    atnRT("04 Information Production Support","PRODUCTION","Monitor Deliverables","S3","Production started",["Monitor Information Production"],null),
+    atnRT("04 Information Production Support","PRODUCTION","Monitor Information Completeness","S3","Deliverables moving",["Monitor Deliverables"],null),
+    atnRT("04 Information Production Support","REVIEW","Monitor Compliance","S3","Completeness watched",["Monitor Information Completeness"],null),
+    atnRT("04 Information Production Support","PRODUCTION","Monitor Workflows","S3","Compliance watched",["Monitor Compliance"],null),
+    atnRT("05 Information Validation","REVIEW","Review Metadata","S3","Containers submitted",["Monitor Workflows"],null),
+    atnRT("05 Information Validation","REVIEW","Review Information Quality","S3","Metadata reviewed",["Review Metadata"],null),
+    atnRT("05 Information Validation","REVIEW","Review Classification","S3","Quality reviewed",["Review Information Quality"],null),
+    atnRT("05 Information Validation","REVIEW","Review Compliance","S3","Classification reviewed",["Review Classification"],null),
+    atnRT("05 Information Validation","REVIEW","Review Readiness","S3","Compliance reviewed",["Review Compliance"],null),
+    atnRT("06 Information Exchange Management","ISSUE","Manage Shared Information","S3","Ready to share",["Review Readiness"],null),
+    atnRT("06 Information Exchange Management","ISSUE","Manage Published Information","S3","Shared accepted",["Manage Shared Information"],null),
+    atnRT("06 Information Exchange Management","ISSUE","Manage Information Exchanges","S3","Publish cycle",["Manage Published Information"],null),
+    atnRT("06 Information Exchange Management","ISSUE","Manage Information Registers","S3","Exchanges running",["Manage Information Exchanges"],null),
+    atnRT("07 Workflow & Approvals","APPROVAL","Monitor Workflow Status","S3","Registers live",["Manage Information Registers"],null),
+    atnRT("07 Workflow & Approvals","APPROVAL","Route Approvals","S3","Items waiting",["Monitor Workflow Status"],"PDM"),
+    atnRT("07 Workflow & Approvals","APPROVAL","Manage Escalations","S3","Overdue",[],"DTL"),
+    atnRT("07 Workflow & Approvals","APPROVAL","Manage Information State Changes","S3","Decision made",["Route Approvals"],null),
+    atnRT("08 Handover Information","HANDOVER","Review AIM","S6","S5 complete",[],null),
+    atnRT("08 Handover Information","HANDOVER","Review AIR Compliance","S6","AIM reviewed",["Review AIM"],null),
+    atnRT("08 Handover Information","HANDOVER","Review Information Completeness","S6","AIR reviewed",["Review AIR Compliance"],null),
+    atnRT("08 Handover Information","HANDOVER","Prepare Handover Package","S6","Complete enough",["Review Information Completeness"],null),
+    atnRT("08 Handover Information","CLOSEOUT","Prepare Archive Package","S6","Handover prepared",["Prepare Handover Package"],null),
+    atnRT("09 Closeout","CLOSEOUT","Archive Information","S6","Archive prepared",["Prepare Archive Package"],null),
+    atnRT("09 Closeout","CLOSEOUT","Lock Information Records","S6","Archived",["Archive Information"],null),
+    atnRT("09 Closeout","CLOSEOUT","Generate Final Registers","S6","Locked",["Lock Information Records"],null),
+    atnRT("09 Closeout","CLOSEOUT","Support Lessons Learned","S6","Registers final",["Generate Final Registers"],"DTL")
+  ]
+};
+ATN_ROLE_TASK_LIB.DM = [
+  atnRT("CDE","MOBILISATION","Open CDE project spaces","S1","IM environment",[],null),
+  atnRT("CDE","ISSUE","Move WIP → Shared → Published","S3","IM exchange",[],"IM")
+];
+ATN_ROLE_TASK_LIB.TTM = [
+  atnRT("Team","MOBILISATION","Confirm team appointment and scope","S1","DTL/PDM appointed TTM",[],null),
+  atnRT("Team","PLANNING","Build TIDP for owned packages","S2","Packages exist",[],null),
+  atnRT("Team","PRODUCTION","Produce team packages","S3","TIDP live",[],null),
+  atnRT("Team","APPROVAL","Approve team information for PDM review","S3","Verify closed",[],"PDM")
+];
+ATN_ROLE_TASK_LIB.TTIM = [ atnRT("Team IM","PRODUCTION","Check required attributes on team packages","S3","Author submitted",[],"IM") ];
+ATN_ROLE_TASK_LIB.IA = [ atnRT("Author","PRODUCTION","Capture required parameters before share","S3","Assigned",[],"PR") ];
+ATN_ROLE_TASK_LIB.PR = [ atnRT("Review","REVIEW","Reject to WIP or pass to Shared","S3","IA submitted",[],"TTM") ];
+ATN_ROLE_TASK_LIB.CM = [ atnRT("Site","CONSTRUCTION","Receive construction information issue","S5","S4 published",[],null) ];
+ATN_ROLE_TASK_LIB.RE = [ atnRT("Site","HANDOVER","Record as-built exceptions for AIM","S6","Works complete",[],"IM") ];
+
+
+
+const ATN_IDM_STAGES = [
+  { id:"ST0", ws:"S1", label:"WS0 Initiate / Mobilisation", production:false, durRole:2, durProd:0, durAppr:1 },
+  { id:"ST1", ws:"S2", label:"WS1 Plan", production:true, createPkgs:true, durRole:3, durProd:2, durAppr:1 },
+  { id:"ST2", ws:"S2", label:"WS2 Concept Production", production:true, durRole:2, durProd:8, durAppr:2 },
+  { id:"ST3", ws:"S3", label:"WS3 Coordinated Design", production:true, durRole:3, durProd:15, durAppr:3 },
+  { id:"ST4", ws:"S3", label:"WS4 Design Approval", production:false, review:true, durRole:2, durProd:0, durAppr:4 },
+  { id:"ST5", ws:"S4", label:"WS5 Issue", production:false, issue:true, durRole:1, durProd:0, durAppr:2 },
+  { id:"ST6", ws:"S5", label:"WS6 Construction Support", production:true, revise:true, durRole:2, durProd:6, durAppr:2 },
+  { id:"ST7", ws:"S6", label:"WS7 Handover", production:true, handover:true, durRole:2, durProd:5, durAppr:2 }
+];
+const ATN_PKG_LIFE = ["DEFINED","PLANNED","IN PRODUCTION","READY FOR REVIEW","READY FOR APPROVAL","APPROVED","ISSUED","AS-BUILT","HANDOVER COMPLETE","ARCHIVED"];
+const ATN_IDM_DELIVERABLES = {
+  AR: ["Plans","Elevations","Schedules","Data Sheets"],
+  ST: ["Foundations model","Member schedule","Connection notes"],
+  ME: ["Layouts","Builders Works","Calculations","Schematics"],
+  EE: ["Lighting layouts","Single-line","DB schedule"],
+  CV: ["Site layout","Setting-out","Levels"],
+  FP: ["Schematics","Coverage layouts"],
+  FD: ["Cause & effect","Device layouts"],
+  DEFAULT: ["Model","Drawing","Schedule"]
+};
+const ATN_IDM_DEPS = [
+  { stage:"ST0", before:"DTL Approve Mobilisation", after:"PDM Receive Project" },
+  { stage:"ST0", before:"PDM Delivery Strategy", after:"IM Project Setup" },
+  { stage:"ST1", before:"Scope Package Creation", after:"MIDP Generation" },
+  { stage:"ST1", before:"MIDP Approved", after:"Production Start" },
+  { stage:"ST2", before:"PDM Release Package", after:"Task Team Production" },
+  { stage:"ST3", before:"Peer Review", after:"Task Team IM Review" },
+  { stage:"ST3", before:"Task Team IM Review", after:"Task Team Manager Approval" },
+  { stage:"ST3", before:"Task Team Manager Approval", after:"PDM Approval" },
+  { stage:"ST4", before:"All Package Approvals", after:"Stage Gate Approval" },
+  { stage:"ST5", before:"PDM Issue Approval", after:"IM Publish" },
+  { stage:"ST7", before:"AIR Compliance", after:"AIM Approval" },
+  { stage:"ST7", before:"AIM Approval", after:"Project Handover" }
+];
+const ATN_GANTT_CHAIN = ["Mobilisation","Planning","Production","Peer Review","TTIM Review","TTM Approval","PDM Approval","IM Publication","Issue"];
+function atnPkgFamily(p){
+  const u = (String((p&&p.ro)||"")+" "+String((p&&p.ss)||"")+" "+String((p&&p.name)||"")).toUpperCase();
+  if(/AR|ARCH|DOOR|WALL|WINDOW/.test(u)) return "AR";
+  if(/ST|STRUCT|FOUND/.test(u)) return "ST";
+  if(/ME|HVAC|VENT|MECH/.test(u)) return "ME";
+  if(/EE|LIGHT|ELECTR|POWER/.test(u)) return "EE";
+  if(/CV|CIVIL|SITE/.test(u)) return "CV";
+  if(/FP|SPRINK/.test(u)) return "FP";
+  if(/FD|FIRE DET|ALARM/.test(u)) return "FD";
+  return (p && p.ro) || "DEFAULT";
+}
+function atnPkgStatus(p){ return (p && p.idmStatus) || "PLANNED"; }
+function atnSetPkgStatus(project, ppId, status){
+  ((project.production && project.production.packages) || []).forEach(function(p){
+    if(String(p.id)===String(ppId)) p.idmStatus = status;
+  });
+}
+function atnActiveRole(project){
+  try { if(window.__activeFuncRole) return String(window.__activeFuncRole).toUpperCase(); } catch(e){}
+  if(project && project.activeFunctionalRole) return String(project.activeFunctionalRole).toUpperCase();
+  if(typeof currentFuncRoleCode === "function") return currentFuncRoleCode(project);
+  return "IM";
+}
+function atnSetActiveRole(project, role){
+  const r = String(role||"IM").toUpperCase();
+  window.__activeFuncRole = r; window.__whoRole = r;
+  if(project) project.activeFunctionalRole = r;
+  try { if(typeof saveProjects === "function") saveProjects(); } catch(e){}
+}
+function atnEnsureRoleWorkState(project){
+  if(!project.roleWork) project.roleWork = { status:{}, plans:{} };
+  if(!project.roleWork.status) project.roleWork.status = {};
+  if(!project.idmPlan) project.idmPlan = { generatedAt:null, bars:[] };
+  return project.roleWork;
+}
+function atnSlug(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""); }
+function atnTasksForIdmStage(role, stId){
+  const all = ATN_ROLE_TASK_LIB[role] || [];
+  const map = {
+    ST0:["MOBILISATION"], ST1:["PLANNING"], ST2:["PRODUCTION"],
+    ST3:["PRODUCTION","REVIEW"], ST4:["REVIEW","APPROVAL"],
+    ST5:["ISSUE"], ST6:["CONSTRUCTION"], ST7:["HANDOVER","CLOSEOUT"]
+  };
+  return all.filter(function(t){ return (map[stId]||[]).indexOf(t.phase)>=0; });
+}
+function atnAllPacks(project){
+  return (typeof getProductionPackages === "function" && project) ? getProductionPackages(project) : [];
+}
+function atnBuildIdmPlan(project){
+  const packs = atnAllPacks(project);
+  const bars = [];
+  let cursor = 0;
+  ATN_IDM_STAGES.forEach(function(st){
+    const start = cursor;
+    const roleDur = st.durRole || 1;
+    const prodDur = st.production ? (st.durProd || 0) : 0;
+    const apprDur = st.durAppr || 1;
+    ["DTL","PDM","IM"].forEach(function(role, ri){
+      const tasks = atnTasksForIdmStage(role, st.id);
+      bars.push({ kind:"role", role:role, stage:st.id, name:role+" · "+st.label, start:start+ri*0.2, dur:roleDur, tasks:tasks.map(function(t){ return t.name; }) });
+    });
+    if(st.production && packs.length){
+      packs.forEach(function(p, pi){
+        bars.push({ kind:"package", role:p.ro||"ZZ", stage:st.id, name:(p.name||p.ss||p.id), ppId:p.id, start:start+roleDur, dur:Math.max(2, prodDur), status:atnPkgStatus(p), dels: ATN_IDM_DELIVERABLES[atnPkgFamily(p)] || ATN_IDM_DELIVERABLES.DEFAULT });
+      });
+    }
+    bars.push({ kind:"gate", role:"GATE", stage:st.id, name:"Approval / issue gate · "+st.id, start:start+roleDur+prodDur, dur:apprDur });
+    cursor = start + roleDur + prodDur + apprDur + 1;
+  });
+  project.idmPlan = { generatedAt: new Date().toISOString(), bars:bars, horizon:cursor };
+  return project.idmPlan;
+}
+function atnIdmGuidance(role, project){
+  const packs = atnAllPacks(project);
+  if(role==="PDM") return packs.slice(0,5).map(function(p){ return "Review "+(p.name||p.ss); }).concat(["Approve stage gate"]);
+  if(role==="IM") return ["MIDP / TIDP integrity", packs.length+" packages", "Publish only after PDM approval"];
+  if(role==="DTL") return ["Approve delivery strategy","Approve stage release","Review resource risk"];
+  return ["Complete next unchecked task"];
+}
+function renderAtnRoleOs(project){
+  const host = document.getElementById("atnRoleOsRoot");
+  if(!host) return;
+  const role = atnActiveRole(project);
+  atnEnsureRoleWorkState(project);
+  if(!window.__idmMode) window.__idmMode = "seat";
+  const mode = window.__idmMode;
+  const meta = (ATN_ROLE_CATALOGUE.filter(function(r){ return r.id===role; })[0]) || { name:role };
+  const plan = project.idmPlan && project.idmPlan.bars && project.idmPlan.bars.length ? project.idmPlan : atnBuildIdmPlan(project);
+  const horizon = plan.horizon || 40;
+  let html = '<div class="card" style="padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div class="section-title">Execution model</div>';
+  html += '<p class="section-sub">ROLE-driven → PRODUCTION-driven → DELIVERABLE-driven → INFORMATION-driven. Generic tasks are the skeleton. Packages are inserted between them.</p>';
+  html += '<div class="atn-stepper">';
+  ATN_ROLE_CATALOGUE.forEach(function(r){
+    html += '<button type="button" class="atn-step'+(r.id===role?' on':'')+'" data-role-os="'+r.id+'"><span class="atn-step-num">'+r.id+'</span><span class="atn-step-lbl">'+r.name+'</span></button>';
+  });
+  html += '</div>';
+  html += '<div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;">';
+  html += '<button type="button" class="btn '+(mode==="seat"?"btn-gold":"btn-ghost")+'" data-idm-mode="seat">My seat</button>';
+  html += '<button type="button" class="btn '+(mode==="programme"?"btn-gold":"btn-ghost")+'" data-idm-mode="programme">Programme WBS + Gantt</button>';
+  html += '<button type="button" class="btn btn-ghost" id="atnIdmRegen">Regenerate schedule</button></div>';
+  html += '<div style="background:#faf5ff;border-radius:10px;padding:10px;margin:8px 0;"><strong>I am the '+escapeHtml(meta.name)+'.</strong> '+atnIdmGuidance(role, project).map(escapeHtml).join(" · ")+'</div>';
+  html += '<div style="font-size:11px;margin:6px 0 10px;">Chain: '+ATN_GANTT_CHAIN.join(" → ")+'</div>';
+
+  if(mode === "programme"){
+    html += '<div style="font-weight:800;font-size:12px;margin-bottom:6px;">Programme Gantt (role duration + production duration + approval duration)</div>';
+    plan.bars.forEach(function(b){
+      const left = Math.min(88, (b.start / horizon) * 100);
+      const w = Math.max(4, (b.dur / horizon) * 100);
+      const col = b.kind==="package" ? "#d5c427" : b.kind==="gate" ? "#6d28d9" : "#3e0b3b";
+      html += '<div style="display:grid;grid-template-columns:220px 1fr;gap:8px;align-items:center;margin-bottom:3px;">';
+      html += '<div style="font-size:11px;">'+escapeHtml(b.role)+" · "+escapeHtml(b.name)+'</div>';
+      html += '<div style="height:10px;background:#f3f0f6;border-radius:6px;position:relative;"><div style="position:absolute;left:'+left+'%;width:'+w+'%;height:10px;border-radius:6px;background:'+col+';"></div></div></div>';
+    });
+    html += '<div style="font-weight:800;font-size:12px;margin:12px 0 6px;">Hard dependency rules</div>';
+    ATN_IDM_DEPS.forEach(function(d){
+      html += '<div style="font-size:12px;padding:3px 0;">'+d.stage+' · <strong>'+escapeHtml(d.before)+'</strong> BEFORE <strong>'+escapeHtml(d.after)+'</strong></div>';
+    });
+  } else {
+    ATN_IDM_STAGES.forEach(function(st){
+      const tasks = atnTasksForIdmStage(role, st.id).map(function(t,i){
+        return Object.assign({ id: role.toLowerCase()+"-"+st.id+"-"+atnSlug(t.name)+"-"+i }, t);
+      });
+      const showPkgs = st.production;
+      const packs = showPkgs ? atnAllPacks(project) : [];
+      html += '<div style="border:1px solid #e9d5ff;border-radius:12px;padding:10px;margin-bottom:10px;">';
+      html += '<div style="font-weight:800;">'+st.label+'</div>';
+      html += '<div class="section-sub">'+(st.production?"Production activities sit after the role tasks below.":(st.review?"Review only — no new production.":(st.issue?"Issue / publish.":"Setup only — no packages.")))+'</div>';
+      html += '<div style="font-size:11px;font-weight:800;margin-top:8px;">'+role+' tasks</div>';
+      tasks.forEach(function(t){
+        const done = project.roleWork.status[t.id]==="done";
+        html += '<label style="display:flex;gap:8px;margin-top:4px;font-size:13px;"><input type="checkbox" data-rw="'+t.id+'" '+(done?"checked":"")+'> '+escapeHtml(t.name)+'</label>';
+      });
+      if(showPkgs && packs.length){
+        html += '<div style="font-size:11px;font-weight:800;color:#847918;margin-top:10px;">Production activities / scope packages</div>';
+        packs.forEach(function(p){
+          const fam = atnPkgFamily(p);
+          const dels = ATN_IDM_DELIVERABLES[fam] || ATN_IDM_DELIVERABLES.DEFAULT;
+          html += '<div style="background:#fffbeb;border:1px solid #f5e6a3;border-radius:10px;padding:8px;margin-top:6px;">';
+          html += '<div style="display:flex;justify-content:space-between;gap:8px;"><strong>'+escapeHtml(p.ro||"")+' · '+escapeHtml(p.name||p.ss||"")+'</strong>';
+          html += '<select data-pkg-st="'+p.id+'" style="font-size:11px;">';
+          ATN_PKG_LIFE.forEach(function(s){ html += '<option'+(s===atnPkgStatus(p)?' selected':'')+'>'+s+'</option>'; });
+          html += '</select></div><div style="font-size:11px;margin-top:4px;">Deliverables: '+dels.join(" · ")+'</div></div>';
+        });
+      }
+      html += '</div>';
+    });
+  }
+  html += '</div>';
+  host.innerHTML = html;
+  host.querySelectorAll("[data-role-os]").forEach(function(b){
+    b.onclick = function(){ atnSetActiveRole(project, b.getAttribute("data-role-os")); renderAtnRoleOs(project); };
+  });
+  host.querySelectorAll("[data-idm-mode]").forEach(function(b){
+    b.onclick = function(){ window.__idmMode = b.getAttribute("data-idm-mode"); renderAtnRoleOs(project); };
+  });
+  const regen = document.getElementById("atnIdmRegen");
+  if(regen) regen.onclick = function(){
+    atnBuildIdmPlan(project);
+    try { if(typeof saveProjects === "function") saveProjects(); } catch(e){}
+    try { showToast("Schedule regenerated from roles + packages"); } catch(e){}
+    renderAtnRoleOs(project);
+  };
+  host.querySelectorAll("[data-rw]").forEach(function(cb){
+    cb.onchange = function(){
+      atnEnsureRoleWorkState(project);
+      project.roleWork.status[cb.getAttribute("data-rw")] = cb.checked ? "done" : "open";
+      try { if(typeof saveProjects === "function") saveProjects(); } catch(e){}
+    };
+  });
+  host.querySelectorAll("[data-pkg-st]").forEach(function(sel){
+    sel.onchange = function(){
+      atnSetPkgStatus(project, sel.getAttribute("data-pkg-st"), sel.value);
+      try { if(typeof saveProjects === "function") saveProjects(); } catch(e){}
+    };
+  });
+}
+
+
+
+/* ========== 3.40.12 Project Delivery Operating System (wraps My Role) ========== */
+const ATN_PDOS_GATES = {
+  ST0: { enter:["Appointment exists","Client requirements available"], exit:["DTL mobilisation approved","PDM and IM appointed"] },
+  ST1: { enter:["Mobilisation approved","Teams named"], exit:["Scope packages defined","MIDP approved"] },
+  ST2: { enter:["MIDP approved","Packages released"], exit:["Concept packages READY FOR REVIEW"] },
+  ST3: { enter:["Concept accepted"], exit:["Peer + TTIM + TTM + PDM approvals on packages"] },
+  ST4: { enter:["All packages READY FOR APPROVAL"], exit:["Stage gate approved"] },
+  ST5: { enter:["Stage gate approved"], exit:["IM published / registers updated"] },
+  ST6: { enter:["Construction issue published"], exit:["RFIs and revisions controlled"] },
+  ST7: { enter:["AIR compliance"], exit:["AIM approved","Archive prepared"] }
+};
+function atnPdosMetrics(project){
+  const packs = (typeof getProductionPackages === "function" && project) ? getProductionPackages(project) : [];
+  const life = typeof ATN_PKG_LIFE !== "undefined" ? ATN_PKG_LIFE : [];
+  const by = {};
+  packs.forEach(function(p){
+    const s = (p.idmStatus || "PLANNED");
+    by[s] = (by[s]||0)+1;
+  });
+  const tidp = (project.production && project.production.tidpRows) || [];
+  const openTidp = tidp.filter(function(r){ return String(r.status||"").toLowerCase() !== "closed" && String(r.status||"") !== "approved"; }).length;
+  const rw = (project.roleWork && project.roleWork.status) || {};
+  const done = Object.keys(rw).filter(function(k){ return rw[k]==="done"; }).length;
+  const aim = (typeof atnAimScore === "function") ? atnAimScore(project) : null;
+  const approved = packs.filter(function(p){ return /APPROVED|ISSUED|HANDOVER|ARCHIVED/.test(p.idmStatus||""); }).length;
+  const pkgReady = packs.length ? Math.round(100*approved/packs.length) : 0;
+  const infoReady = aim && aim.pct != null ? aim.pct : (tidp.length ? Math.round(100*(tidp.length-openTidp)/tidp.length) : 0);
+  const gateReady = Math.round((pkgReady + infoReady)/2);
+  return {
+    packs: packs.length, by: by, tidp: tidp.length, openTidp: openTidp, tasksDone: done,
+    pkgReady: pkgReady, infoReady: infoReady, gateReady: gateReady,
+    deliveryReady: Math.round((pkgReady+infoReady+gateReady)/3),
+    aimPct: aim && aim.pct != null ? aim.pct : null
+  };
+}
+function atnPdosNext(project, role){
+  const m = atnPdosMetrics(project);
+  if(role==="DTL"){
+    if(m.gateReady < 80) return "Approve only when package + information readiness clear the gate. Current gate readiness "+m.gateReady+"%.";
+    return "Approve stage release and watch resource risk.";
+  }
+  if(role==="PDM"){
+    if(!m.packs) return "Define and release scope packages before production starts.";
+    if(m.pkgReady < 50) return "Review packages still short of APPROVED. "+m.packs+" packages in play.";
+    return "Coordinate interfaces and prepare the stage-gate pack for DTL.";
+  }
+  if(role==="IM"){
+    if(m.openTidp) return m.openTidp+" TIDP activities still open. Do not publish ahead of PDM approval.";
+    return "Keep registers current and prepare the exchange / archive pack.";
+  }
+  return "Switch to DTL, PDM or IM to see the next mandated action.";
+}
+function atnPdosPaint(project){
+  const host = document.getElementById("atnRoleOsRoot");
+  if(!host) return;
+  const role = (typeof atnActiveRole === "function") ? atnActiveRole(project) : "IM";
+  const m = atnPdosMetrics(project);
+  const pane = document.getElementById("atnPdosPane") || (function(){
+    const d = document.createElement("div");
+    d.id = "atnPdosPane";
+    host.appendChild(d);
+    return d;
+  })();
+  let html = '<div class="card" style="margin-top:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div class="section-title">Project delivery operating system</div>';
+  html += '<p class="section-sub">Controls + guidance on top of the role / production plan. Engines underneath are unchanged.</p>';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;">';
+  [["Packages", m.packs],["Pkg ready", m.pkgReady+"%"],["Info ready", m.infoReady+"%"],["Gate ready", m.gateReady+"%"],["Delivery ready", m.deliveryReady+"%"],["Open TIDP", m.openTidp],["Tasks done", m.tasksDone],["AIM", m.aimPct!=null?m.aimPct+"%":"—"]].forEach(function(c){
+    html += '<div style="background:#faf5ff;border-radius:10px;padding:8px;text-align:center;"><div style="font-size:11px;color:#666;">'+c[0]+'</div><div style="font-size:18px;font-weight:800;color:#3e0b3b;">'+c[1]+'</div></div>';
+  });
+  html += '</div>';
+  html += '<div style="margin-top:10px;padding:10px;background:#fffbeb;border-radius:10px;font-size:13px;"><strong>Next action ('+role+'):</strong> '+atnPdosNext(project, role)+'</div>';
+  html += '<div style="font-weight:800;font-size:12px;margin:12px 0 6px;">Stage entry / exit</div>';
+  (typeof ATN_IDM_STAGES !== "undefined" ? ATN_IDM_STAGES : []).forEach(function(st){
+    const g = ATN_PDOS_GATES[st.id] || { enter:[], exit:[] };
+    html += '<div style="font-size:12px;padding:6px 0;border-bottom:1px solid #f3f0f6;"><strong>'+st.label+'</strong><br>Enter: '+g.enter.join("; ")+'<br>Exit: '+g.exit.join("; ")+'</div>';
+  });
+  html += '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">';
+  html += '<button type="button" class="btn btn-gold" id="atnPdosCmd">Open Command Center</button>';
+  html += '<button type="button" class="btn btn-ghost" id="atnPdosMidp">Open MIDP</button>';
+  html += '</div></div>';
+  pane.innerHTML = html;
+  const c = document.getElementById("atnPdosCmd");
+  if(c) c.onclick = function(){
+    const btn = document.querySelector('#wsSegmented [data-wsview="ecc"]');
+    if(btn) btn.click();
+  };
+  const midp = document.getElementById("atnPdosMidp");
+  if(midp) midp.onclick = function(){
+    const btn = document.querySelector('#wsSegmented [data-wsview="midp"]');
+    if(btn) btn.click();
+  };
+}
+(function atnWrapRoleOs(){
+  if(typeof renderAtnRoleOs !== "function" || renderAtnRoleOs.__pdosWrapped) return;
+  const prev = renderAtnRoleOs;
+  const wrapped = function(project){
+    prev(project);
+    try { atnPdosPaint(project); } catch(e){ console.error(e); }
+  };
+  wrapped.__pdosWrapped = true;
+  renderAtnRoleOs = wrapped;
+})();
+
+
+
+/* ========== 3.40.13 Dependency-driven scheduling engine ========== */
+const ATN_DEP = { FS:"FS", SS:"SS", FF:"FF", GATE:"GATE" };
+function atnS(id, name, role, stage, type, preds, trigger, inputs, outputs){
+  return { id:id, name:name, role:role, stage:stage, type:type||ATN_DEP.FS, preds:preds||[], trigger:trigger||null, inputs:inputs||[], outputs:outputs||[], kind:"role" };
+}
+const ATN_SCHED_LIB = [
+  atnS("DTL-001","Accept Project Handover","DTL","ST0",ATN_DEP.FS,[],null,[],["Handover accepted"]),
+  atnS("DTL-002","Approve Mobilisation","DTL","ST0",ATN_DEP.FS,["DTL-001"],null,["Handover accepted"],["Mobilisation approved"]),
+  atnS("DTL-101","Approve Project Governance","DTL","ST1",ATN_DEP.FS,["PDM-003","IM-001"],null,["Delivery strategy","Project configured"],["Governance approved"]),
+  atnS("DTL-102","Approve Baseline Programme","DTL","ST1",ATN_DEP.FS,["PDM-103","IM-101"],null,["Production plan","MIDP draft"],["Baseline approved"]),
+  atnS("DTL-103","Approve Resource Plan","DTL","ST1",ATN_DEP.FS,["PDM-102"],null,["Package owners"],["Resource plan approved"]),
+  atnS("DTL-GATE","DTL Stage Gate Approval","DTL","ST4",ATN_DEP.GATE,["PDM-303","IM-303"],"All package approvals",["PDM recommendation","IM compliance"],["Stage gate"]),
+  atnS("PDM-001","Receive Project","PDM","ST0",ATN_DEP.FS,["DTL-002"],null,["Mobilisation approved"],["Project received"]),
+  atnS("PDM-002","Review Requirements","PDM","ST0",ATN_DEP.FS,["PDM-001"],null,["Contract","OIR","PIR","EIR"],["Requirements reviewed"]),
+  atnS("PDM-003","Create Delivery Strategy","PDM","ST0",ATN_DEP.FS,["PDM-002"],null,["Requirements reviewed"],["Delivery strategy"]),
+  atnS("PDM-101","Create Scope Packages","PDM","ST1",ATN_DEP.FS,["PDM-003"],null,["Delivery strategy"],["Scope Package Register"]),
+  atnS("PDM-102","Assign Package Ownership","PDM","ST1",ATN_DEP.FS,["PDM-101"],null,["Register"],["Package owners"]),
+  atnS("PDM-103","Create Production Plan","PDM","ST1",ATN_DEP.FS,["PDM-102"],null,["Owners"],["Production programme"]),
+  atnS("PDM-104","Release Package For Production","PDM","ST1",ATN_DEP.FS,["IM-104","PDM-103"],null,["MIDP approved","Production plan"],["Packages released"]),
+  atnS("PDM-201","Monitor Package Progress","PDM","ST2",ATN_DEP.SS,["PKG-PRODUCE"],null,[],[]),
+  atnS("PDM-202","Coordinate Design Interfaces","PDM","ST2",ATN_DEP.SS,["PKG-PRODUCE"],null,[],[]),
+  atnS("PDM-203","Resolve Coordination Issues","PDM","ST3",ATN_DEP.FS,[], "Design clash / late deliverable / missing information",[],["Issue closed"]),
+  atnS("PDM-301","Review Package Readiness","PDM","ST3",ATN_DEP.FS,["PKG-TTM"],null,["TTM approval"],["Readiness reviewed"]),
+  atnS("PDM-302","Approve Package","PDM","ST3",ATN_DEP.FS,["PDM-301"],null,["Readiness"],["Package approved"]),
+  atnS("PDM-303","Recommend Stage Gate","PDM","ST4",ATN_DEP.FS,["PDM-302"],null,["All package approvals"],["Gate recommendation"]),
+  atnS("IM-001","Configure Project","IM","ST0",ATN_DEP.FS,["DTL-002"],null,["Mobilisation approved"],["Project configured"]),
+  atnS("IM-002","Create Project Structures","IM","ST0",ATN_DEP.FS,["IM-001"],null,[],["FB","Spatial per FB","Task teams"]),
+  atnS("IM-003","Configure Standards","IM","ST0",ATN_DEP.FS,["IM-002"],null,["Structures"],["Standards live"]),
+  atnS("IM-101","Create MIDP","IM","ST1",ATN_DEP.FS,["PDM-101"],null,["Scope packages"],["MIDP draft"]),
+  atnS("IM-102","Create TIDPs","IM","ST1",ATN_DEP.FS,["IM-101"],null,["MIDP draft"],["TIDPs"]),
+  atnS("IM-103","Configure Workflows","IM","ST1",ATN_DEP.SS,["IM-101"],null,[],["Workflows"]),
+  atnS("IM-104","MIDP Approval","IM","ST1",ATN_DEP.FS,["IM-101"],null,["MIDP complete"],["MIDP approved"]),
+  atnS("IM-201","Monitor Information Production","IM","ST2",ATN_DEP.SS,["PKG-PRODUCE"],null,[],[]),
+  atnS("IM-202","Monitor Compliance","IM","ST2",ATN_DEP.SS,["PKG-PRODUCE"],null,[],[]),
+  atnS("IM-301","Review Metadata","IM","ST3",ATN_DEP.FS,["PKG-PEER"],null,["Peer complete"],["Metadata reviewed"]),
+  atnS("IM-302","Validate Information","IM","ST3",ATN_DEP.FS,["PKG-TTIM"],null,["TTIM review"],["Information validated"]),
+  atnS("IM-303","Validate Readiness","IM","ST4",ATN_DEP.FS,["PDM-302"],null,["Package approval"],["Compliance confirmation"]),
+  atnS("IM-401","Publish Information","IM","ST5",ATN_DEP.FS,["PDM-302"],null,["PDM approval"],["Published"]),
+  atnS("IM-402","Update Registers","IM","ST5",ATN_DEP.FS,["IM-401"],null,["Published"],["Registers"]),
+  atnS("IM-403","Issue Information Containers","IM","ST5",ATN_DEP.FS,["IM-401"],null,["Publication"],["Containers issued"]),
+  atnS("IM-501","Validate AIR","IM","ST7",ATN_DEP.FS,["PDM-302"],null,["Final package approval"],["AIR valid"]),
+  atnS("IM-502","Validate AIM","IM","ST7",ATN_DEP.FS,["IM-501"],null,["AIR valid"],["AIM valid"]),
+  atnS("IM-503","Create Archive","IM","ST7",ATN_DEP.FS,["DTL-GATE"],null,["Handover"],["Archive"])
+];
+const ATN_PKG_CHAIN = [
+  { id:"PKG-PLAN", name:"Plan Package", type:ATN_DEP.FS, preds:["PDM-104"], dur:1 },
+  { id:"PKG-REL", name:"Release Package", type:ATN_DEP.FS, preds:["PKG-PLAN"], dur:1 },
+  { id:"PKG-PRODUCE", name:"Produce Package", type:ATN_DEP.FS, preds:["PKG-REL"], dur:8 },
+  { id:"PKG-PEER", name:"Peer Review", type:ATN_DEP.FS, preds:["PKG-PRODUCE"], dur:2 },
+  { id:"PKG-TTIM", name:"TTIM Review", type:ATN_DEP.FS, preds:["PKG-PEER"], dur:1 },
+  { id:"PKG-TTM", name:"TTM Approval", type:ATN_DEP.FS, preds:["PKG-TTIM"], dur:1 },
+  { id:"PKG-PDM", name:"PDM Approval", type:ATN_DEP.FS, preds:["PKG-TTM","PDM-301"], dur:2 },
+  { id:"PKG-IM", name:"IM Publication", type:ATN_DEP.FS, preds:["PKG-PDM","IM-401"], dur:1 },
+  { id:"PKG-GATE", name:"Stage Gate", type:ATN_DEP.GATE, preds:["PKG-PDM","DTL-GATE"], dur:1 },
+  { id:"PKG-ISSUE", name:"Issue", type:ATN_DEP.FS, preds:["PKG-IM"], dur:1 },
+  { id:"PKG-HO", name:"Handover", type:ATN_DEP.FS, preds:["PKG-ISSUE","IM-502"], dur:2 }
+];
+const ATN_CRITICAL = ["DTL-002","PDM-003","IM-104","PDM-104","PKG-PRODUCE","PKG-PEER","PKG-TTIM","PKG-TTM","PKG-PDM","PKG-IM","DTL-GATE","PKG-ISSUE"];
+function atnSchedForward(nodes){
+  const map = {};
+  nodes.forEach(function(n){ map[n.uid] = n; n.es = 0; n.ef = n.dur||1; });
+  let pass = 0;
+  while(pass < 12){
+    let moved = false;
+    nodes.forEach(function(n){
+      let es = 0;
+      (n.preds||[]).forEach(function(pid){
+        const hits = nodes.filter(function(x){ return x.id===pid || x.uid===pid; });
+        hits.forEach(function(p){
+          const t = n.type || ATN_DEP.FS;
+          if(t===ATN_DEP.SS) es = Math.max(es, p.es||0);
+          else if(t===ATN_DEP.FF) es = Math.max(es, (p.ef||0) - (n.dur||1));
+          else es = Math.max(es, p.ef||0);
+        });
+      });
+      if(es > (n.es||0)){ n.es = es; n.ef = es + (n.dur||1); moved = true; }
+    });
+    if(!moved) break;
+    pass++;
+  }
+  return nodes;
+}
+function atnBuildSched(project){
+  const nodes = [];
+  ATN_SCHED_LIB.forEach(function(t){
+    nodes.push({ uid:t.id, id:t.id, name:t.name, role:t.role, stage:t.stage, type:t.type, preds:t.preds.slice(), dur: t.stage==="ST3"?3:2, kind:"role", critical: ATN_CRITICAL.indexOf(t.id)>=0, inputs:t.inputs, outputs:t.outputs, trigger:t.trigger });
+  });
+  const packs = (typeof getProductionPackages === "function" && project) ? getProductionPackages(project) : [];
+  packs.forEach(function(p){
+    ATN_PKG_CHAIN.forEach(function(step){
+      const uid = p.id+"-"+step.id;
+      const preds = step.preds.map(function(pr){
+        if(pr.indexOf("PKG-")===0) return p.id+"-"+pr;
+        return pr;
+      });
+      nodes.push({ uid:uid, id:step.id, name:(p.name||p.ss||p.id)+" · "+step.name, role:p.ro||"PKG", stage:"PKG", type:step.type, preds:preds, dur:step.dur, kind:"package", ppId:p.id, critical: ATN_CRITICAL.indexOf(step.id)>=0 });
+    });
+  });
+  return atnSchedForward(nodes);
+}
+function renderAtnSchedule(project){
+  const host = document.getElementById("atnSchedRoot");
+  if(!host) return;
+  const role = (typeof atnActiveRole === "function") ? atnActiveRole(project) : "IM";
+  const nodes = atnBuildSched(project);
+  const mine = nodes.filter(function(n){ return n.role===role || n.kind==="package"; });
+  const maxEf = nodes.reduce(function(m,n){ return Math.max(m, n.ef||0); }, 1);
+  let html = '<div class="card" style="margin-top:12px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
+  html += '<div class="section-title">Dependency schedule</div>';
+  html += '<p class="section-sub">FS / SS / FF / GATE. Default critical path: DTL mobilisation → PDM strategy → IM MIDP → package release → produce → peer → TTIM → TTM → PDM → IM publish → gate → issue. Packages insert on that path.</p>';
+  html += '<div style="font-size:12px;margin-bottom:8px;">Showing <strong>'+role+'</strong> role tasks + all package chains. Horizon '+maxEf+' units.</div>';
+  mine.forEach(function(n){
+    const left = Math.min(90, ((n.es||0)/maxEf)*100);
+    const w = Math.max(3, ((n.dur||1)/maxEf)*100);
+    const col = n.critical ? "#b5442e" : (n.kind==="package" ? "#d5c427" : "#3e0b3b");
+    html += '<div style="display:grid;grid-template-columns:280px 1fr;gap:8px;align-items:center;margin-bottom:3px;">';
+    html += '<div style="font-size:11px;"><span class="mono">'+escapeHtml(n.uid)+'</span> '+escapeHtml(n.name)+' <span style="color:#888;">'+n.type+(n.preds&&n.preds.length?" ← "+n.preds.join(","):"")+'</span></div>';
+    html += '<div style="height:10px;background:#f3f0f6;border-radius:6px;position:relative;"><div title="ES '+n.es+' EF '+n.ef+'" style="position:absolute;left:'+left+'%;width:'+w+'%;height:10px;border-radius:6px;background:'+col+';"></div></div></div>';
+  });
+  html += '<p class="section-sub">Red = default critical path. Gold = package-specific. Purple = other role tasks for this seat. No production before DTL-002. No publish before PDM-302.</p></div>';
+  host.innerHTML = html;
+}
+(function atnHookSched(){
+  const hostParent = function(){
+    const os = document.getElementById("atnRoleOsRoot");
+    if(!os) return;
+    if(!document.getElementById("atnSchedRoot")){
+      const d = document.createElement("div");
+      d.id = "atnSchedRoot";
+      os.appendChild(d);
+    }
+  };
+  const prev = typeof renderAtnRoleOs === "function" ? renderAtnRoleOs : null;
+  if(!prev || prev.__schedWrapped) return;
+  const wrapped = function(project){
+    prev(project);
+    try { hostParent(); renderAtnSchedule(project); } catch(e){ console.error(e); }
+  };
+  wrapped.__pdosWrapped = prev.__pdosWrapped;
+  wrapped.__schedWrapped = true;
+  renderAtnRoleOs = wrapped;
+})();
 
 </script>
 </body>
