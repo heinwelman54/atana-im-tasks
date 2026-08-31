@@ -1,15 +1,15 @@
 # Repo output
 
-**App version: 3.40.14**
+**App version: 3.40.15**
 **Pages file:** app.html
-Open app.html?v=3414 after push. Badge **v3.40.14**.
+Open app.html?v=3415 after push. Badge **v3.40.15**.
 
 ## What changed on the app
 
 | Change | Where |
 |---|---|
-| Framework v1.0 task libraries (DTL 46, PDM 47, IM 46) with IDs, entry/exit, deps | **My Role** stage lists now show e.g. PDM-101 Create scope packages |
-| Operating manuals | docs/framework/DTL-OPERATING-MANUAL.md (and PDM, IM) |
-| Combined JSON | role-tasks/ATANA-FRAMEWORK-v1.json |
+| Classified task codes (PM_04_015 / DM_05_001 / IM_03_002) on My Role lists | **My Role** |
+| Master catalogue JSON | role-tasks/ATANA-MASTER-CATALOGUE-v1.json |
+| Excel import/export (ROLE_TASKS, DEPENDENCIES, SCOPE_PACKAGE_LINKS, ROLES, TASK_CATEGORIES) | role-tasks/ATANA-MASTER-CATALOGUE-v1.xlsx |
 
-This is the MVP core for tomorrow’s PDM / DTL / IM mobilisation.
+PackageInteraction on every task: NONE/PLAN/CREATE/ASSIGN/REVIEW/APPROVE/PUBLISH/MONITOR/CLOSE.
