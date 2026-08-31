@@ -1477,6 +1477,18 @@
   .role-pill{display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:6px;background:#ede9fe;color:#3e0b3b;}
   .role-pill.ghost{background:#e5e7eb;color:#6b7280;}
   .role-pill.zz{background:#fef3c7;color:#92400e;}
+
+  #wsSegmented{flex-wrap:wrap;border-radius:16px;gap:4px;}
+  #wsSegmented button{flex:0 0 auto;min-height:44px;padding:9px 12px;}
+  .atn-grid{display:grid;gap:10px;}
+  .atn-2{grid-template-columns:1fr;}
+  @media(min-width:720px){.atn-2{grid-template-columns:1fr 1fr;}}
+  .atn-pin{min-height:44px;border:0;border-radius:999px;padding:0 14px;background:var(--slate-100);color:var(--ink);font-weight:700;cursor:pointer;}
+  .atn-pin.on{background:var(--purple-900);color:#fff;}
+  .atn-ask{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+  .atn-ask input{flex:1;min-width:180px;min-height:44px;border:1px solid var(--slate-300);border-radius:10px;padding:0 12px;font:inherit;}
+  .atn-trace{font-family:var(--mono);font-size:12px;line-height:1.55;white-space:pre-wrap;}
+  .atn-bar{height:8px;background:var(--slate-100);border-radius:99px;overflow:hidden;margin-top:8px;}
 </style>
 <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js" crossorigin="anonymous"></script>
 </head>
@@ -1979,6 +1991,12 @@
         <button data-wsview="method">How Atana Works</button>
         <button data-wsview="dpow">DPoW</button>
         <button data-wsview="midp">MIDP</button>
+        <button data-wsview="ite">ITE</button>
+        <button data-wsview="air">AIR</button>
+        <button data-wsview="aim">AIM</button>
+        <button data-wsview="graph">Graph</button>
+        <button data-wsview="decide">Decide</button>
+        <button data-wsview="ecc">Command</button>
         <button data-wsview="prjtools">Tools</button>
         <button data-wsview="prjdocs">Documents</button>
         <button data-wsview="models">Models</button>
@@ -2297,6 +2315,48 @@
         </div>
       </div>
 
+      <div class="ws-view" id="wsview-ite">
+        <div class="card" style="margin-bottom:12px;">
+          <div class="chart-card-title">Information templates</div>
+          <p class="section-sub" style="margin:0;">Templates, attributes and LOI.</p>
+        </div>
+        <div id="atnIteRoot"></div>
+      </div>
+      <div class="ws-view" id="wsview-air">
+        <div class="card" style="margin-bottom:12px;">
+          <div class="chart-card-title">AIR builder</div>
+          <p class="section-sub" style="margin:0;">Asset information requirements. Export IDS JSON or CSV.</p>
+        </div>
+        <div id="atnAirRoot"></div>
+      </div>
+      <div class="ws-view" id="wsview-aim">
+        <div class="card" style="margin-bottom:12px;">
+          <div class="chart-card-title">AIM</div>
+          <p class="section-sub" style="margin:0;">Present vs required. Stage 4 gate 95%.</p>
+        </div>
+        <div id="atnAimRoot"></div>
+      </div>
+      <div class="ws-view" id="wsview-graph">
+        <div class="card" style="margin-bottom:12px;">
+          <div class="chart-card-title">Knowledge graph</div>
+          <p class="section-sub" style="margin:0;">Trace, impact, ask, queries, dashboards, schema.</p>
+        </div>
+        <div id="atnGraphRoot"></div>
+      </div>
+      <div class="ws-view" id="wsview-decide">
+        <div class="card" style="margin-bottom:12px;">
+          <div class="chart-card-title">Decision intelligence</div>
+          <p class="section-sub" style="margin:0;">Health, risk, recovery and Copilot.</p>
+        </div>
+        <div id="atnDecideRoot"></div>
+      </div>
+      <div class="ws-view" id="wsview-ecc">
+        <div class="card" style="margin-bottom:12px;">
+          <div class="chart-card-title">Executive command center</div>
+          <p class="section-sub" style="margin:0;">Single strip of truth from AIM present/required and the graph.</p>
+        </div>
+        <div id="atnEccRoot"></div>
+      </div>
       <div class="ws-view" id="wsview-models">
         <div class="section-title" style="margin-bottom:6px;">Model viewer</div>
         <p class="section-sub">Pick a task team and a functional breakdown — the matching WIP model opens automatically. Ss packages on the Production WBS show whether a model exists; click a package to pop out and isolate that Ss.</p>
@@ -2473,8 +2533,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.40.2";
-const APP_BUILD = "2026-08-31-aim-spec";
+const APP_VERSION = "3.40.3";
+const APP_BUILD = "2026-08-31-ecc-on-apphtml";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -22068,6 +22128,12 @@ function setActiveWsView(view){
       try { renderMidpTool(project); }
       catch(err){ console.error("renderMidpTool", err); showToast("MIDP view error: " + (err.message||err)); }
     }
+    if(main === "ite" && typeof renderAtnIte === "function") renderAtnIte(project);
+    if(main === "air" && typeof renderAtnAir === "function") renderAtnAir(project);
+    if(main === "aim" && typeof renderAtnAim === "function") renderAtnAim(project);
+    if(main === "graph" && typeof renderAtnGraph === "function") renderAtnGraph(project);
+    if(main === "decide" && typeof renderAtnDecide === "function") renderAtnDecide(project);
+    if(main === "ecc" && typeof renderAtnEcc === "function") renderAtnEcc(project);
     if(main === "prjtools" && typeof bindProjectTools === "function") bindProjectTools(project);
     if(main === "prjdocs" && typeof bindProjectDocs === "function") bindProjectDocs(project);
     if(main === "models" && typeof renderModelsViewer === "function") renderModelsViewer(project);
@@ -30995,6 +31061,547 @@ document.getElementById('assetNamingClose') && document.getElementById('assetNam
   const host = document.getElementById('toolsAssetNamingHost');
   if(host) host.style.display = 'none';
 });
+
+
+
+
+/* ========== Copilot engines 2026-08-31: ITE / AIR / AIM / Graph / Decide ========== */
+const ATN_GATE = 95;
+const ATN_TEMPLATES = [
+  {id:"door", name:"Door", ifc:"IfcDoor", revit:"Doors", uniclass:"Pr_30_59_24", attrs:[
+    {id:"fire", name:"Fire Rating", loi:2, unit:"min", req:true},
+    {id:"width", name:"Clear Width", loi:2, unit:"mm", req:true},
+    {id:"hand", name:"Handing", loi:3, unit:"", req:true},
+    {id:"iron", name:"Ironmongery Set", loi:4, unit:"", req:true},
+    {id:"maint", name:"Maintenance Regime", loi:5, unit:"", req:false}
+  ]},
+  {id:"window", name:"Window", ifc:"IfcWindow", revit:"Windows", uniclass:"Pr_30_59_94", attrs:[
+    {id:"uval", name:"U-Value", loi:2, unit:"W/m2K", req:true},
+    {id:"gval", name:"g-Value", loi:3, unit:"", req:true},
+    {id:"sec", name:"Security Rating", loi:4, unit:"", req:true}
+  ]},
+  {id:"pump", name:"Pump", ifc:"IfcPump", revit:"Mechanical Equipment", uniclass:"Pr_65_53_30", attrs:[
+    {id:"flow", name:"Duty Flow", loi:2, unit:"l/s", req:true},
+    {id:"head", name:"Duty Head", loi:2, unit:"kPa", req:true},
+    {id:"nplus", name:"N+1 Redundancy", loi:4, unit:"", req:true}
+  ]},
+  {id:"ahu", name:"AHU", ifc:"IfcUnitaryEquipment", revit:"Mechanical Equipment", uniclass:"Pr_70_65_03", attrs:[
+    {id:"sa", name:"Supply Airflow", loi:2, unit:"l/s", req:true},
+    {id:"filt", name:"Filter Class", loi:3, unit:"", req:true},
+    {id:"hvac", name:"HVAC Control Strategy", loi:4, unit:"", req:true}
+  ]},
+  {id:"cctv", name:"CCTV Camera", ifc:"IfcAudioVisualAppliance", revit:"Electrical Fixtures", uniclass:"Pr_75_75_17", attrs:[
+    {id:"res", name:"Resolution", loi:2, unit:"", req:true},
+    {id:"cov", name:"Coverage Zone", loi:3, unit:"", req:true}
+  ]},
+  {id:"det", name:"Detector", ifc:"IfcSensor", revit:"Fire Alarm Devices", uniclass:"Pr_75_50_76", attrs:[
+    {id:"type", name:"Detector Type", loi:2, unit:"", req:true},
+    {id:"loop", name:"Loop Address", loi:4, unit:"", req:true}
+  ]}
+];
+const ATN_ASSETS = [
+  {id:"d1", type:"door", name:"D-01 Reception"},
+  {id:"d2", type:"door", name:"D-02 Comms"},
+  {id:"d3", type:"door", name:"D-03 Stair A"},
+  {id:"w1", type:"window", name:"W-14 West"},
+  {id:"p1", type:"pump", name:"P-01 Duty"},
+  {id:"a1", type:"ahu", name:"AHU-01 L1"}
+];
+const ATN_CHAIN = [
+  {id:"org", kind:"Organisation", label:"Atana / appointing party"},
+  {id:"proj", kind:"Project", label:"FB01 Administration"},
+  {id:"fb", kind:"Functional Breakdown", label:"FB01 Administration"},
+  {id:"sl", kind:"Spatial Breakdown", label:"SL_90_10 Reception / Comms / Stair A"},
+  {id:"stage4", kind:"Work Stage", label:"Stage 4 — Technical design"},
+  {id:"tt-arch", kind:"Task Team", label:"Architecture task team"},
+  {id:"tt-mep", kind:"Task Team", label:"MEP task team"},
+  {id:"role-im", kind:"Role", label:"Information Manager"},
+  {id:"role-ia", kind:"Role", label:"Information Author"},
+  {id:"oir", kind:"OIR", label:"OIR — operate a safe building"},
+  {id:"pir", kind:"PIR", label:"PIR — fire compartmentation known at handover"},
+  {id:"eir", kind:"EIR", label:"EIR — fire-rated openings scheduled at Stage 4"},
+  {id:"hvac", kind:"EIR", label:"EIR — HVAC strategy at Stage 4"},
+  {id:"air", kind:"AIR", label:"AIR — Fire Rating on every door instance"},
+  {id:"air-hvac", kind:"AIR", label:"AIR — HVAC Control Strategy on every AHU"},
+  {id:"ir-door", kind:"Information Requirement", label:"IR — Door LOI 4 schedule"},
+  {id:"tpl-door", kind:"Information Template", label:"Template — Door"},
+  {id:"tpl-ahu", kind:"Information Template", label:"Template — AHU"},
+  {id:"attr-fire", kind:"Attribute", label:"Fire Rating"},
+  {id:"attr-hvac", kind:"Attribute", label:"HVAC Control Strategy"},
+  {id:"pset", kind:"IFC Property Set", label:"Pset_DoorCommon.FireRating"},
+  {id:"revit", kind:"Revit Parameter", label:"Fire Rating (ATA_ZZ)"},
+  {id:"ss-door", kind:"Uniclass SS", label:"Ss_25_30_20 Doorsets"},
+  {id:"spp-door", kind:"Scope Production Package", label:"Package — Doors"},
+  {id:"spp-ahu", kind:"Scope Production Package", label:"Package — AHU"},
+  {id:"del-door", kind:"Deliverable", label:"Door schedule S4"},
+  {id:"ids-door", kind:"IDS", label:"IDS — Door Fire Rating required"},
+  {id:"aim", kind:"AIM", label:"AIM — FB01 asset set"},
+  {id:"aim-d1", kind:"Asset", label:"D-01 Reception"},
+  {id:"aim-d2", kind:"Asset", label:"D-02 Comms"},
+  {id:"aim-a1", kind:"Asset", label:"AHU-01 L1"},
+  {id:"sys-fire", kind:"System", label:"Fire compartmentation"},
+  {id:"twin", kind:"Digital Twin Entity", label:"Twin — FB01 doors / AHU"},
+  {id:"ops", kind:"Operations Entity", label:"FM — fire door inspection"},
+  {id:"risk1", kind:"Risk", label:"Stage 4 issue gate missed"},
+  {id:"act1", kind:"Action", label:"Capture Fire Rating on D-02"}
+];
+const ATN_EDGES = [
+  ["org","OWNS","proj"],["proj","CONTAINS","fb"],["proj","CONTAINS","sl"],
+  ["proj","CONTAINS","stage4"],["proj","ASSIGNED_TO","tt-arch"],["proj","ASSIGNED_TO","tt-mep"],
+  ["role-im","GOVERNS","proj"],["role-ia","AUTHORED_BY","del-door"],
+  ["oir","GENERATES","pir"],["pir","GENERATES","eir"],["eir","BINDS","air"],
+  ["oir","GENERATES","hvac"],["hvac","BINDS","air-hvac"],
+  ["air","DEFINES","tpl-door"],["air-hvac","DEFINES","tpl-ahu"],
+  ["tpl-door","CONTAINS","attr-fire"],["tpl-ahu","CONTAINS","attr-hvac"],
+  ["attr-fire","CLASSIFIED_AS","pset"],["attr-fire","REFERENCES","revit"],
+  ["tpl-door","CLASSIFIED_AS","ss-door"],["tpl-door","GENERATES","ir-door"],
+  ["ir-door","FEEDS","spp-door"],["tpl-door","PRODUCES","spp-door"],["tpl-ahu","PRODUCES","spp-ahu"],
+  ["spp-door","CONTAINS","del-door"],["ir-door","VALIDATED_BY","ids-door"],
+  ["ids-door","VALIDATED_BY","aim"],["aim","CONTAINS","aim-d1"],["aim","CONTAINS","aim-d2"],["aim","CONTAINS","aim-a1"],
+  ["attr-fire","REQUIRES","aim-d1"],["attr-fire","REQUIRES","aim-d2"],["attr-hvac","REQUIRES","aim-a1"],
+  ["aim-d1","LOCATED_IN","sl"],["aim-d2","LOCATED_IN","sl"],["aim-d1","PART_OF","sys-fire"],
+  ["aim","FEEDS","twin"],["twin","SUPPORTS","ops"],
+  ["attr-fire","BLOCKS","stage4"],["aim-d2","IMPACTS","risk1"],["risk1","ASSIGNED_TO","act1"],
+  ["tt-arch","RESPONSIBLE_FOR","spp-door"],["tt-mep","RESPONSIBLE_FOR","spp-ahu"],
+  ["stage4","DEPENDS_ON","del-door"]
+];
+const ATN_KINDS = ["Organisation","Project","Portfolio","Functional Breakdown","Spatial Breakdown","Task Team","Stakeholder","Role","Work Stage","Scope Production Package","Information Template","Information Requirement","Attribute","Parameter","Deliverable","Deliverable Package","Information Container","IDS","AIM","AIR","EIR","PIR","OIR","Asset","Asset Type","System","System Type","Space","Space Type","Workflow","Approval","Action","Recommendation","Prediction","Issue","Risk","Compliance Result","Validation Result","Requirement","Classification","Uniclass SS","Uniclass SL","IFC Property Set","Revit Parameter","Document","Model","Drawing","Report","Specification","Schedule","Calculation","Register","Matrix","Digital Twin Entity","Operations Entity","Facility","Maintenance Activity","Lifecycle Stage"];
+const ATN_REL_KINDS = ["REQUIRES","GENERATES","DEPENDS_ON","OWNS","BELONGS_TO","SATISFIES","VALIDATED_BY","APPROVED_BY","AUTHORED_BY","MANAGED_BY","CLASSIFIED_AS","LOCATED_IN","PART_OF","TRACES_TO","DERIVED_FROM","RELATED_TO","SUPPORTS","FEEDS","REFERENCES","CONTAINS","BLOCKS","ENABLES","IMPACTS","ASSIGNED_TO","RESPONSIBLE_FOR","INFORMS","MONITORS","GOVERNS","BINDS","DEFINES","PRODUCES"];
+const ATN_QUERIES = [
+  {id:"missing", q:"What information is missing?"},
+  {id:"noncomp", q:"Which assets are non-compliant?"},
+  {id:"support", q:"Which deliverables support this requirement?"},
+  {id:"why", q:"Why is Fire Rating required?"},
+  {id:"block4", q:"What is blocking Stage 4?"},
+  {id:"stakeholders", q:"Which stakeholders are impacted?"},
+  {id:"handover", q:"Which assets will fail handover?"},
+  {id:"unsat", q:"Which client requirements are not satisfied?"},
+  {id:"sysrisk", q:"Which systems have the highest risk?"},
+  {id:"ready", q:"Which deliverables are ready for issue?"},
+  {id:"next", q:"What information must be delivered next?"},
+  {id:"health", q:"What is the current project health?"},
+  {id:"ahu", q:"Which AHUs are missing mandatory AIR information?"},
+  {id:"recover", q:"Generate a recovery plan for Stage 4."},
+  {id:"trace", q:"Show traceability from OIR to Asset."},
+  {id:"hvacwhy", q:"Why is HVAC compliance below target?"}
+];
+const ATN_DASHBOARDS = [
+  {id:"exec", role:"Executive", kpi:["Health %","Stage 4 gate","Open P1"], ask:"health"},
+  {id:"client", role:"Client", kpi:["OIR satisfied","Unsatisfied AIR","Handover risk"], ask:"unsat"},
+  {id:"owner", role:"Asset Owner", kpi:["AIM present","Twin ready","FM inspections"], ask:"handover"},
+  {id:"pm", role:"Project Manager", kpi:["Blocked packages","Days of risk","Ready to issue"], ask:"block4"},
+  {id:"pdm", role:"Project Delivery Manager", kpi:["TIDP vs MIDP","Team load","Stage risk"], ask:"next"},
+  {id:"im", role:"Information Manager", kpi:["IDS fails","Missing LOI 4","CDE state"], ask:"missing"},
+  {id:"ttm", role:"Task Team Manager", kpi:["Package health","Author queue","Approvals"], ask:"support"},
+  {id:"ia", role:"Information Author", kpi:["My missing attrs","Templates to fill","Next capture"], ask:"next"},
+  {id:"fm", role:"Facility Manager", kpi:["Ops entities","Maintenance","Fire doors"], ask:"handover"},
+  {id:"ops", role:"Operations Manager", kpi:["Twin coverage","Regime LOI 5","Open issues"], ask:"sysrisk"}
+];
+function atnLoiForStage(project){
+  const id = String((project && (project.currentStage || project.workStage || project.stage)) || "S4").toUpperCase();
+  if(id.indexOf("1")>=0 || id==="S1") return 2;
+  if(id.indexOf("2")>=0 || id==="S2") return 2;
+  if(id.indexOf("3")>=0 || id==="S3") return 3;
+  if(id.indexOf("5")>=0 || id==="S5") return 5;
+  if(id.indexOf("6")>=0 || id==="S6") return 5;
+  return 4;
+}
+function atnLoad(){
+  try { return JSON.parse(localStorage.getItem("atana_im_engines_v1")||"{}"); } catch(e){ return {}; }
+}
+function atnSave(patch){
+  const cur = Object.assign({present:{}, persona:"information-author", airLoi:4, airSel:["door","ahu"]}, atnLoad(), patch||{});
+  localStorage.setItem("atana_im_engines_v1", JSON.stringify(cur));
+  return cur;
+}
+function atnPresent(assetId, attrId){
+  const st = atnLoad();
+  const key = assetId+":"+attrId;
+  if(st.present && Object.prototype.hasOwnProperty.call(st.present, key)) return !!st.present[key];
+  return !(assetId==="d2" && attrId==="fire") && !(assetId==="d3" && attrId==="iron") && !(assetId==="a1" && attrId==="hvac");
+}
+function atnTogglePresent(assetId, attrId){
+  const st = atnLoad();
+  st.present = st.present || {};
+  const key = assetId+":"+attrId;
+  st.present[key] = !atnPresent(assetId, attrId);
+  atnSave(st);
+}
+function atnTpl(id){ return ATN_TEMPLATES.find(t => t.id===id); }
+function atnRequiredAttrs(tpl, loi){ return (tpl.attrs||[]).filter(a => a.loi <= loi && a.req); }
+function atnAimScore(loi){
+  let req=0, have=0;
+  ATN_ASSETS.forEach(a => {
+    const tpl = atnTpl(a.type);
+    atnRequiredAttrs(tpl, loi).forEach(attr => {
+      req++;
+      if(atnPresent(a.id, attr.id)) have++;
+    });
+  });
+  const pct = req ? Math.round(have/req*100) : 100;
+  return {req, have, pct, ready: pct >= ATN_GATE};
+}
+function atnWhy(id){
+  const back = {};
+  ATN_EDGES.forEach(([f,k,to]) => { (back[to]=back[to]||[]).push({from:f, kind:k}); });
+  const out=[], seen={};
+  function walk(cur){
+    if(seen[cur]) return; seen[cur]=1;
+    const n = ATN_CHAIN.find(x => x.id===cur);
+    if(n) out.push(n);
+    const pref = (back[cur]||[]).sort((a,b) => {
+      const ra = {OIR:0,PIR:1,EIR:2,AIR:3,TEMPLATE:4}[ (ATN_CHAIN.find(x=>x.id===a.from)||{}).kind ] ?? 9;
+      const rb = {OIR:0,PIR:1,EIR:2,AIR:3,TEMPLATE:4}[ (ATN_CHAIN.find(x=>x.id===b.from)||{}).kind ] ?? 9;
+      return ra-rb;
+    });
+    pref.forEach(p => walk(p.from));
+  }
+  walk(id);
+  return out;
+}
+function atnImpact(id){
+  const fwd = {};
+  ATN_EDGES.forEach(([f,k,to]) => { if(k!=="SATISFIES") (fwd[f]=fwd[f]||[]).push(to); });
+  const out=[], q=[id], seen={};
+  while(q.length){
+    const cur=q.shift();
+    if(seen[cur]) continue; seen[cur]=1;
+    if(cur!==id){ const n=ATN_CHAIN.find(x=>x.id===cur); if(n) out.push(n); }
+    (fwd[cur]||[]).forEach(n => q.push(n));
+  }
+  return out;
+}
+function atnAnswer(q){
+  const s = String(q||"").toLowerCase();
+  const sc = atnAimScore(4);
+  const missing = [];
+  if(!atnPresent("d2","fire")) missing.push("Fire Rating on D-02 Comms");
+  if(!atnPresent("d3","iron")) missing.push("Ironmongery set on D-03");
+  if(!atnPresent("a1","hvac")) missing.push("HVAC Control Strategy on AHU-01");
+  if(/missing|what information is missing/.test(s)) return missing.length ? ("Missing at LOI 4: "+missing.join("; ")+".") : "Nothing required is missing.";
+  if(/non-compliant|non compliant/.test(s)) return missing.length ? ("Non-compliant assets: "+missing.join("; ")+".") : "All seeded assets meet required AIR at LOI 4.";
+  if(/deliverables support|support this requirement/.test(s)) return "Fire Rating is satisfied by deliverable Door schedule S4, validated by IDS — Door Fire Rating required, produced by package Doors.";
+  if(/fire/.test(s) && /why|required|need|parameter/.test(s)){
+    const steps = atnWhy("attr-fire").map(n => n.kind+": "+n.label).join(" ← ");
+    return "Fire Rating is required because the OIR is to operate a safe building. PIR: compartment known at handover. EIR: openings scheduled at Stage 4. AIR: Fire Rating on every door. Trace: "+steps+".";
+  }
+  if(/hvac/.test(s)) return "HVAC compliance is below target because AIR HVAC Control Strategy is missing on AHU-01. That AIR is bound to the HVAC EIR, which is generated from the same OIR. MEP package cannot issue.";
+  if(/blocking stage 4|block stage 4|what is blocking/.test(s)) return "Stage 4 is blocked by Fire Rating on D-02 (BLOCKS Stage 4) and HVAC strategy on AHU-01. Door schedule S4 depends on the Door package.";
+  if(/stakeholder/.test(s)) return "Impacted stakeholders: Information Manager (governs project), Architecture task team (Doors package), MEP task team (AHU package), Information Author (door schedule), Facility Manager (fire door inspection).";
+  if(/fail handover|handover/.test(s) && !/ready/.test(s)) return missing.length ? ("Will fail handover: "+missing.join("; ")+". Twin and FM inspection cannot start.") : "No seeded asset fails handover.";
+  if(/not satisfied|unsatisfied|client requirement/.test(s)) return missing.length ? ("Unsatisfied client requirements: OIR safe building is open while Fire Rating on D-02 is empty; HVAC EIR is open while AHU-01 strategy is empty.") : "Client OIR/PIR/EIR/AIR chain is satisfied on the seed set.";
+  if(/highest risk|systems have/.test(s)) return "Highest risk system: Fire compartmentation (D-02 Fire Rating missing) then HVAC (AHU-01). Risk node: Stage 4 issue gate missed.";
+  if(/ready for issue|deliverables are ready/.test(s)) return sc.ready ? "Door schedule S4 and IDS Door can issue." : "No Stage 4 deliverable is ready. Gate "+sc.pct+"% / 95%.";
+  if(/delivered next|must be delivered/.test(s)) return missing[0] ? ("Deliver next: "+missing[0]+". Then "+(missing[1]||"re-run IDS")+".") : "Queue is clear.";
+  if(/project health|current project health/.test(s)) return "Project health is "+sc.pct+"% present vs required at LOI 4 ("+sc.have+"/"+sc.req+"). Gate 95%.";
+  if(/ahu/.test(s)) return atnPresent("a1","hvac") ? "AHU-01 has HVAC Control Strategy present." : "AHU-01 L1 is missing mandatory AIR: HVAC Control Strategy (LOI 4).";
+  if(/recovery/.test(s)) return "Recovery for Stage 4: 1) Capture Fire Rating on D-02. 2) Confirm HVAC strategy on AHU-01. 3) Re-run IDS Door. 4) Issue Door schedule S4. 5) Recompute health.";
+  if(/traceability from oir|oir to asset|show traceability/.test(s)){
+    return "OIR operate a safe building → PIR fire compartmentation → EIR fire-rated openings → AIR Fire Rating → Door template → Attribute Fire Rating → Assets D-01 and D-02 → AIM FB01 → Twin → FM inspection.";
+  }
+  if(/stage 3/.test(s)) return "Stage 3 is not the current gate on this pilot. Stage 4 technical design is the active work stage.";
+  if(/impact|block/.test(s)){
+    const imp = atnImpact("oir").map(n => n.label).join("; ");
+    return "Impact of the OIR: "+imp+".";
+  }
+  if(/door schedule/.test(s)) return "Door schedule S4 is the deliverable inside package Doors. It SATISFIES IR Door LOI 4 and is VALIDATED_BY IDS Door Fire Rating.";
+  return "Ask a graph question: missing information, non-compliant assets, why Fire Rating exists, Stage 4 block, handover failures, recovery plan, or OIR→Asset trace.";
+}
+function atnEsc(s){ return String(s==null?"":s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function atnCard(title, body){ return `<div class="card" style="margin-bottom:10px;"><div class="chart-card-title">${atnEsc(title)}</div>${body}</div>`; }
+
+function renderAtnIte(project){
+  const root = document.getElementById("atnIteRoot"); if(!root) return;
+  const loi = atnLoiForStage(project);
+  root.innerHTML = ATN_TEMPLATES.map(tpl => {
+    const rows = tpl.attrs.map(a => `<tr><td>${atnEsc(a.name)}</td><td class="mono">LOI ${a.loi}</td><td>${a.req && a.loi<=loi ? "Required now" : a.req ? "Later" : "Optional"}</td><td>${atnEsc(a.unit||"—")}</td></tr>`).join("");
+    return atnCard(tpl.name, `<p class="atn-muted">${atnEsc(tpl.ifc)} · ${atnEsc(tpl.revit)} · ${atnEsc(tpl.uniclass)} · current LOI ${loi}</p>
+      <div class="table-wrap" style="overflow:auto;"><table class="data" style="width:100%;font-size:13px;"><thead><tr><th>Attribute</th><th>LOI</th><th>At this stage</th><th>Unit</th></tr></thead><tbody>${rows}</tbody></table></div>`);
+  }).join("");
+}
+
+function renderAtnAir(project){
+  const root = document.getElementById("atnAirRoot"); if(!root) return;
+  const st = Object.assign({airLoi: atnLoiForStage(project), airSel:["door","ahu"]}, atnLoad());
+  const loi = Number(st.airLoi)||4;
+  const sel = new Set(st.airSel||[]);
+  const rows = [];
+  ATN_TEMPLATES.filter(t => sel.has(t.id)).forEach(tpl => {
+    atnRequiredAttrs(tpl, loi).forEach(a => {
+      rows.push({tpl:tpl.name, attr:a.name, loi:a.loi, chain:"OIR → PIR → EIR → AIR"});
+    });
+  });
+  root.innerHTML = `
+    <div class="card" style="margin-bottom:10px;">
+      <div class="chart-card-title">Issue this AIR</div>
+      <p class="atn-muted">Appointing party requirements for FB01 Administration. LOI ${loi}. ${rows.length} contractual attributes.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;">
+        ${ATN_TEMPLATES.map(t => `<button type="button" class="atn-pin ${sel.has(t.id)?"on":""}" data-airtpl="${t.id}">${atnEsc(t.name)}</button>`).join("")}
+      </div>
+      <label class="field-label">Target LOI</label>
+      <select id="atnAirLoi">${[2,3,4,5].map(n => `<option value="${n}" ${n===loi?"selected":""}>LOI ${n}</option>`).join("")}</select>
+    </div>
+    <div class="card">
+      <table class="data" style="width:100%;font-size:13px;"><thead><tr><th>Template</th><th>Requirement</th><th>LOI</th><th>Trace</th></tr></thead>
+      <tbody>${rows.map(r => `<tr><td>${atnEsc(r.tpl)}</td><td>${atnEsc(r.attr)}</td><td>${r.loi}</td><td class="atn-muted">${r.chain}</td></tr>`).join("") || "<tr><td colspan=4>Select a template.</td></tr>"}</tbody></table>
+      <p class="atn-muted" style="margin-top:10px;">IR is the project-facing extract of this AIR. IDS is the machine check of the same rows.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <button type="button" class="btn btn-gold" id="atnAirIds">Export IDS JSON</button>
+        <button type="button" class="btn btn-ghost" id="atnAirCsv">Export AIR (.csv)</button>
+      </div>
+    </div>`;
+  root.querySelectorAll("[data-airtpl]").forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.getAttribute("data-airtpl");
+      if(sel.has(id)) sel.delete(id); else sel.add(id);
+      atnSave({airSel:[...sel], airLoi:loi});
+      renderAtnAir(project);
+    };
+  });
+  const selEl = document.getElementById("atnAirLoi");
+  if(selEl) selEl.onchange = () => { atnSave({airLoi:Number(selEl.value)}); renderAtnAir(project); };
+  const idsBtn = document.getElementById("atnAirIds");
+  if(idsBtn) idsBtn.onclick = () => {
+    const payload = {
+      spec:"buildingSMART IDS", stage:"S4", loi:loi,
+      specifications: rows.map(r => ({name:r.attr, entity:r.tpl, cardinality:"required", applicability:"AIR"}))
+    };
+    const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "FB01-AIR-IDS.json"; a.click();
+  };
+  const csvBtn = document.getElementById("atnAirCsv");
+  if(csvBtn) csvBtn.onclick = () => {
+    const csv = "Template,Requirement,LOI,Trace\n" + rows.map(r => [r.tpl,r.attr,r.loi,r.chain].join(",")).join("\n");
+    const blob = new Blob([csv], {type:"text/csv"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "FB01-AIR.csv"; a.click();
+  };
+}
+
+function renderAtnAim(project){
+  const root = document.getElementById("atnAimRoot"); if(!root) return;
+  const loi = atnLoiForStage(project);
+  const sc = atnAimScore(loi);
+  const blocks = ATN_ASSETS.map(a => {
+    const tpl = atnTpl(a.type);
+    const attrs = atnRequiredAttrs(tpl, loi);
+    const have = attrs.filter(x => atnPresent(a.id, x.id)).length;
+    const pct = attrs.length ? Math.round(have/attrs.length*100) : 100;
+    const chips = attrs.map(x => {
+      const on = atnPresent(a.id, x.id);
+      return `<button type="button" class="atn-pin ${on?"on":""}" data-aim="${a.id}:${x.id}">${on?"Present":"Missing"} · ${atnEsc(x.name)}</button>`;
+    }).join(" ");
+    return atnCard(a.name, `<p class="atn-muted">${atnEsc(tpl.name)} · ${have}/${attrs.length} required · ${pct}%</p><div class="atn-bar"><i style="width:${pct}%"></i></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">${chips}</div>`);
+  }).join("");
+  root.innerHTML = atnCard("Project health", `<p style="font-size:22px;font-weight:700;margin:0;">${sc.pct}%</p><div class="atn-bar"><i style="width:${sc.pct}%"></i></div><p class="atn-muted">${sc.have}/${sc.req} present vs required · gate ${ATN_GATE}% · ${sc.ready?"Ready for issue":"Not ready"}</p>`) + blocks;
+  root.querySelectorAll("[data-aim]").forEach(btn => {
+    btn.onclick = () => {
+      const [a,b] = btn.getAttribute("data-aim").split(":");
+      atnTogglePresent(a,b);
+      renderAtnAim(project);
+    };
+  });
+}
+
+function atnCypher(qid){
+  const map = {
+    why: "MATCH (a:Attribute {name:'Fire Rating'})<-[:CONTAINS]-(t:InformationTemplate)<-[:DEFINES]-(air:AIR)<-[:BINDS]-(eir:EIR)<-[:GENERATES]-(pir:PIR)<-[:GENERATES]-(oir:OIR) RETURN oir,pir,eir,air,t,a",
+    missing: "MATCH (asset:Asset)-[:REQUIRES]-(attr:Attribute) WHERE asset.present = false RETURN asset, attr",
+    block4: "MATCH (n)-[:BLOCKS]->(s:WorkStage {name:'Stage 4'}) RETURN n,s",
+    impact: "MATCH (p:ScopeProductionPackage {id:'spp-door'})-[:CONTAINS|PRODUCES|REQUIRES*1..5]-(x) RETURN p,x"
+  };
+  return map[qid] || map.why;
+}
+function renderAtnGraph(project){
+  const root = document.getElementById("atnGraphRoot"); if(!root) return;
+  const st = Object.assign({graphId:"attr-fire", graphView:"trace", graphDash:"im"}, atnLoad());
+  const sel = st.graphId || "attr-fire";
+  const view = st.graphView || "trace";
+  const node = ATN_CHAIN.find(n => n.id===sel) || ATN_CHAIN.find(n => n.id==="attr-fire");
+  const pins = [
+    {id:"attr-fire", label:"Fire Rating"},
+    {id:"oir", label:"OIR"},
+    {id:"hvac", label:"HVAC EIR"},
+    {id:"spp-door", label:"Doors package"},
+    {id:"stage4", label:"Stage 4"},
+    {id:"aim-d2", label:"D-02"}
+  ];
+  const tabs = ["trace","impact","ask","queries","dashboards","schema"];
+  let body = "";
+  if(view==="trace"){
+    body = `<div class="atn-trace">${atnEsc(atnWhy(sel).map(n => n.kind+"  "+n.label).join("\\n↑\\n"))}</div>`;
+  } else if(view==="impact"){
+    const imp = atnImpact(sel);
+    body = `<div class="atn-trace">${atnEsc((imp.length?imp:[{kind:"—",label:"Nothing downstream"}]).map(n => n.kind+"  "+n.label).join("\\n↓\\n"))}</div>
+      <p class="atn-muted" style="margin-top:10px;">Change this node and the list above is what breaks: deliverables, templates, assets, requirements, stakeholders.</p>`;
+  } else if(view==="ask"){
+    body = `<div class="atn-trace">${atnEsc(atnAnswer(st.graphQ || "Why is Fire Rating required?"))}</div>
+      <div class="atn-ask"><input id="atnGraphQ" value="${atnEsc(st.graphQ||"Why is Fire Rating required?")}" /><button type="button" class="btn btn-gold" id="atnGraphAsk">Ask</button></div>`;
+  } else if(view==="queries"){
+    body = ATN_QUERIES.map(q => `<button type="button" class="atn-pin" data-gq="${atnEsc(q.q)}" style="margin:4px 4px 0 0;">${atnEsc(q.q)}</button>`).join("") +
+      `<div class="card" style="margin-top:12px;"><div class="chart-card-title">Answer</div><div class="atn-trace">${atnEsc(atnAnswer(st.graphQ || ATN_QUERIES[3].q))}</div>
+      <p class="atn-muted" style="margin-top:8px;">Cypher (target Neo4j): ${atnEsc(atnCypher("why"))}</p></div>`;
+  } else if(view==="dashboards"){
+    const dash = ATN_DASHBOARDS.find(d => d.id===st.graphDash) || ATN_DASHBOARDS[5];
+    const sc = atnAimScore(4);
+    body = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">${ATN_DASHBOARDS.map(d => `<button type="button" class="atn-pin ${d.id===dash.id?"on":""}" data-gdash="${d.id}">${atnEsc(d.role)}</button>`).join("")}</div>
+      ${atnCard(dash.role, `<p class="atn-muted">KPIs: ${atnEsc(dash.kpi.join(" · "))}</p><p style="font-size:22px;font-weight:700;margin:8px 0 0;">${sc.pct}%</p><div class="atn-bar"><i style="width:${sc.pct}%"></i></div>`)}
+      <div class="card">${atnEsc(atnAnswer(ATN_QUERIES.find(q=>q.id===dash.ask)?.q || "health"))}</div>`;
+  } else {
+    body = `<p class="atn-muted">${ATN_CHAIN.length} live nodes · ${ATN_EDGES.length} live edges on FB01. Full ontology ${ATN_KINDS.length} kinds · ${ATN_REL_KINDS.length} relationships.</p>
+      <div class="chart-card-title" style="margin-top:10px;">Node types</div>
+      <p class="atn-muted">${ATN_KINDS.join(" · ")}</p>
+      <div class="chart-card-title" style="margin-top:10px;">Relationships</div>
+      <p class="atn-muted">${ATN_REL_KINDS.join(" · ")}</p>
+      <div class="chart-card-title" style="margin-top:10px;">Live nodes</div>
+      <div class="atn-trace">${ATN_CHAIN.map(n => n.kind+"  "+n.id+"  "+n.label).map(atnEsc).join("<br>")}</div>
+      <p class="atn-muted" style="margin-top:10px;">Production target: Neo4j + GraphQL + .NET 9 + Azure OpenAI. This app is the in-memory operational graph over the same ontology.</p>`;
+  }
+  root.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      ${pins.map(p => `<button type="button" class="atn-pin ${p.id===sel?"on":""}" data-gpin="${p.id}">${atnEsc(p.label)}</button>`).join("")}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      ${tabs.map(v => `<button type="button" class="atn-pin ${v===view?"on":""}" data-gview="${v}">${v[0].toUpperCase()+v.slice(1)}</button>`).join("")}
+    </div>
+    <div class="card">
+      <div class="chart-card-title">${view==="schema"?"Ontology":view==="dashboards"?"Role dashboard":view==="queries"?"Graph queries":atnEsc(node.label)}</div>
+      ${body}
+    </div>`;
+  root.querySelectorAll("[data-gpin]").forEach(b => b.onclick = () => { atnSave({graphId:b.getAttribute("data-gpin")}); renderAtnGraph(project); });
+  root.querySelectorAll("[data-gview]").forEach(b => b.onclick = () => { atnSave({graphView:b.getAttribute("data-gview")}); renderAtnGraph(project); });
+  root.querySelectorAll("[data-gdash]").forEach(b => b.onclick = () => { atnSave({graphDash:b.getAttribute("data-gdash"), graphView:"dashboards"}); renderAtnGraph(project); });
+  root.querySelectorAll("[data-gq]").forEach(b => b.onclick = () => { atnSave({graphQ:b.getAttribute("data-gq"), graphView:"queries"}); renderAtnGraph(project); });
+  const ask = document.getElementById("atnGraphAsk");
+  if(ask) ask.onclick = () => {
+    const q = (document.getElementById("atnGraphQ")||{}).value || "";
+    atnSave({graphQ:q, graphView:"ask"});
+    renderAtnGraph(project);
+  };
+}
+
+function renderAtnDecide(project){
+  const root = document.getElementById("atnDecideRoot"); if(!root) return;
+  const loi = atnLoiForStage(project);
+  const sc = atnAimScore(loi);
+  const actions = [];
+  if(!atnPresent("d2","fire")) actions.push({p:"P1", t:"Capture Fire Rating on D-02 Comms", d:"AIR on the Door template is not present. Blocks Stage 4 door schedule."});
+  if(!atnPresent("a1","hvac")) actions.push({p:"P1", t:"Confirm HVAC strategy on AHU-01", d:"EIR for HVAC at Stage 4 is unbound on the AIM instance."});
+  if(!atnPresent("d3","iron")) actions.push({p:"P2", t:"Ironmongery set on D-03 Stair A", d:"LOI 4 requirement. Needed before issue, not before model freeze."});
+  if(!actions.length) actions.push({p:"P3", t:"Queue is clear", d:"Switch role or work stage to see other work."});
+  const risk = sc.pct < ATN_GATE ? (ATN_GATE-sc.pct)+" points below the 95% issue gate. Likely 5–8 days if Fire Rating stays empty." : "Within gate.";
+  const pred = sc.ready ? "Issue this week." : "If D-02 Fire Rating lands tomorrow, AHU strategy still holds the mechanical package.";
+  const rec = sc.ready ? "No recovery path required." : "Recovery: close Fire Rating on D-02, then HVAC strategy on AHU-01, then re-run IDS.";
+  const chips = ["Why is Fire Rating required?","What does the OIR impact?","Is Stage 4 ready for handover?"];
+  const st = atnLoad();
+  const ans = atnAnswer(st.decideQ || chips[0]);
+  root.innerHTML = `
+    <div class="atn-grid atn-2">
+      ${atnCard("Project health", `<p style="font-size:22px;font-weight:700;margin:0;">${sc.pct}%</p><div class="atn-bar"><i style="width:${sc.pct}%"></i></div><p class="atn-muted">Present vs required at LOI ${loi}</p>`)}
+      ${atnCard("Risk", `<p class="atn-muted">${atnEsc(risk)}</p>`)}
+      ${atnCard("Prediction", `<p class="atn-muted">${atnEsc(pred)}</p>`)}
+      ${atnCard("Recovery", `<p class="atn-muted">${atnEsc(rec)}</p>`)}
+    </div>
+    <div class="card" style="margin-top:10px;">
+      <div class="chart-card-title">Next actions</div>
+      ${actions.map(a => `<div style="padding:10px 0;border-bottom:1px solid var(--slate-100);"><strong>${a.p}</strong> · ${atnEsc(a.t)}<div class="atn-muted">${atnEsc(a.d)}</div></div>`).join("")}
+    </div>
+    <div class="card" style="margin-top:10px;">
+      <div class="chart-card-title">Copilot</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;">
+        ${chips.map(c => `<button type="button" class="atn-pin" data-dq="${atnEsc(c)}">${atnEsc(c)}</button>`).join("")}
+      </div>
+      <div class="atn-ask"><input id="atnDecideQ" value="${atnEsc(st.decideQ||chips[0])}" /><button type="button" class="btn btn-gold" id="atnDecideAsk">Ask</button></div>
+      <p class="atn-muted" style="margin-top:10px;" id="atnDecideA">${atnEsc(ans)}</p>
+    </div>`;
+  function ask(q){ atnSave({decideQ:q}); renderAtnDecide(project); }
+  root.querySelectorAll("[data-dq]").forEach(b => b.onclick = () => ask(b.getAttribute("data-dq")));
+  const go = document.getElementById("atnDecideAsk");
+  if(go) go.onclick = () => ask((document.getElementById("atnDecideQ")||{}).value||"");
+}
+
+function renderAtnEcc(project){
+  const root = document.getElementById("atnEccRoot");
+  if(!root) return;
+  const loi = (typeof atnLoiForStage === "function") ? atnLoiForStage(project) : 4;
+  const sc = atnAimScore(loi);
+  const st = atnLoad();
+  const persona = st.eccPersona || "exec";
+  const dash = (ATN_DASHBOARDS || []).find(d => d.id === persona) || (ATN_DASHBOARDS||[])[0] || {id:"exec", role:"Executive", kpi:[], ask:"health"};
+  const missing = [];
+  try {
+    if(typeof atnPresent === "function"){
+      if(!atnPresent("d2","fire")) missing.push("Fire Rating · D-02 Comms");
+      if(!atnPresent("d3","iron")) missing.push("Ironmongery set · D-03");
+      if(!atnPresent("a1","hvac")) missing.push("HVAC Control Strategy · AHU-01");
+    }
+  } catch(e){}
+  const ih = sc.pct;
+  const cs = missing.length ? Math.max(0, sc.pct - missing.length * 8) : sc.pct;
+  const dh = sc.ready ? 88 : 64;
+  const rs = sc.pct;
+  const riskPts = Math.max(0, (typeof ATN_GATE === "number" ? ATN_GATE : 95) - sc.pct);
+  const ph = Math.round(0.30*ih + 0.25*dh + 0.20*cs + 0.15*Math.max(0,100-riskPts) + 0.10*(sc.ready?90:55));
+  function band(n, gate){
+    if(gate != null && n < gate) return {t:"Red", c:"var(--danger)"};
+    if(n >= 85) return {t:"Green", c:"var(--ok)"};
+    if(n >= 70) return {t:"Amber", c:"var(--gold-700)"};
+    return {t:"Red", c:"var(--danger)"};
+  }
+  const phB = band(ph);
+  const rsB = band(rs, typeof ATN_GATE === "number" ? ATN_GATE : 95);
+  const q = st.eccQ || "What is blocking Stage 4?";
+  const ans = atnAnswer(q);
+  const tiles = [
+    ["Project health", ph+"%", phB],
+    ["Information / AIM", ih+"%", band(ih)],
+    ["Stage readiness", rs+"%", rsB],
+    ["Compliance", cs+"%", band(cs)],
+    ["Delivery", dh+"%", band(dh)],
+    ["Open gaps", String(missing.length), missing.length ? {t:"Red", c:"var(--danger)"} : {t:"Green", c:"var(--ok)"}]
+  ];
+  const personas = (ATN_DASHBOARDS||[]).map(d =>
+    `<button type="button" class="atn-pin${d.id===persona?" active":""}" data-ecc-p="${d.id}">${atnEsc(d.role)}</button>`
+  ).join("");
+  const waterfall = [
+    ["OIR","Safe building", "ok"],
+    ["PIR","Compartmentation known", "ok"],
+    ["EIR","Fire-rated openings at S4", "ok"],
+    ["AIR","Fire Rating on every door", missing.some(m=>/Fire/.test(m))?"warn":"ok"],
+    ["AIM", sc.have+" / "+sc.req+" at LOI "+loi, sc.ready?"ok":"warn"],
+    ["IDS", missing.length?"Fails on missing attrs":"Pass", missing.length?"warn":"ok"]
+  ].map(r => `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--slate-100);">
+      <strong>${r[0]}</strong><span class="atn-muted">${atnEsc(r[1])}</span>
+      <span style="color:${r[2]==="ok"?"var(--ok)":"var(--danger)"}">${r[2]==="ok"?"Ready":"Gap"}</span>
+    </div>`).join("");
+  root.innerHTML = `
+    <div class="segmented" style="margin-bottom:10px;">${personas}</div>
+    <p class="atn-muted" style="margin:0 0 10px;">Persona: ${atnEsc(dash.role)}. KPIs: ${(dash.kpi||[]).map(atnEsc).join(" · ")||"Health"}.</p>
+    <div class="atn-grid atn-2">
+      ${tiles.map(t => atnCard(t[0], `<p style="font-size:22px;font-weight:700;margin:0;color:${t[2].c}">${t[1]}</p><p class="atn-muted">${t[2].t}</p>`)).join("")}
+    </div>
+    <div class="card" style="margin-top:10px;">
+      <div class="chart-card-title">Information waterfall · OIR to IDS</div>
+      ${waterfall}
+    </div>
+    <div class="card" style="margin-top:10px;">
+      <div class="chart-card-title">Assets not handover-ready</div>
+      ${missing.length ? missing.map(m => `<div style="padding:8px 0;border-bottom:1px solid var(--slate-100);">${atnEsc(m)}</div>`).join("") : `<p class="atn-muted">All seeded assets meet LOI ${loi}.</p>`}
+    </div>
+    <div class="card" style="margin-top:10px;">
+      <div class="chart-card-title">Executive copilot</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;">
+        ${["What is blocking Stage 4?","Which assets will fail handover?","What is the current project health?","Show traceability from OIR to Asset.","Generate a recovery plan for Stage 4."].map(c => `<button type="button" class="atn-pin" data-ecc-q="${atnEsc(c)}">${atnEsc(c)}</button>`).join("")}
+      </div>
+      <div class="atn-ask"><input id="atnEccQ" value="${atnEsc(q)}" /><button type="button" class="btn btn-gold" id="atnEccAsk">Ask</button></div>
+      <p class="atn-trace" style="margin-top:10px;" id="atnEccA">${atnEsc(ans)}</p>
+    </div>
+    <p class="atn-muted" style="margin-top:12px;">Scores use the live AIM present/required engine. Portfolio, Power BI and warehouse views are specified in docs/COMMAND-CENTER.md — not this console.</p>`;
+  root.querySelectorAll("[data-ecc-p]").forEach(b => b.onclick = () => { atnSave({eccPersona:b.getAttribute("data-ecc-p")}); renderAtnEcc(project); });
+  function ask(v){ atnSave({eccQ:v, eccPersona:persona}); renderAtnEcc(project); }
+  root.querySelectorAll("[data-ecc-q]").forEach(b => b.onclick = () => ask(b.getAttribute("data-ecc-q")));
+  const go = document.getElementById("atnEccAsk");
+  if(go) go.onclick = () => ask((document.getElementById("atnEccQ")||{}).value || q);
+}
 
 
 
