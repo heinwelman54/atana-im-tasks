@@ -2558,8 +2558,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.40.20";
-const APP_BUILD = "2026-09-01-silent-export";
+const APP_VERSION = "3.40.21";
+const APP_BUILD = "2026-09-01-folder-only";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -16503,53 +16503,51 @@ function atnDefaultExportPath(project){
   return (project && project.exportPath) || (DATA.settings && DATA.settings.exportPath) || (DATA.settings && DATA.settings.exportFolderName) || "";
 }
 async function atnSilentWritePack(project, dir){
-  const pathHint = (dir && dir.name) || atnDefaultExportPath(project);
+  if(!dir) throw new Error("no-folder");
+  const pathHint = atnDefaultExportPath(project) || dir.name || "";
   const pack = (typeof buildProjectTransferPack === "function")
     ? buildProjectTransferPack(project, { fileName: atnSafeProjectFileName(project), exportPath: pathHint })
     : { project: project };
   const fname = pack.fileName || (atnSafeProjectFileName(project) + ".json");
-  const text = JSON.stringify(pack, null, 2);
-  if(dir){
-    const fh = await dir.getFileHandle(fname, { create: true });
-    const w = await fh.createWritable();
-    await w.write(new Blob([text], { type: "application/json" }));
-    await w.close();
-    return fname + " → " + dir.name;
-  }
-  downloadBlob(fname, new Blob([text], { type: "application/json" }));
-  return fname;
+  const fh = await dir.getFileHandle(fname, { create: true });
+  const w = await fh.createWritable();
+  await w.write(new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" }));
+  await w.close();
+  return fname + " → " + (pathHint || dir.name);
 }
 async function atnQuickExportProject(ev){
   const project = (typeof projectById === "function" && typeof currentProjectId !== "undefined")
     ? (projectById(currentProjectId) || (DATA.projects && DATA.projects[0]))
     : (DATA.projects && DATA.projects[0]);
   if(!project){ showToast("Open a project first"); return; }
+  const hint = atnDefaultExportPath(project);
   const forcePick = !!(ev && ev.shiftKey);
+  if(!window.showDirectoryPicker){
+    showToast("Use Chrome or Edge. A website cannot write to " + (hint || "a disk path") + " from Downloads.");
+    return;
+  }
   try{
-    let dir = null;
-    if(forcePick){
-      dir = await atnEnsureExportDir(true);
-    } else {
-      dir = await atnLoadExportDir();
-      if(dir){
-        try{
-          const q = await dir.queryPermission({ mode: "readwrite" });
-          if(q !== "granted"){
-            const r = await dir.requestPermission({ mode: "readwrite" });
-            if(r !== "granted") dir = null;
-          }
-        }catch(e){ dir = null; }
-      }
+    let dir = forcePick ? null : await atnLoadExportDir();
+    if(dir){
+      try{
+        const q = await dir.queryPermission({ mode: "readwrite" });
+        if(q !== "granted"){
+          const r = await dir.requestPermission({ mode: "readwrite" });
+          if(r !== "granted") dir = null;
+        }
+      }catch(e){ dir = null; }
+    }
+    if(!dir){
+      showToast("Select the export folder" + (hint ? " (" + hint + ")" : ""));
+      dir = await window.showDirectoryPicker({ mode: "readwrite", startIn: "documents" });
+      await atnSaveExportDir(dir);
     }
     const where = await atnSilentWritePack(project, dir);
-    showToast("Exported " + where);
+    showToast("Overwrote " + where);
   }catch(e){
-    if(e && e.name === "AbortError") return;
+    if(e && e.name === "AbortError"){ showToast("Folder not selected — nothing written to Downloads"); return; }
     console.warn(e);
-    try{
-      const where = await atnSilentWritePack(project, null);
-      showToast("Exported " + where);
-    }catch(e2){ showToast("Export failed"); }
+    showToast("Could not write to folder. Pick JSON DBs with EXPORT again.");
   }
 }
 function bindAtnQuickExport(){
