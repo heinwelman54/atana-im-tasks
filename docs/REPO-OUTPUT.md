@@ -1,17 +1,16 @@
 # Repo output
 
-**App version: 3.40.17**
+**App version: 3.40.18**
 **Pages file:** app.html
-Open app.html?v=3417 after push. Badge **v3.40.17**.
+Open app.html?v=3418 after push. Badge **v3.40.18**.
 
 ## What changed on the app
 
 | Change | Where |
 |---|---|
-| My Role Programme is the working DPoW | **My Role → Programme WBS + Gantt** |
-| Each work stage is a pill with NBS-style 3D schematic that matures LOD 1→5 | Same |
-| TTM / TTIM / IA / PR: pick task team (EE, AR…) — that scope expands; other teams fold under Dependencies | Team chips on My Role |
-| LOI popup: full attribute names, only rows required at that stage’s LOI | Click a stage pill or a DPoW cell |
-| Photos no longer used as the maturity graphic | SVG schematics |
+| Full project transfer JSON (tasks/progress, teams, convention, MIDP, DPoW, production, stages, ACC, role work) | Project settings → **Export project (.json)** |
+| File name defaults to the exact project name | Export dialog |
+| Export path / folder hint remembered + stored in the JSON | Same dialog |
+| Choose location… uses the browser save picker when available | Same |
 
-NBS LOD guides are the language (schematic → detailed). Plates are not copied.
+Teammate: **Import project (.json)** → Merge / Override / Add as new.

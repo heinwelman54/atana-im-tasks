@@ -2555,8 +2555,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.40.17";
-const APP_BUILD = "2026-09-01-lod-pills";
+const APP_VERSION = "3.40.18";
+const APP_BUILD = "2026-09-01-export-pack";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -25480,25 +25480,119 @@ function sheetTable(headers, rows){
   return `<table border="1"><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`;
 }
 
+function atnSafeProjectFileName(project){
+  const raw = String((project && (project.name || project.code)) || "project").trim();
+  return raw.replace(/[\/\\:\*\?"<>\|]/g, "-").replace(/\s+/g, " ").replace(/^\.+/, "").slice(0, 180) || "project";
+}
+function atnCollectProjectTeam(project){
+  const memberIds = new Set();
+  (project.teamIds || []).forEach(id => memberIds.add(id));
+  if(project.defaultAssigneeId) memberIds.add(project.defaultAssigneeId);
+  Object.values(project.tasks || {}).forEach(function(t){ if(t && t.assignee) memberIds.add(t.assignee); });
+  Object.values(project.roleWork || {}).forEach(function(){});
+  ((project.production && project.production.packages) || []).forEach(function(pk){
+    if(pk.owner) memberIds.add(pk.owner);
+  });
+  let team = (DATA.team || []).filter(m => memberIds.has(m.id));
+  if(!team.length) team = (DATA.team || []).slice();
+  return team;
+}
+function buildProjectTransferPack(project, opts){
+  opts = opts || {};
+  const live = (DATA.projects || []).find(function(p){ return p.id === project.id; }) || project;
+  const clone = JSON.parse(JSON.stringify(live));
+  const fname = (opts.fileName || atnSafeProjectFileName(live)).replace(/\.json$/i, "") + ".json";
+  const pathHint = opts.exportPath != null ? opts.exportPath : ((DATA.settings && DATA.settings.exportPath) || "");
+  return {
+    type: "atana-project-transfer",
+    schema: "1.1",
+    appVersion: (typeof APP_VERSION !== "undefined" ? APP_VERSION : ""),
+    exportedAt: new Date().toISOString(),
+    fileName: fname,
+    exportPath: pathHint,
+    project: clone,
+    team: JSON.parse(JSON.stringify(atnCollectProjectTeam(live))),
+    settings: {
+      naming: DATA.settings && DATA.settings.naming,
+      conventions: DATA.settings && DATA.settings.conventions,
+      acc: DATA.settings && DATA.settings.acc
+    },
+    acc: {
+      hubId: live.accHubId || live.accHub || null,
+      projectId: live.accProjectId || null,
+      folder: live.accFolder || live.accFolderId || null,
+      url: live.accUrl || live.accProjectUrl || null,
+      lastSync: live.accLastSync || null
+    },
+    inventory: Object.keys(clone).sort()
+  };
+}
+async function atnWriteProjectJson(filename, text, pathHint){
+  if(window.showSaveFilePicker){
+    try{
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        startIn: "documents",
+        types: [{ description: "Atana project transfer", accept: { "application/json": [".json"] } }]
+      });
+      const w = await handle.createWritable();
+      await w.write(new Blob([text], { type: "application/json" }));
+      await w.close();
+      return "picker";
+    }catch(e){
+      if(e && e.name === "AbortError") return "cancel";
+    }
+  }
+  downloadBlob(filename, new Blob([text], { type: "application/json" }));
+  return "download";
+}
 function exportSingleProjectJson(project){
   if(!project){ showToast("No project"); return; }
-  // Include referenced team members (by id on project roster / assignees)
-  const memberIds = new Set();
-  if(project.teamIds) project.teamIds.forEach(id => memberIds.add(id));
-  if(project.defaultAssigneeId) memberIds.add(project.defaultAssigneeId);
-  Object.values(project.tasks || {}).forEach(t => { if(t && t.assignee) memberIds.add(t.assignee); });
-  const team = DATA.team.filter(m => memberIds.has(m.id));
-  const payload = {
-    type: "atana-single-project",
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    project: project,
-    team: team
-  };
-  const safe = (project.code || project.name || "project").replace(/[^\w\-]+/g, "_").slice(0,40);
-  downloadBlob(`Project-${safe}.json`, new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
-  showToast("Project JSON exported");
+  const live = (DATA.projects || []).find(function(p){ return p.id === project.id; }) || project;
+  const defName = atnSafeProjectFileName(live);
+  const lastPath = (DATA.settings && DATA.settings.exportPath) || "";
+  const packPreview = buildProjectTransferPack(live, { fileName: defName, exportPath: lastPath });
+  openSheet(`
+    <h2>Export project pack</h2>
+    <p class="section-sub">Full transfer file for another Atana user: tasks and progress, teams, conventions, MIDP / DPoW / production, work stages, ACC link, role work, sync fields.</p>
+    <div class="field"><label>File name (exactly the project name)</label>
+      <input id="xp-name" value="${escapeHtml(defName)}"></div>
+    <div class="field"><label>Export path / folder hint</label>
+      <input id="xp-path" placeholder="e.g. Shared Drive / Atana / Handovers" value="${escapeHtml(lastPath)}">
+      <p class="section-sub">Browsers cannot force a disk folder. This hint is stored in the JSON and remembered. Use <strong>Choose location</strong> to pick the folder in the save dialog.</p></div>
+    <p class="section-sub">${packPreview.inventory.length} project keys · ${packPreview.team.length} team members · ACC ${packPreview.acc.projectId || packPreview.acc.url || "not linked"}</p>
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" id="xp-cancel">Cancel</button>
+      <button class="btn btn-ghost" id="xp-dl">Quick download</button>
+      <button class="btn btn-primary" id="xp-go">Choose location…</button>
+    </div>
+  `);
+  document.getElementById("xp-cancel").onclick = closeSheet;
+  function run(usePicker){
+    const name = (document.getElementById("xp-name").value || defName).trim() || defName;
+    const pathHint = (document.getElementById("xp-path").value || "").trim();
+    if(!DATA.settings) DATA.settings = {};
+    DATA.settings.exportPath = pathHint;
+    if(typeof saveData === "function") saveData(DATA);
+    const pack = buildProjectTransferPack(live, { fileName: name, exportPath: pathHint });
+    const text = JSON.stringify(pack, null, 2);
+    const fname = pack.fileName;
+    closeSheet();
+    if(!usePicker){
+      downloadBlob(fname, new Blob([text], { type: "application/json" }));
+      showToast("Downloaded " + fname);
+      return;
+    }
+    atnWriteProjectJson(fname, text, pathHint).then(function(how){
+      if(how === "cancel") showToast("Export cancelled");
+      else if(how === "picker") showToast("Saved " + fname);
+      else showToast("Downloaded " + fname + (pathHint ? " · path hint: " + pathHint : ""));
+    });
+  }
+  document.getElementById("xp-dl").onclick = function(){ run(false); };
+  document.getElementById("xp-go").onclick = function(){ run(true); };
 }
+
 function findProjectMatch(incoming){
   const name = (incoming.name || "").trim().toLowerCase();
   const guid = incoming.id;
@@ -25532,7 +25626,7 @@ function importSingleProjectJson(file){
   reader.onload = () => {
     try {
       const data = JSON.parse(reader.result);
-      const incoming = normalizeProject(data.project || data);
+      const incoming = normalizeProject((data && data.project) || data);
       if(!incoming || !incoming.name){ showToast("Invalid project file"); return; }
       const members = Array.isArray(data.team) ? data.team.map((m,i) => normalizeMember(m,i)) : [];
       openSheet(`
