@@ -1553,6 +1553,9 @@
         <span class="acc-status-dot" id="accStatusDot"></span>
         <span class="acc-status-lbl">FORMA</span>
       </button>
+      <button type="button" class="acc-status-btn" id="atnQuickExportBtn" title="Export project JSON to saved folder (overwrite). Shift-click to choose folder." aria-label="Quick export project">
+        <span class="acc-status-lbl">EXPORT</span>
+      </button>
       <select id="topbarRoleSwitcher" class="topbar-role-switch" title="Who am I on this project?" aria-label="Current user / role">
         <option value="">Who am I...</option>
       </select>
@@ -2555,8 +2558,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.40.18";
-const APP_BUILD = "2026-09-01-export-pack";
+const APP_VERSION = "3.40.19";
+const APP_BUILD = "2026-09-01-quick-export";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -16442,7 +16445,96 @@ function isApsSessionActive(){
     return true;
   } catch(e){ return false; }
 }
+
+const ATN_EXPORT_IDB = "atana-export-folder-v1";
+function atnExportIdb(){
+  return new Promise(function(res, rej){
+    const req = indexedDB.open(ATN_EXPORT_IDB, 1);
+    req.onupgradeneeded = function(){ try{ req.result.createObjectStore("kv"); }catch(e){} };
+    req.onsuccess = function(){ res(req.result); };
+    req.onerror = function(){ rej(req.error); };
+  });
+}
+async function atnSaveExportDir(handle){
+  const db = await atnExportIdb();
+  await new Promise(function(res, rej){
+    const tx = db.transaction("kv", "readwrite");
+    tx.objectStore("kv").put(handle, "dir");
+    tx.oncomplete = function(){ res(); };
+    tx.onerror = function(){ rej(tx.error); };
+  });
+  if(!DATA.settings) DATA.settings = {};
+  DATA.settings.exportFolderName = handle.name || "";
+  if(typeof saveData === "function") saveData(DATA);
+}
+async function atnLoadExportDir(){
+  try{
+    const db = await atnExportIdb();
+    return await new Promise(function(res, rej){
+      const tx = db.transaction("kv", "readonly");
+      const q = tx.objectStore("kv").get("dir");
+      q.onsuccess = function(){ res(q.result || null); };
+      q.onerror = function(){ rej(q.error); };
+    });
+  }catch(e){ return null; }
+}
+async function atnEnsureExportDir(forcePick){
+  let handle = forcePick ? null : await atnLoadExportDir();
+  if(handle){
+    try{
+      const q = await handle.queryPermission({ mode: "readwrite" });
+      if(q !== "granted"){
+        const r = await handle.requestPermission({ mode: "readwrite" });
+        if(r !== "granted") handle = null;
+      }
+    }catch(e){ handle = null; }
+  }
+  if(!handle){
+    if(!window.showDirectoryPicker){
+      showToast("This browser cannot pin a folder. Use Export project (.json) instead.");
+      return null;
+    }
+    handle = await window.showDirectoryPicker({ mode: "readwrite", startIn: "documents" });
+    await atnSaveExportDir(handle);
+  }
+  return handle;
+}
+async function atnQuickExportProject(ev){
+  const project = (typeof projectById === "function" && typeof currentProjectId !== "undefined")
+    ? (projectById(currentProjectId) || (DATA.projects && DATA.projects[0]))
+    : (DATA.projects && DATA.projects[0]);
+  if(!project){ showToast("Open a project first"); return; }
+  const force = !!(ev && ev.shiftKey);
+  try{
+    const dir = await atnEnsureExportDir(force);
+    if(!dir){
+      if(typeof exportSingleProjectJson === "function") exportSingleProjectJson(project);
+      return;
+    }
+    const pack = (typeof buildProjectTransferPack === "function")
+      ? buildProjectTransferPack(project, { fileName: atnSafeProjectFileName(project), exportPath: dir.name || "" })
+      : { project: project };
+    const fname = pack.fileName || (atnSafeProjectFileName(project) + ".json");
+    const fh = await dir.getFileHandle(fname, { create: true });
+    const w = await fh.createWritable();
+    await w.write(new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" }));
+    await w.close();
+    showToast("Exported (overwrite) " + fname + " → " + dir.name);
+  }catch(e){
+    if(e && e.name === "AbortError") return;
+    console.warn(e);
+    showToast("Export failed — use Export project (.json)");
+  }
+}
+function bindAtnQuickExport(){
+  const btn = document.getElementById("atnQuickExportBtn");
+  if(!btn || btn._atnBound) return;
+  btn._atnBound = true;
+  btn.addEventListener("click", function(ev){ atnQuickExportProject(ev); });
+}
+
 function updateAccStatusUi(){
+  if(typeof bindAtnQuickExport === "function") bindAtnQuickExport();
   const btn = document.getElementById("accStatusBtn");
   if(!btn) return;
   const on = isApsSessionActive();

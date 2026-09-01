@@ -1,16 +1,16 @@
 # Repo output
 
-**App version: 3.40.18**
+**App version: 3.40.19**
 **Pages file:** app.html
-Open app.html?v=3418 after push. Badge **v3.40.18**.
+Open app.html?v=3419 after push. Badge **v3.40.19**.
 
 ## What changed on the app
 
 | Change | Where |
 |---|---|
-| Full project transfer JSON (tasks/progress, teams, convention, MIDP, DPoW, production, stages, ACC, role work) | Project settings → **Export project (.json)** |
-| File name defaults to the exact project name | Export dialog |
-| Export path / folder hint remembered + stored in the JSON | Same dialog |
-| Choose location… uses the browser save picker when available | Same |
+| **EXPORT** next to FORMA | Top bar |
+| First click: pick folder | Folder picker |
+| Later clicks: overwrite `{Project name}.json` in that folder | Same |
+| Shift-click: pick a different folder | Same |
 
-Teammate: **Import project (.json)** → Merge / Override / Add as new.
+Chrome / Edge. Folder permission is stored in this browser.
