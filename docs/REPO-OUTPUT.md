@@ -1,16 +1,17 @@
 # Repo output
 
-**App version: 3.40.16**
+**App version: 3.40.17**
 **Pages file:** app.html
-Open app.html?v=3416 after push. Badge **v3.40.16**.
+Open app.html?v=3417 after push. Badge **v3.40.17**.
 
 ## What changed on the app
 
 | Change | Where |
 |---|---|
-| Programme Gantt is now a DPoW maturity matrix (LOD/LOI per work stage, darker = more mature) | **My Role → Programme WBS + Gantt** |
-| Ss photographs on each package row | Same matrix + **DPoW / MIDP** scope name column |
-| LOI dialog splits **required at current LOI** vs later, from the attached LOI workbook | Click a DPoW name or a Gantt cell |
-| Workbook mapped: ZZ, AR, ST, EE, YS, ME, FP, YC | LOI_BY_ROLE overlay |
+| My Role Programme is the working DPoW | **My Role → Programme WBS + Gantt** |
+| Each work stage is a pill with NBS-style 3D schematic that matures LOD 1→5 | Same |
+| TTM / TTIM / IA / PR: pick task team (EE, AR…) — that scope expands; other teams fold under Dependencies | Team chips on My Role |
+| LOI popup: full attribute names, only rows required at that stage’s LOI | Click a stage pill or a DPoW cell |
+| Photos no longer used as the maturity graphic | SVG schematics |
 
-Photos live in img/ss/ (retaining wall, curtain wall, HVAC, foundations, doors, lighting, sprinkler, drainage).
+NBS LOD guides are the language (schematic → detailed). Plates are not copied.

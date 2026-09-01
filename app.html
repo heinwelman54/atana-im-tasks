@@ -2555,8 +2555,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.40.16";
-const APP_BUILD = "2026-09-01-dpow-gantt";
+const APP_VERSION = "3.40.17";
+const APP_BUILD = "2026-09-01-lod-pills";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -24023,6 +24023,9 @@ function renderDpow(project){
       const reqMap = st.params || defaults;
       const byCat = {};
       params.forEach(x => { (byCat[x.c||"GENERAL"] = byCat[x.c||"GENERAL"] || []).push(x); });
+      if(typeof atnCleanLoiSheetHtml === "function"){
+        openSheet(atnCleanLoiSheetHtml(project, sc, sid));
+      } else {
       openSheet(`
         <h2>${escapeHtml(sc.name)}</h2>
         <p class="section-sub mono">${escapeHtml(sc.uniclass||sc.code)} · ${escapeHtml(sc.role||"")} · stage ${escapeHtml(sid)}</p>
@@ -24031,15 +24034,9 @@ function renderDpow(project){
         <div class="field"><label>Design responsibility</label>
           <select id="ap-dr"><option value="">—</option>${projectCompanies(project).map(c=>`<option value="${escapeHtml(c.code)}" ${c.code===(st.designResponsibility||"")?"selected":""}>${escapeHtml(c.code)} · ${escapeHtml(c.label)}</option>`).join("")}</select>
         </div>
-        <div class="field"><label>LOI parameters (defaults from LOI schedule · LOI ${loiNumberForStage(sid)})</label>
-          <div class="midp-select-list" style="max-height:240px;overflow:auto;">${Object.keys(byCat).map(cat => `
-            <div style="font-size:10px;font-weight:700;margin:8px 0 4px;color:var(--purple-900);">${escapeHtml(cat)}</div>
-            ${byCat[cat].map(x => `<label class="checklabel"><input type="checkbox" data-ap-param="${escapeHtml(x.p)}" ${reqMap[x.p]?"checked":""}><span class="lbl-main">${escapeHtml(x.p)}</span></label>`).join("")}
-          `).join("")}</div>
-        </div>
-        <p class="section-sub"><a href="${NBS_LOD_GUIDE_URL}" target="_blank" rel="noopener">NBS LOD guide</a></p>
         <div class="sheet-actions"><button class="btn btn-ghost" id="ap-cancel">Close</button><button class="btn btn-primary" id="ap-save">Save</button></div>
       `);
+      }
       document.getElementById("ap-cancel").onclick = closeSheet;
       document.getElementById("ap-save").onclick = () => {
         if(!sc.stages[sid]) sc.stages[sid] = {};
@@ -32985,54 +32982,202 @@ if(window.ATN_LOI_XLSX){
     return list;
   };
 })();
+
+/* ========== 3.40.17 NBS-style LOD pills + role-scoped DPoW on My Role ========== */
+function atnPlannedLodNum(stageId){
+  const m = { S1:1, S2:2, S3:3, S4:4, S5:5, S6:5, S7:6, ST0:1, ST1:2, ST2:2, ST3:3, ST4:4, ST5:5, ST6:5, ST7:6 };
+  return m[stageId] || 2;
+}
+function atnSsFamily(ss, name){
+  const u = (String(ss||"")+" "+String(name||"")).toLowerCase();
+  if(/curtain|glaz|window/.test(u)) return "curtain";
+  if(/retain|gravity wall/.test(u)) return "retain";
+  if(/door|shutter|hatch/.test(u)) return "door";
+  if(/cool|hvac|heat pump|ventilat|air condition|heating/.test(u)) return "hvac";
+  if(/foundat|pile|substructure/.test(u)) return "found";
+  if(/light|lumin|power|cable|elect/.test(u)) return "elec";
+  if(/sprinkler|fire|extinguish/.test(u)) return "fire";
+  if(/drain|waste|sewer|gully/.test(u)) return "drain";
+  if(/wall|partition|masonry|cladding/.test(u)) return "wall";
+  return "generic";
+}
+function atnLodSvg(family, lod){
+  const n = Math.max(1, Math.min(6, Number(lod)||1));
+  const w=72,h=56;
+  const stroke="#3e0b3b", fill0="#faf5ff", fill1="#e9d5ff", gold="#d5c427";
+  function box(detail){
+    let g = '<rect x="8" y="18" width="40" height="28" fill="'+fill0+'" stroke="'+stroke+'" stroke-width="1.4"/>';
+    g += '<polygon points="8,18 28,8 68,8 48,18" fill="'+fill1+'" stroke="'+stroke+'" stroke-width="1.2"/>';
+    g += '<polygon points="48,18 68,8 68,36 48,46" fill="#fff" stroke="'+stroke+'" stroke-width="1.2"/>';
+    if(detail>=2) g += '<line x1="8" y1="32" x2="48" y2="32" stroke="'+stroke+'" stroke-width="0.8"/>';
+    if(detail>=3){
+      g += '<rect x="16" y="24" width="10" height="14" fill="#fff" stroke="'+stroke+'" stroke-width="0.9"/>';
+      g += '<rect x="30" y="24" width="10" height="14" fill="#fff" stroke="'+stroke+'" stroke-width="0.9"/>';
+    }
+    if(detail>=4){
+      g += '<line x1="16" y1="31" x2="26" y2="31" stroke="'+stroke+'" stroke-width="0.6"/>';
+      g += '<circle cx="24" cy="34" r="1.2" fill="'+gold+'"/>';
+    }
+    if(detail>=5){
+      g += '<path d="M12 46 L20 40 L28 46" fill="none" stroke="'+gold+'" stroke-width="1.2"/>';
+      g += '<rect x="52" y="14" width="8" height="10" fill="'+gold+'" stroke="'+stroke+'" stroke-width="0.6"/>';
+    }
+    if(detail>=6) g += '<text x="52" y="52" font-size="7" fill="'+stroke+'">AB</text>';
+    return g;
+  }
+  function curtain(detail){
+    let g='';
+    const cols = detail>=3 ? 4 : (detail>=2?3:2);
+    const rows = detail>=4 ? 3 : 2;
+    for(let c=0;c<cols;c++){
+      for(let r=0;r<rows;r++){
+        const x=10+c*14, y=12+r*14;
+        g += '<rect x="'+x+'" y="'+y+'" width="13" height="13" fill="'+(detail>=3?'#e8f4ff':'#faf5ff')+'" stroke="'+stroke+'" stroke-width="0.9"/>';
+        if(detail>=4) g += '<rect x="'+(x+3)+'" y="'+(y+3)+'" width="7" height="7" fill="none" stroke="'+gold+'" stroke-width="0.6"/>';
+        if(detail>=5) g += '<circle cx="'+(x+10)+'" cy="'+(y+11)+'" r="1" fill="'+stroke+'"/>';
+      }
+    }
+    return g;
+  }
+  function hvac(detail){
+    let g='<rect x="14" y="20" width="36" height="20" rx="3" fill="'+fill0+'" stroke="'+stroke+'"/>';
+    if(detail>=2) g += '<circle cx="26" cy="30" r="6" fill="none" stroke="'+stroke+'"/><circle cx="40" cy="30" r="6" fill="none" stroke="'+stroke+'"/>';
+    if(detail>=3) g += '<rect x="48" y="10" width="8" height="22" fill="'+fill1+'" stroke="'+stroke+'"/>';
+    if(detail>=4) g += '<path d="M52 10 C58 6 62 14 56 18" fill="none" stroke="'+gold+'" stroke-width="1.4"/>';
+    if(detail>=5) g += '<rect x="16" y="42" width="12" height="6" fill="'+gold+'" stroke="'+stroke+'"/>';
+    return g;
+  }
+  function door(detail){
+    let g='<rect x="22" y="10" width="22" height="36" fill="'+fill0+'" stroke="'+stroke+'"/>';
+    if(detail>=2) g += '<line x1="33" y1="10" x2="33" y2="46" stroke="'+stroke+'"/>';
+    if(detail>=3) g += '<circle cx="40" cy="30" r="1.6" fill="'+stroke+'"/>';
+    if(detail>=4) g += '<rect x="24" y="14" width="8" height="10" fill="#fff" stroke="'+stroke+'"/>';
+    if(detail>=5) g += '<rect x="46" y="28" width="8" height="4" fill="'+gold+'"/>';
+    return g;
+  }
+  const inner = family==="curtain"?curtain(n): family==="hvac"?hvac(n): family==="door"?door(n): box(n);
+  return '<svg viewBox="0 0 '+w+' '+h+'" width="72" height="56" aria-hidden="true">'+inner+'</svg>';
+}
+function atnActiveTeamCode(project){
+  const role = (typeof atnActiveRole === "function") ? atnActiveRole(project) : "IM";
+  if(["TTM","TTIM","IA","PR","DM"].indexOf(role) >= 0){
+    return window.__activeTaskTeam || (project && project.activeTaskTeam) || (typeof activeTaskTeam === "function" ? activeTaskTeam(project) : null) || null;
+  }
+  return null;
+}
+function atnTeamCodes(project){
+  const packs = (typeof atnAllPacks === "function") ? atnAllPacks(project) : [];
+  const set = {};
+  packs.forEach(function(p){ if(p.ro) set[p.ro]=true; });
+  return Object.keys(set).sort();
+}
 function atnRenderDpowGantt(project){
-  const stages = (typeof getHierarchy === "function") ? getHierarchy() : [{id:"S2"},{id:"S3"},{id:"S4"},{id:"S5"},{id:"S6"}];
-  const packs = atnAllPacks(project);
-  const cur = (project && (project.currentStageId || project.currentStage)) || "S3";
-  let html = '<div style="font-weight:800;font-size:12px;margin-bottom:8px;">DPoW programme — package maturity by work stage (LOD / LOI)</div>';
-  html += '<p class="section-sub">Each gold cell is that package at that stage. Darker = higher LOD. Click a cell to open the LOI dialog.</p>';
-  html += '<div style="overflow:auto;max-height:520px;border:1px solid #e9d5ff;border-radius:12px;">';
-  html += '<table class="ir-table" style="min-width:760px;"><thead><tr><th style="width:280px;">Scope package</th>';
-  stages.forEach(function(s){
-    const on = s.id === cur;
-    html += '<th style="'+(on?"background:#3e0b3b;color:#fff;":"")+'">'+escapeHtml(s.id)+(s.name?(" · "+escapeHtml(String(s.name).slice(0,16))):"")+'</th>';
-  });
-  html += '</tr></thead><tbody>';
-  const byRo = {};
-  packs.forEach(function(p){
-    const ro = p.ro || "ZZ";
-    (byRo[ro]||(byRo[ro]=[])).push(p);
-  });
-  Object.keys(byRo).sort().forEach(function(ro){
-    html += '<tr><td colspan="'+(stages.length+1)+'" style="background:#faf5ff;font-weight:800;font-size:11px;">'+escapeHtml(ro)+' · '+byRo[ro].length+' packages</td></tr>';
-    byRo[ro].forEach(function(p){
-      const sc = atnScopeForPackage(project, p);
-      html += '<tr>';
-      html += '<td><div style="display:flex;gap:8px;align-items:center;">'+atnSsThumb(p.ss||p.code, p.name, 40);
-      html += '<div><div style="font-size:12px;font-weight:700;">'+escapeHtml(p.name||p.ss||"")+'</div>';
-      html += '<div style="font-size:10px;color:#666;">'+escapeHtml(p.ss||"")+' · '+(p.idmStatus||"PLANNED")+'</div></div></div></td>';
-      stages.forEach(function(s){
-        const st = (sc && sc.stages && sc.stages[s.id]) || {};
-        const lod = st.lod || atnDefaultLodForStage(s.id);
-        const loi = st.loi || (lod ? lod.replace("LOD","LOI") : "");
-        const rank = atnLodRank(lod);
-        const bg = !lod ? "#f8f5f9" : ("rgba(213,196,39,"+(0.15+rank*0.15)+")");
-        const sid = sc ? ((project.dpow.scopes||[]).indexOf(sc)) : -1;
-        html += '<td style="text-align:center;background:'+bg+';cursor:pointer;" data-dpow-gantt-ir="'+(sid>=0?sid:"")+'" title="'+escapeHtml((p.name||"")+" "+s.id)+'">';
-        if(lod){
-          html += '<div style="font-size:10px;font-weight:800;">'+escapeHtml(lod)+'</div>';
-          html += '<div style="font-size:9px;color:#666;">'+escapeHtml(loi)+'</div>';
-          html += '<div style="height:6px;background:#eee;border-radius:4px;margin-top:4px;"><div style="height:6px;width:'+(rank*20)+'%;background:#3e0b3b;border-radius:4px;"></div></div>';
-        } else {
-          html += '<span style="color:#ccc;">—</span>';
-        }
-        html += '</td>';
-      });
-      html += '</tr>';
+  const stages = (typeof getHierarchy === "function") ? getHierarchy() : [{id:"S1"},{id:"S2"},{id:"S3"},{id:"S4"},{id:"S5"},{id:"S6"}];
+  const packs = (typeof atnAllPacks === "function") ? atnAllPacks(project) : [];
+  const role = (typeof atnActiveRole === "function") ? atnActiveRole(project) : "IM";
+  const ownTeam = atnActiveTeamCode(project);
+  const cur = (project && (project.currentStageId || project.currentStage)) || "S5";
+  const leadership = ["DTL","PDM","IM","DM"].indexOf(role) >= 0;
+  let html = '<div style="font-weight:800;font-size:13px;margin-bottom:6px;">My Role · Digital Plan of Work</div>';
+  html += '<p class="section-sub">Each work stage is a pill. Graphics follow NBS LOD language (schematic → coordinated → detailed → as-built). Not photographs. Click a pill to edit LOI for that stage only.</p>';
+  if(["TTM","TTIM","IA","PR"].indexOf(role)>=0){
+    html += '<div style="margin:8px 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center;"><span style="font-size:11px;font-weight:700;">Task team</span>';
+    atnTeamCodes(project).forEach(function(code){
+      const on = (ownTeam||"AR") === code;
+      html += '<button type="button" class="btn '+(on?"btn-gold":"btn-ghost")+'" data-atn-team="'+code+'">'+code+'</button>';
     });
+    html += '</div>';
+  }
+  const mine = [];
+  const deps = [];
+  packs.forEach(function(p){
+    if(leadership) mine.push(p);
+    else if((ownTeam && p.ro === ownTeam) || (!ownTeam && p.ro === "AR")) mine.push(p);
+    else deps.push(p);
   });
-  html += '</tbody></table></div>';
+  function packRow(p, dep){
+    const fam = atnSsFamily(p.ss||p.code, p.name);
+    const sc = (typeof atnScopeForPackage === "function") ? atnScopeForPackage(project, p) : null;
+    const sid = sc && project.dpow && project.dpow.scopes ? project.dpow.scopes.indexOf(sc) : -1;
+    let row = '<div style="display:grid;grid-template-columns:220px 1fr;gap:10px;align-items:start;padding:8px 0;border-bottom:1px solid #f3f0f6;'+(dep?"opacity:.72;":"")+'">';
+    row += '<div><div style="font-size:12px;font-weight:800;">'+escapeHtml(p.name||p.ss||"")+'</div>';
+    row += '<div style="font-size:10px;color:#666;">'+escapeHtml(p.ss||"")+' · '+escapeHtml(p.ro||"")+(dep?" · dependency":"")+'</div></div>';
+    row += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+    stages.forEach(function(s){
+      const planned = atnPlannedLodNum(s.id);
+      const st = (sc && sc.stages && sc.stages[s.id]) || {};
+      const stored = (typeof atnLodRank === "function") ? atnLodRank(st.lod) : 0;
+      const lod = stored || planned;
+      const on = s.id === cur;
+      row += '<button type="button" data-dpow-gantt-ir="'+(sid>=0?sid:"")+'" data-dpow-gantt-stage="'+s.id+'" style="width:92px;border:1px solid '+(on?"#3e0b3b":"#e9d5ff")+';background:'+(on?"#fffbeb":"#fff")+';border-radius:14px;padding:6px 4px;cursor:pointer;">';
+      row += '<div style="font-size:9px;font-weight:800;color:#3e0b3b;">'+s.id+' · LOD '+lod+'</div>';
+      row += '<div style="display:flex;justify-content:center;">'+atnLodSvg(fam, lod)+'</div>';
+      row += '<div style="font-size:8px;color:#666;">LOI '+lod+'</div></button>';
+    });
+    row += '</div></div>';
+    return row;
+  }
+  html += '<div style="font-size:11px;font-weight:800;margin:8px 0 4px;">'+(ownTeam||role)+' scope · '+mine.length+' packages</div>';
+  html += '<div style="max-height:420px;overflow:auto;border:1px solid #e9d5ff;border-radius:12px;padding:8px;">';
+  mine.slice(0,80).forEach(function(p){ html += packRow(p, false); });
+  if(mine.length>80) html += '<div class="section-sub">Showing 80 of '+mine.length+'.</div>';
+  html += '</div>';
+  if(!leadership && deps.length){
+    html += '<details style="margin-top:10px;"><summary style="font-size:12px;font-weight:800;cursor:pointer;">Other teams (dependencies) · '+deps.length+'</summary>';
+    const by={};
+    deps.forEach(function(p){ (by[p.ro]||(by[p.ro]=[])).push(p); });
+    Object.keys(by).sort().forEach(function(ro){
+      html += '<div style="font-size:11px;font-weight:700;margin:8px 0 4px;">'+ro+' · interface / predecessor</div>';
+      by[ro].slice(0,12).forEach(function(p){ html += packRow(p, true); });
+    });
+    html += '</details>';
+  }
   return html;
+}
+function atnBindTeamChips(project){
+  document.querySelectorAll("[data-atn-team]").forEach(function(b){
+    b.onclick = function(){
+      window.__activeTaskTeam = b.getAttribute("data-atn-team");
+      if(project) project.activeTaskTeam = window.__activeTaskTeam;
+      if(typeof renderAtnRoleOs === "function") renderAtnRoleOs(project);
+    };
+  });
+}
+function atnCleanLoiSheetHtml(project, scope, sid){
+  const st = (scope.stages && scope.stages[sid]) || {};
+  const all = (typeof loiParamsForScope === "function") ? loiParamsForScope(scope, sid) : [];
+  const n = String((typeof loiNumberForStage === "function") ? loiNumberForStage(sid) : atnPlannedLodNum(sid));
+  const req = all.filter(function(a){ return a.l && (a.l[n] || a.l[String(n)]); });
+  const list = req.length ? req : all.slice(0, 24);
+  const reqMap = st.params || {};
+  const fam = atnSsFamily(scope.uniclass||scope.code, scope.name);
+  const lod = atnPlannedLodNum(sid);
+  let h = '<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px;">';
+  h += '<div style="background:#faf5ff;border-radius:12px;padding:8px;">'+atnLodSvg(fam, lod)+'</div>';
+  h += '<div><h2 style="margin:0;">'+escapeHtml(scope.name)+'</h2>';
+  h += '<p class="section-sub" style="margin:4px 0 0;">'+escapeHtml(scope.uniclass||scope.code)+' · '+escapeHtml(scope.role||"")+' · '+escapeHtml(sid)+' · planned LOD/LOI '+lod+'</p>';
+  h += '<p class="section-sub">Attributes below are those the LOI schedule marks for this stage only.</p></div></div>';
+  h += '<div class="field"><label>LOD (this stage)</label><select id="ap-lod">'+(typeof lodOptionHtml==="function"?lodOptionHtml(lodOptionsFor(project), st.lod || ("LOD "+lod)):"")+'</select></div>';
+  h += '<div class="field"><label>LOI (this stage)</label><select id="ap-loi">'+(typeof lodOptionHtml==="function"?lodOptionHtml(loiOptionsFor(project), st.loi || ("LOI "+lod)):"")+'</select></div>';
+  h += '<div class="field"><label>Design responsibility</label><select id="ap-dr"><option value="">—</option>';
+  (typeof projectCompanies==="function"?projectCompanies(project):[]).forEach(function(c){
+    h += '<option value="'+escapeHtml(c.code)+'" '+(c.code===(st.designResponsibility||"")?"selected":"")+'>'+escapeHtml(c.code)+' · '+escapeHtml(c.label)+'</option>';
+  });
+  h += '</select></div>';
+  h += '<div class="field"><label>Required attributes at LOI '+n+' · '+list.length+'</label>';
+  h += '<div style="max-height:280px;overflow:auto;border:1px solid #eee;border-radius:10px;padding:8px;">';
+  if(!list.length) h += '<p class="section-sub">No LOI rows marked for this stage and product.</p>';
+  list.forEach(function(x){
+    const on = reqMap[x.p] || (x.l && x.l[n]);
+    h += '<label style="display:grid;grid-template-columns:18px 1fr;gap:8px;padding:6px 4px;border-bottom:1px solid #f3f0f6;align-items:start;">';
+    h += '<input type="checkbox" data-ap-param="'+escapeHtml(x.p)+'" '+(on?"checked":"")+'>';
+    h += '<span><strong style="font-size:13px;">'+escapeHtml(x.p)+'</strong>';
+    h += '<div style="font-size:11px;color:#555;">'+escapeHtml(x.c||"")+(x.t?(" · "+x.t):"")+(x.u && x.u!=="-"?(" · "+x.u):"")+'</div></span></label>';
+  });
+  h += '</div></div>';
+  h += '<p class="section-sub"><a href="'+(typeof NBS_LOD_GUIDE_URL!=="undefined"?NBS_LOD_GUIDE_URL:"https://www.thenbs.com/knowledge/level-of-detail-lod-and-digital-plans-of-work")+'" target="_blank" rel="noopener">NBS LOD guide (reference)</a> — graphics in Atana are original schematics in that language, not copied plates.</p>';
+  h += '<div class="sheet-actions"><button class="btn btn-ghost" id="ap-cancel">Close</button><button class="btn btn-primary" id="ap-save">Save</button></div>';
+  return h;
 }
 
 
@@ -33041,11 +33186,35 @@ function atnRenderDpowGantt(project){
   if(!prev || prev.__ganttBound) return;
   const w = function(project){
     prev(project);
+    if(typeof atnBindTeamChips === "function") atnBindTeamChips(project);
     document.querySelectorAll("[data-dpow-gantt-ir]").forEach(function(td){
       td.onclick = function(){
         const i = parseInt(td.getAttribute("data-dpow-gantt-ir"),10);
+        const sid = td.getAttribute("data-dpow-gantt-stage") || currentDpowStageId(project);
         const sc = project && project.dpow && project.dpow.scopes && project.dpow.scopes[i];
-        if(sc && typeof renderScopeIrModal === "function") renderScopeIrModal(project, sc);
+        if(!sc) return;
+        if(typeof openSheet === "function" && typeof atnCleanLoiSheetHtml === "function"){
+          const st = sc.stages[sid] || {};
+          openSheet(atnCleanLoiSheetHtml(project, sc, sid));
+          const cancel=document.getElementById("ap-cancel");
+          if(cancel) cancel.onclick = closeSheet;
+          const save=document.getElementById("ap-save");
+          if(save) save.onclick = function(){
+            if(!sc.stages[sid]) sc.stages[sid]={};
+            const lodEl=document.getElementById("ap-lod");
+            const loiEl=document.getElementById("ap-loi");
+            const drEl=document.getElementById("ap-dr");
+            if(lodEl) sc.stages[sid].lod=lodEl.value;
+            if(loiEl) sc.stages[sid].loi=loiEl.value;
+            if(drEl) sc.stages[sid].designResponsibility=drEl.value;
+            const pm={};
+            document.querySelectorAll("[data-ap-param]").forEach(function(cb){ if(cb.checked) pm[cb.getAttribute("data-ap-param")]=true; });
+            sc.stages[sid].params=pm;
+            if(typeof saveData==="function") saveData(DATA);
+            closeSheet();
+            renderAtnRoleOs(project);
+          };
+        } else if(typeof renderScopeIrModal === "function") renderScopeIrModal(project, sc);
       };
     });
   };
