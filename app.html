@@ -2558,8 +2558,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.40.19";
-const APP_BUILD = "2026-09-01-quick-export";
+const APP_VERSION = "3.40.20";
+const APP_BUILD = "2026-09-01-silent-export";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -16499,31 +16499,57 @@ async function atnEnsureExportDir(forcePick){
   }
   return handle;
 }
+function atnDefaultExportPath(project){
+  return (project && project.exportPath) || (DATA.settings && DATA.settings.exportPath) || (DATA.settings && DATA.settings.exportFolderName) || "";
+}
+async function atnSilentWritePack(project, dir){
+  const pathHint = (dir && dir.name) || atnDefaultExportPath(project);
+  const pack = (typeof buildProjectTransferPack === "function")
+    ? buildProjectTransferPack(project, { fileName: atnSafeProjectFileName(project), exportPath: pathHint })
+    : { project: project };
+  const fname = pack.fileName || (atnSafeProjectFileName(project) + ".json");
+  const text = JSON.stringify(pack, null, 2);
+  if(dir){
+    const fh = await dir.getFileHandle(fname, { create: true });
+    const w = await fh.createWritable();
+    await w.write(new Blob([text], { type: "application/json" }));
+    await w.close();
+    return fname + " → " + dir.name;
+  }
+  downloadBlob(fname, new Blob([text], { type: "application/json" }));
+  return fname;
+}
 async function atnQuickExportProject(ev){
   const project = (typeof projectById === "function" && typeof currentProjectId !== "undefined")
     ? (projectById(currentProjectId) || (DATA.projects && DATA.projects[0]))
     : (DATA.projects && DATA.projects[0]);
   if(!project){ showToast("Open a project first"); return; }
-  const force = !!(ev && ev.shiftKey);
+  const forcePick = !!(ev && ev.shiftKey);
   try{
-    const dir = await atnEnsureExportDir(force);
-    if(!dir){
-      if(typeof exportSingleProjectJson === "function") exportSingleProjectJson(project);
-      return;
+    let dir = null;
+    if(forcePick){
+      dir = await atnEnsureExportDir(true);
+    } else {
+      dir = await atnLoadExportDir();
+      if(dir){
+        try{
+          const q = await dir.queryPermission({ mode: "readwrite" });
+          if(q !== "granted"){
+            const r = await dir.requestPermission({ mode: "readwrite" });
+            if(r !== "granted") dir = null;
+          }
+        }catch(e){ dir = null; }
+      }
     }
-    const pack = (typeof buildProjectTransferPack === "function")
-      ? buildProjectTransferPack(project, { fileName: atnSafeProjectFileName(project), exportPath: dir.name || "" })
-      : { project: project };
-    const fname = pack.fileName || (atnSafeProjectFileName(project) + ".json");
-    const fh = await dir.getFileHandle(fname, { create: true });
-    const w = await fh.createWritable();
-    await w.write(new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" }));
-    await w.close();
-    showToast("Exported (overwrite) " + fname + " → " + dir.name);
+    const where = await atnSilentWritePack(project, dir);
+    showToast("Exported " + where);
   }catch(e){
     if(e && e.name === "AbortError") return;
     console.warn(e);
-    showToast("Export failed — use Export project (.json)");
+    try{
+      const where = await atnSilentWritePack(project, null);
+      showToast("Exported " + where);
+    }catch(e2){ showToast("Export failed"); }
   }
 }
 function bindAtnQuickExport(){
@@ -25665,6 +25691,7 @@ function exportSingleProjectJson(project){
     const pathHint = (document.getElementById("xp-path").value || "").trim();
     if(!DATA.settings) DATA.settings = {};
     DATA.settings.exportPath = pathHint;
+    live.exportPath = pathHint;
     if(typeof saveData === "function") saveData(DATA);
     const pack = buildProjectTransferPack(live, { fileName: name, exportPath: pathHint });
     const text = JSON.stringify(pack, null, 2);
@@ -29512,6 +29539,11 @@ function openEditProjectSheet(project){
           <button type="button" class="btn btn-primary btn-xs" id="f-p-export-json">Export project (.json)</button>
           <button type="button" class="btn btn-ghost btn-xs" id="f-p-import-json">Import project (.json)</button>
         </div>
+        <div class="field" style="margin-top:10px;">
+          <label>Default export folder (used by header EXPORT — overwrite, no prompt)</label>
+          <input id="f-p-export-path" placeholder="C:\Users\...\JSON DBs" value="${escapeHtml(project.exportPath || (DATA.settings && DATA.settings.exportPath) || "")}">
+          <p class="section-sub">Saved on the project. Header EXPORT writes immediately. Pin the same folder once with Shift+EXPORT so the browser can overwrite that folder.</p>
+        </div>
         <div id="import-settings-sections" style="margin-top:10px;padding:10px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;font-size:12px;">
           <div style="font-weight:700;margin-bottom:6px;">When importing settings / Forma sheet — include sections</div>
           <div style="display:flex;flex-wrap:wrap;gap:8px 14px;">
@@ -29650,6 +29682,15 @@ function openEditProjectSheet(project){
   }
   const impBtn = document.getElementById("f-p-import-naming");
   if(impBtn) impBtn.onclick = () => openImportNamingSheet(project);
+  const expPath = document.getElementById("f-p-export-path");
+  if(expPath){
+    expPath.onchange = () => {
+      project.exportPath = expPath.value.trim();
+      if(!DATA.settings) DATA.settings = {};
+      DATA.settings.exportPath = project.exportPath;
+      if(typeof saveData === "function") saveData(DATA);
+    };
+  }
   const expJson = document.getElementById("f-p-export-json");
   if(expJson) expJson.onclick = () => exportSingleProjectJson(project);
   const impJson = document.getElementById("f-p-import-json");
