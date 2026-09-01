@@ -2558,8 +2558,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.40.21";
-const APP_BUILD = "2026-09-01-folder-only";
+const APP_VERSION = "3.42.0";
+const APP_BUILD = "2026-09-01-pdom-p2";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -27626,7 +27626,7 @@ function projectStageSystemFieldsHtml(selected){
   const sel = selected || "SA";
   return `
     <div class="field stage-system-field">
-      <label class="stage-system-heading">Work stage system</label>
+      <label class="stage-system-heading">Project Delivery Framework</label>
       <div class="stage-system-options">
         <label class="stage-system-option">
           <input type="radio" name="f-p-stageSystem" value="SA" ${sel==="SA"?"checked":""}/>
@@ -27641,6 +27641,20 @@ function projectStageSystemFieldsHtml(selected){
           <span>Show both SA + RIBA</span>
         </label>
       </div>
+      <p class="section-sub">SA stages stay primary. RIBA is a mapping layer only. Tasks do not change.</p>
+    </div>
+    <div class="field">
+      <label>Contract form</label>
+      <select id="f-p-contractForm">
+        ${["CESA","CIDB","FIDIC","NEC3","NEC4","PROCSA"].map(function(c){
+          return '<option value="'+c+'">'+c+'</option>';
+        }).join("")}
+      </select>
+    </div>
+    <div class="field">
+      <label>ISO 19650</label>
+      <label class="stage-system-option"><input type="radio" name="f-p-iso19650" value="on" checked/> <span>Enabled (embedded in tasks)</span></label>
+      <label class="stage-system-option"><input type="radio" name="f-p-iso19650" value="off"/> <span>Disabled</span></label>
     </div>`;
 }
 function readProjectStageSystemFromForm(){
@@ -29680,6 +29694,13 @@ function openEditProjectSheet(project){
   }
   const impBtn = document.getElementById("f-p-import-naming");
   if(impBtn) impBtn.onclick = () => openImportNamingSheet(project);
+  const cfEl = document.getElementById("f-p-contractForm");
+  if(cfEl){
+    cfEl.value = project.contractForm || "CESA";
+  }
+  document.querySelectorAll('input[name="f-p-iso19650"]').forEach(function(r){
+    r.checked = project.iso19650Enabled === false ? (r.value==="off") : (r.value==="on");
+  });
   const expPath = document.getElementById("f-p-export-path");
   if(expPath){
     expPath.onchange = () => {
@@ -29786,6 +29807,10 @@ function openEditProjectSheet(project){
     if(stEl && stEl.value) project.currentStageId = stEl.value;
     project.stageLabels = info.stageLabels || {};
     project.stageSystem = readProjectStageSystemFromForm();
+    const cf = document.getElementById("f-p-contractForm");
+    if(cf) project.contractForm = cf.value || project.contractForm || "CESA";
+    const isoEl = document.querySelector('input[name="f-p-iso19650"]:checked');
+    project.iso19650Enabled = !(isoEl && isoEl.value === "off");
     // Force stage labels / pickers / WBS / progress to refresh under new system
     try {
       if(typeof renderStagePicker === "function") renderStagePicker(project);
@@ -32649,6 +32674,228 @@ ATN_ROLE_TASK_LIB.RE = [ atnRT("Site","HANDOVER","Record as-built exceptions for
 
 
 
+
+/* ========== 3.41.0 SA delivery framework consolidation ========== */
+const ATN_SA_STAGES = [
+  { id:"S1", ws:"WS1", label:"Stage 1 – Inception", riba:"0/1 Strategic / Preparation", iso:"OIR / PIR / appointment" },
+  { id:"S2", ws:"WS2", label:"Stage 2 – Concept & Viability", riba:"2 Concept", iso:"EIR / BEP / MIDP draft" },
+  { id:"S3", ws:"WS3", label:"Stage 3 – Design Development", riba:"3 Spatial Coordination", iso:"Information production" },
+  { id:"S4", ws:"WS4", label:"Stage 4 – Documentation & Procurement", riba:"4 Technical Design", iso:"Information exchange / tender" },
+  { id:"S5", ws:"WS5", label:"Stage 5 – Construction", riba:"5 Manufacturing / Construction", iso:"Site information / as-built" },
+  { id:"S6", ws:"WS6", label:"Stage 6 – Close Out", riba:"6 Handover", iso:"AIM / archive" }
+];
+const ATN_ZZ_GATES = [
+  { id:"ZZ-001", name:"Stage Start", stages:["S1","S2","S3","S4","S5","S6"] },
+  { id:"ZZ-002", name:"Mobilisation Complete", stages:["S1"] },
+  { id:"ZZ-003", name:"Capability Approved", stages:["S1"] },
+  { id:"ZZ-004", name:"Capacity Approved", stages:["S1"] },
+  { id:"ZZ-005", name:"CDE Operational", stages:["S1"] },
+  { id:"ZZ-006", name:"Peer Review", stages:["S2","S3","S4"] },
+  { id:"ZZ-007", name:"QA Review", stages:["S3","S4","S5"] },
+  { id:"ZZ-008", name:"Client Review", stages:["S2","S3","S4","S5"] },
+  { id:"ZZ-009", name:"Submission", stages:["S2","S3","S4"] },
+  { id:"ZZ-010", name:"Approval", stages:["S1","S2","S3","S4","S5","S6"] },
+  { id:"ZZ-011", name:"Handover", stages:["S6"] },
+  { id:"ZZ-012", name:"Closeout", stages:["S6"] }
+];
+const ATN_DOM_FROZEN = "1.1";
+const ATN_GANTT_SEQ = ["ZZ-001 Stage Start","Governance tasks","Production packages","Deliverables","ZZ-006 Peer Review","ZZ-007 QA Review","ZZ-008 Client Review","ZZ-009 Submission","ZZ-010 Approval","Issue / publish"];
+const ATN_ISO_MAP = {
+  "DTL.07": { iso:"ISO 19650-2 5.1–5.3", lrqa:"LRQA BIM Org / Appointment", pep:"PEP Information Management", bep:"BEP approval" },
+  "IM.02": { iso:"ISO 19650-2 5.1.7 CDE", lrqa:"CDE operational", pep:"CDE section", bep:"CDE workflow" },
+  "IM.03": { iso:"ISO 19650-2 5.2 MIDP", lrqa:"MIDP maintained", pep:"Information delivery", bep:"MIDP / TIDP" },
+  "IM.04": { iso:"ISO 19650-2 5.1.3 Standard", lrqa:"Information standard", pep:"Standards", bep:"Standards annex" },
+  "IM.05": { iso:"ISO 19650-1 LOIN", lrqa:"LOIN / DPoW", pep:"Information requirements", bep:"LOIN" },
+  "IM.06": { iso:"ISO 19650-2 5.6 Review", lrqa:"IQA / audit", pep:"Quality", bep:"Checking" },
+  "IM.08": { iso:"ISO 19650-2 5.7 Delivery", lrqa:"Publish / archive", pep:"Handover", bep:"Publication" },
+  "PDM.01": { iso:"ISO 19650-2 5.3 Planning", lrqa:"Package plan", pep:"WBS", bep:"Task team plan" },
+  "DTL.02": { iso:"ISO 19650-2 Appointment", lrqa:"Mobilisation", pep:"Startup", bep:"Team" }
+};
+function atnFwTask(role, code, name, stage, category, raci){
+  return {
+    taskId: role + "-" + code.replace(/\./g,"-"),
+    taskCode: code,
+    taskName: name,
+    role: role,
+    stage: stage,
+    taskCategory: category,
+    categoryCode: code.split(".").slice(0,2).join("."),
+    r: raci.R, a: raci.A, c: raci.C || "", i: raci.I || "",
+    mandatory: true
+  };
+}
+(function atnInstallSaFramework(){
+  const DTL_A = { R:"DTL", A:"DTL", C:"PDM", I:"IM" };
+  const IM_R = { R:"IM", A:"DTL", C:"PDM", I:"TTM" };
+  const PDM_R = { R:"PDM", A:"DTL", C:"IM", I:"TTM" };
+  const dtl = [];
+  function add(role, code, name, stage, cat, raci){ (role==="DTL"?dtl:role==="PDM"?pdm:im).push(atnFwTask(role, code, name, stage, cat, raci)); }
+  const pdm = [], im = [];
+  [
+    ["DTL.01.01","Review Contract","S1","Contract & Commercial"],
+    ["DTL.01.02","Review Deliverables","S1","Contract & Commercial"],
+    ["DTL.01.03","Review Client Requirements","S1","Contract & Commercial"],
+    ["DTL.01.04","Manage Variations","S3","Contract & Commercial"],
+    ["DTL.01.05","Contract Administration","S5","Contract & Commercial"],
+    ["DTL.02.01","Complete VP Startup","S1","Project Setup"],
+    ["DTL.02.02","Project Organisation","S1","Project Setup"],
+    ["DTL.02.03","Roles & Responsibilities","S1","Project Setup"],
+    ["DTL.02.04","Stakeholder Register","S1","Project Setup"],
+    ["DTL.02.05","Communication Plan","S1","Project Setup"],
+    ["DTL.02.06","Meeting Structure","S1","Project Setup"],
+    ["DTL.03.01","Approve WBS","S1","Planning"],
+    ["DTL.03.02","Approve Programme","S1","Planning"],
+    ["DTL.03.03","Approve Resource Plan","S2","Planning"],
+    ["DTL.03.04","Approve PEP","S2","Planning"],
+    ["DTL.04.01","Budget Review","S1","Financial"],
+    ["DTL.04.02","Forecast Reviews","S3","Financial"],
+    ["DTL.04.03","Commercial Reviews","S4","Financial"],
+    ["DTL.04.04","Invoice Reviews","S5","Financial"],
+    ["DTL.05.01","Risk Plan","S1","Risk"],
+    ["DTL.05.02","Risk Register","S2","Risk"],
+    ["DTL.05.03","Opportunity Register","S2","Risk"],
+    ["DTL.05.04","Lessons Learned Register","S6","Risk"],
+    ["DTL.06.01","Quality Plan","S1","Quality"],
+    ["DTL.06.02","Audit Schedule","S3","Quality"],
+    ["DTL.06.03","Peer Review Schedule","S3","Quality"],
+    ["DTL.06.04","QA Schedule","S3","Quality"],
+    ["DTL.07.01","Approve EIR","S1","Information Governance"],
+    ["DTL.07.02","Approve BEP","S1","Information Governance"],
+    ["DTL.07.03","Approve MIDP","S2","Information Governance"],
+    ["DTL.07.04","Approve Information Standard","S1","Information Governance"],
+    ["DTL.07.05","Approve Information Protocol","S1","Information Governance"],
+    ["DTL.08.01","Procurement Plan","S4","Procurement"],
+    ["DTL.08.02","Supplier Review","S4","Procurement"],
+    ["DTL.08.03","Capability Approval","S1","Procurement"],
+    ["DTL.08.04","Capacity Approval","S1","Procurement"],
+    ["DTL.09.01","Project Health Checks","S3","Execution Control"],
+    ["DTL.09.02","Progress Reviews","S3","Execution Control"],
+    ["DTL.09.03","Stakeholder Reviews","S4","Execution Control"],
+    ["DTL.09.04","Client Reviews","S4","Execution Control"],
+    ["DTL.10.01","Closeout Plan","S6","Closeout"],
+    ["DTL.10.02","Final Lessons Learned","S6","Closeout"],
+    ["DTL.10.03","Archive Approval","S6","Closeout"],
+    ["DTL.10.04","Project Closure","S6","Closeout"]
+  ].forEach(function(r){
+    const raci = r[0].indexOf("DTL.07")===0 ? { R:"IM", A:"DTL", C:"PDM", I:"TTM" } : DTL_A;
+    dtl.push(atnFwTask("DTL", r[0], r[1], r[2], r[3], raci));
+  });
+  [
+    ["PDM.01.01","Define WBS","S1","Scope"],
+    ["PDM.01.02","Define Production Packages","S1","Scope"],
+    ["PDM.01.03","Define Deliverables","S2","Scope"],
+    ["PDM.02.01","Design Strategy","S2","Design Management"],
+    ["PDM.02.02","Design Reviews","S3","Design Management"],
+    ["PDM.02.03","Technical Reviews","S3","Design Management"],
+    ["PDM.02.04","Review Resolutions","S3","Design Management"],
+    ["PDM.03.01","Package Planning","S2","Programme"],
+    ["PDM.03.02","Sequencing","S3","Programme"],
+    ["PDM.03.03","Delivery Planning","S3","Programme"],
+    ["PDM.04.01","Design Coordination","S3","Coordination"],
+    ["PDM.04.02","Interdiscipline Coordination","S3","Coordination"],
+    ["PDM.04.03","Package Coordination","S3","Coordination"],
+    ["PDM.05.01","Technical QA","S3","Quality"],
+    ["PDM.05.02","Peer Reviews","S4","Quality"],
+    ["PDM.05.03","Design Checks","S4","Quality"],
+    ["PDM.06.01","RFIs","S5","Construction Support"],
+    ["PDM.06.02","Technical Support","S5","Construction Support"],
+    ["PDM.06.03","Site Queries","S5","Construction Support"],
+    ["PDM.06.04","Design Changes","S5","Construction Support"]
+  ].forEach(function(r){ pdm.push(atnFwTask("PDM", r[0], r[1], r[2], r[3], PDM_R)); });
+  [
+    ["IM.01.01","Capability Assessment","S1","Mobilisation"],
+    ["IM.01.02","Capacity Assessment","S1","Mobilisation"],
+    ["IM.01.03","Mobilisation Plan","S1","Mobilisation"],
+    ["IM.01.04","Information Readiness Review","S1","Mobilisation"],
+    ["IM.02.01","CDE Setup","S1","CDE"],
+    ["IM.02.02","Access Control","S1","CDE"],
+    ["IM.02.03","Workflow Setup","S1","CDE"],
+    ["IM.02.04","Archive Setup","S1","CDE"],
+    ["IM.03.01","Prepare MIDP","S1","Information Planning"],
+    ["IM.03.02","Maintain MIDP","S3","Information Planning"],
+    ["IM.03.03","Review TIDPs","S2","Information Planning"],
+    ["IM.03.04","Aggregate TIDPs","S3","Information Planning"],
+    ["IM.04.01","Information Standard","S1","Standards"],
+    ["IM.04.02","Naming Standard","S1","Standards"],
+    ["IM.04.03","Classification Standard","S1","Standards"],
+    ["IM.04.04","Templates","S1","Standards"],
+    ["IM.05.01","DPoW Setup","S2","DPoW & LOIN"],
+    ["IM.05.02","LOIN Definition","S2","DPoW & LOIN"],
+    ["IM.05.03","Information Requirements","S3","DPoW & LOIN"],
+    ["IM.06.01","IQA Reviews","S3","Information Quality"],
+    ["IM.06.02","Information Audits","S4","Information Quality"],
+    ["IM.06.03","Metadata Audits","S3","Information Quality"],
+    ["IM.06.04","Compliance Reviews","S4","Information Quality"],
+    ["IM.07.01","Federation","S3","Coordination"],
+    ["IM.07.02","Clash Detection","S3","Coordination"],
+    ["IM.07.03","Issue Management","S3","Coordination"],
+    ["IM.07.04","Model Reviews","S4","Coordination"],
+    ["IM.08.01","Publish Information","S4","Publication"],
+    ["IM.08.02","Shared Area","S4","Publication"],
+    ["IM.08.03","Published Area","S5","Publication"],
+    ["IM.08.04","Archive","S6","Publication"]
+  ].forEach(function(r){ im.push(atnFwTask("IM", r[0], r[1], r[2], r[3], IM_R)); });
+  window.ATN_FW = { DTL: dtl, PDM: pdm, IM: im };
+  window.ATN_SA_FRAMEWORK = { version:"1.0", stages: ATN_SA_STAGES, gates: ATN_ZZ_GATES, raciRule: "IM Responsible · DTL Accountable for information management" };
+})();
+function atnStageCaption(project, st){
+  const mode = (project && project.stageSystem) || "SA";
+  if(mode === "RIBA") return st.id + " · " + st.riba;
+  if(mode === "both") return st.label + " · " + st.riba;
+  return st.label;
+}
+function atnRenderSaSeat(project, activeRole){
+  const packs = (typeof atnAllPacks === "function") ? atnAllPacks(project) : [];
+  const roles = ["DTL","PDM","IM"];
+  let html = '<p class="section-sub">South Africa stages are primary. Information Management: <strong>IM = Responsible</strong>, <strong>DTL = Accountable</strong>. Other roles are visible but grey and read-only. Packages sit between governance tasks and gates.</p>';
+  ATN_SA_STAGES.forEach(function(st){
+    html += '<div style="border:1px solid #e9d5ff;border-radius:12px;padding:12px;margin-bottom:12px;">';
+    html += '<div style="font-weight:800;">'+escapeHtml(atnStageCaption(project, st))+'</div>';
+    html += '<div class="section-sub">ISO 19650: '+escapeHtml(st.iso)+'</div>';
+    roles.forEach(function(role){
+      const mine = role === activeRole;
+      const tasks = (window.ATN_FW && ATN_FW[role] || []).filter(function(t){ return t.stage === st.id; });
+      if(!tasks.length) return;
+      html += '<div style="margin-top:10px;opacity:'+(mine?"1":".55")+';">';
+      html += '<div style="font-size:11px;font-weight:800;">'+role+(mine?"":" · read only")+'</div>';
+      tasks.forEach(function(t){
+        const id = t.taskId;
+        const done = project.roleWork && project.roleWork.status && project.roleWork.status[id]==="done";
+        html += '<label style="display:flex;gap:8px;margin-top:4px;font-size:13px;align-items:flex-start;">';
+        html += '<input type="checkbox" data-rw="'+id+'" '+(done?"checked":"")+' '+(mine?"":"disabled")+'>';
+        html += '<span><strong>'+escapeHtml(t.taskCode)+'</strong> '+escapeHtml(t.taskName);
+        html += ' <span style="font-size:10px;color:#666;">R '+t.r+' · A '+t.a+'</span>';
+        const iso = (typeof ATN_ISO_MAP!=="undefined") && ATN_ISO_MAP[t.categoryCode];
+        if(iso) html += '<div style="font-size:10px;color:#7c3aed;">'+escapeHtml(iso.iso)+' · '+escapeHtml(iso.lrqa)+'</div>';
+        html += '</span></label>';
+        if(t.taskCode==="DTL.02.01"){
+          html += '<div style="margin:4px 0 8px 26px;font-size:11px;color:#555;">VP evidence (do not duplicate VP): VP Project Created · Contract Loaded · Labour Planned · Budget Loaded · Risks Loaded</div>';
+        }
+      });
+      html += '</div>';
+    });
+    if(packs.length && ["S2","S3","S4"].indexOf(st.id)>=0){
+      html += '<div style="font-size:11px;font-weight:800;color:#847918;margin-top:12px;">Production packages → deliverables</div>';
+      packs.slice(0,40).forEach(function(p){
+        const fam = (typeof atnPkgFamily === "function") ? atnPkgFamily(p) : "DEFAULT";
+        const dels = (typeof ATN_IDM_DELIVERABLES !== "undefined" && ATN_IDM_DELIVERABLES[fam]) ? ATN_IDM_DELIVERABLES[fam] : ["Layout","GA","Schedules","Model","Specification"];
+        html += '<div style="background:#fffbeb;border:1px solid #f5e6a3;border-radius:10px;padding:8px;margin-top:6px;">';
+        html += '<div style="font-weight:700;font-size:12px;">'+escapeHtml(p.ro||"")+' · '+escapeHtml(p.name||p.ss||"")+'</div>';
+        html += '<div style="font-size:11px;margin-top:4px;">Deliverables: '+dels.join(" · ")+'</div>';
+        html += '<div style="font-size:10px;color:#666;margin-top:4px;">Review → QA → Submission · types: '+(typeof ATN_PKG_TYPES!=="undefined"?ATN_PKG_TYPES.join(" · "):"")+'</div></div>';
+      });
+    }
+    const gates = ATN_ZZ_GATES.filter(function(g){ return g.stages.indexOf(st.id)>=0; });
+    html += '<div style="font-size:11px;font-weight:800;margin-top:12px;">Stage gates (ZZ)</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">';
+    gates.forEach(function(g){
+      html += '<span style="font-size:11px;border:1px solid #c4b5fd;background:#f5f3ff;border-radius:999px;padding:3px 8px;">'+g.id+' '+escapeHtml(g.name)+'</span>';
+    });
+    html += '</div></div>';
+  });
+  return html;
+}
+
 const ATN_IDM_STAGES = [
   { id:"ST0", ws:"S1", label:"WS0 Initiate / Mobilisation", production:false, durRole:2, durProd:0, durAppr:1 },
   { id:"ST1", ws:"S2", label:"WS1 Plan", production:true, createPkgs:true, durRole:3, durProd:2, durAppr:1 },
@@ -32660,6 +32907,28 @@ const ATN_IDM_STAGES = [
   { id:"ST7", ws:"S6", label:"WS7 Handover", production:true, handover:true, durRole:2, durProd:5, durAppr:2 }
 ];
 const ATN_PKG_LIFE = ["DEFINED","PLANNED","IN PRODUCTION","READY FOR REVIEW","READY FOR APPROVAL","APPROVED","ISSUED","AS-BUILT","HANDOVER COMPLETE","ARCHIVED"];
+const ATN_PKG_TYPES = ["Design Package","Council Submission","Authority Submission","Permit Submission","Tender Package","Construction Package","As Built Package","Handover Package"];
+const ATN_TASK_DEPS = [
+  { task:"DTL.02.01", pred:"ZZ-001", succ:"IM.01.01", type:"FS" },
+  { task:"IM.01.01", pred:"DTL.02.01", succ:"IM.01.02", type:"FS" },
+  { task:"IM.01.02", pred:"IM.01.01", succ:"ZZ-003", type:"FS" },
+  { task:"ZZ-003", pred:"IM.01.01", succ:"ZZ-004", type:"FS" },
+  { task:"ZZ-004", pred:"IM.01.02", succ:"IM.02.01", type:"FS" },
+  { task:"IM.02.01", pred:"ZZ-004", succ:"ZZ-005", type:"FS" },
+  { task:"ZZ-005", pred:"IM.02.01", succ:"IM.03.01", type:"FS" },
+  { task:"IM.03.01", pred:"ZZ-005", succ:"PDM.01.02", type:"FS" },
+  { task:"PDM.01.01", pred:"DTL.03.01", succ:"PDM.01.02", type:"FS" },
+  { task:"PDM.01.02", pred:"IM.03.01", succ:"PKG", type:"FS" },
+  { task:"PKG", pred:"PDM.01.02", succ:"DELIV", type:"FS" },
+  { task:"DELIV", pred:"PKG", succ:"ZZ-006", type:"FS" },
+  { task:"ZZ-006", pred:"DELIV", succ:"IM.06.01", type:"FS" },
+  { task:"IM.06.01", pred:"ZZ-006", succ:"ZZ-007", type:"FS" },
+  { task:"ZZ-007", pred:"IM.06.01", succ:"ZZ-008", type:"FS" },
+  { task:"ZZ-008", pred:"ZZ-007", succ:"ZZ-009", type:"FS" },
+  { task:"ZZ-009", pred:"ZZ-008", succ:"ZZ-010", type:"FS" },
+  { task:"ZZ-010", pred:"ZZ-009", succ:"IM.08.01", type:"FS" },
+  { task:"IM.08.01", pred:"ZZ-010", succ:"NEXT-STAGE", type:"FS" }
+];
 const ATN_IDM_DELIVERABLES = {
   AR: ["Plans","Elevations","Schedules","Data Sheets"],
   ST: ["Foundations model","Member schedule","Connection notes"],
@@ -32781,7 +33050,7 @@ function renderAtnRoleOs(project){
   const horizon = plan.horizon || 40;
   let html = '<div class="card" style="padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
   html += '<div class="section-title">Execution model</div>';
-  html += '<p class="section-sub">ROLE-driven → PRODUCTION-driven → DELIVERABLE-driven → INFORMATION-driven. Generic tasks are the skeleton. Packages are inserted between them.</p>';
+  html += '<p class="section-sub">SA project delivery first. ISO 19650 is embedded. IM = Responsible, DTL = Accountable. Packages sit between governance tasks and ZZ gates.</p>';
   html += '<div class="atn-stepper">';
   ATN_ROLE_CATALOGUE.forEach(function(r){
     html += '<button type="button" class="atn-step'+(r.id===role?' on':'')+'" data-role-os="'+r.id+'"><span class="atn-step-num">'+r.id+'</span><span class="atn-step-lbl">'+r.name+'</span></button>';
@@ -32792,7 +33061,7 @@ function renderAtnRoleOs(project){
   html += '<button type="button" class="btn '+(mode==="programme"?"btn-gold":"btn-ghost")+'" data-idm-mode="programme">Programme WBS + Gantt</button>';
   html += '<button type="button" class="btn btn-ghost" id="atnIdmRegen">Regenerate schedule</button></div>';
   html += '<div style="background:#faf5ff;border-radius:10px;padding:10px;margin:8px 0;"><strong>I am the '+escapeHtml(meta.name)+'.</strong> '+atnIdmGuidance(role, project).map(escapeHtml).join(" · ")+'</div>';
-  html += '<div style="font-size:11px;margin:6px 0 10px;">Chain: '+ATN_GANTT_CHAIN.join(" → ")+'</div>';
+  html += '<div style="font-size:11px;margin:6px 0 10px;">Sequence: '+((typeof ATN_GANTT_SEQ!=="undefined")?ATN_GANTT_SEQ:ATN_GANTT_CHAIN).join(" → ")+'</div>';
 
   if(mode === "programme"){
     html += (typeof atnRenderDpowGantt === "function") ? atnRenderDpowGantt(project) : "";
@@ -32810,6 +33079,9 @@ function renderAtnRoleOs(project){
       html += '<div style="font-size:12px;padding:3px 0;">'+d.stage+' · <strong>'+escapeHtml(d.before)+'</strong> BEFORE <strong>'+escapeHtml(d.after)+'</strong></div>';
     });
   } else {
+    if(typeof atnRenderSaSeat === "function"){
+      html += atnRenderSaSeat(project, role);
+    } else
     ATN_IDM_STAGES.forEach(function(st){
       const tasks = atnTasksForIdmStage(role, st.id).map(function(t,i){
         return Object.assign({ id: role.toLowerCase()+"-"+st.id+"-"+atnSlug(t.name)+"-"+i }, t);
