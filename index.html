@@ -15,8 +15,8 @@
 </head>
 <body>
 <div class="box">
-  <p>Opening Atana IM Tasks v3.48.0…</p>
-  <p><a id="go" href="app.html?v=3480">Open app</a></p>
+  <p>Opening Atana IM Tasks v3.48.2…</p>
+  <p><a id="go" href="app.html?v=3482">Open app</a></p>
 </div>
 <script>
 (async function () {
@@ -30,7 +30,7 @@
       await Promise.all(keys.map(k => caches.delete(k)));
     }
   } catch (e) {}
-  const url = "app.html?v=3480&t=" + Date.now();
+  const url = "app.html?v=3482&t=" + Date.now();
   document.getElementById("go").href = url;
   location.replace(url);
 })();

@@ -1279,10 +1279,7 @@
   #panel-workspace .ws-sticky-chrome .stage-picker-label{
     font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#64748b;
   }
-  #panel-workspace .ws-sticky-chrome #plannerSub{display:none !important;}
-  #imtasksSub{display:none;}
-  #panel-workspace.ws-on-imtasks .ws-sticky-chrome #plannerSub{display:none !important;}
-  #imtasksSub{display:flex;}
+  #plannerSub, #imtasksSub { display:none !important; }
 
   .ws-timeline{position:relative;height:44px;background:#f1f5f9;border-radius:8px;margin:0 0 8px;border:1px solid #e2e8f0;overflow:hidden;box-shadow:0 2px 6px rgba(15,23,42,.08),inset 0 1px 2px rgba(15,23,42,.06);}
   .ws-timeline .ws-tl-past{position:absolute;left:0;top:0;bottom:0;background:#cbd5e1;}
@@ -2025,6 +2022,7 @@
         <div class="stage-picker" id="stagePicker"></div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;">
           <button type="button" class="btn btn-ghost btn-xs" id="showAllRoleTasksBtn" title="Show predecessor / successor tasks from other roles. Those rows stay locked.">Show dependency tasks</button>
+          <button type="button" class="btn btn-ghost btn-xs" id="showEveryRoleTasksBtn" title="Show every functional role task. Other roles stay locked.">Show all role tasks</button>
           <span id="activeRoleBanner" style="font-size:11px;font-weight:600;color:var(--purple-900);"></span>
         </div>
         <div class="ws-stage-meta">
@@ -2187,7 +2185,11 @@
       </div><!-- /wsview-midp -->
 
 
+      <div class="ws-view" id="wsview-team">
+        <div id="scopeTeamRoot"></div>
+      </div>
       <div class="ws-view" id="wsview-dpow">
+        <div id="atnRoleOsRootDpow"></div>
         <div class="card" style="margin-bottom:12px;">
           <div class="chart-card-title" style="margin-bottom:4px;">Digital Plan of Work</div>
           <p class="section-sub" style="margin:0 0 10px;"><strong>Ss systems</strong> encapsulate what is modelled (later: Revit families/models). Set <strong>LOD/LOI</strong> per stage. Contractual offtake is the <strong>imported MIDP plan</strong> (MIDP tracking); each task team <strong>TIDP</strong> is that plan filtered by role, tied to the <strong>end of the work stage</strong>.</p>
@@ -2578,9 +2580,9 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.48.0";
+const APP_VERSION = "3.48.2";
 window.APP_VERSION = APP_VERSION;
-const APP_BUILD = "2026-09-02-rebuild-3455";
+const APP_BUILD = "2026-09-02-dpow-team-nav";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -4440,13 +4442,13 @@ let state = {
   stageDates: {},
   functionalList: [
     {code:"XX", label:"NO SUBDIVISION", selected:true},
-    {code:"ZZ", label:"MULTIPLE SUBDIVISIONS", selected:false},
+    {code:"ZZ", label:"MULTIPLE SUBDIVISIONS", selected:true},
     {code:"00", label:"GENERAL / SITE-WIDE", selected:false},
     {code:"01", label:"BUILDING 01", selected:false},
   ],
   levels: [
     {code:"00", label:"GROUND FLOOR", selected:true},
-    {code:"01", label:"LEVEL 01", selected:false},
+    {code:"01", label:"LEVEL 01", selected:true},
     {code:"02", label:"LEVEL 02", selected:false},
     {code:"B1", label:"BASEMENT LEVEL 01", selected:false},
     {code:"RF", label:"ROOF LEVEL", selected:false},
@@ -4986,7 +4988,7 @@ function defaultMidpState(){
     stageDates: {},
     functionalList: [
       {code:"XX", label:"NO SUBDIVISION", selected:true},
-      {code:"ZZ", label:"MULTIPLE SUBDIVISIONS", selected:false},
+      {code:"ZZ", label:"MULTIPLE SUBDIVISIONS", selected:true},
       {code:"00", label:"GENERAL / SITE-WIDE", selected:false},
       {code:"01", label:"BUILDING 01", selected:false},
     ],
@@ -7991,42 +7993,71 @@ function renderFormaPackagePanel(project){
     host.id = "formaPkgPanel";
     list.parentNode.insertBefore(host, list);
   }
-  const files = (project && project.accDeliverablesCache) || [];
-  const orphans = files.filter(function(f){ return f.formaOrphan; });
-  const withPk = files.filter(function(f){ return f.formaPackageId; });
-  const txs = atnFormaTransmits(project);
-  const unsent = files.filter(function(f){
-    const key = (f.id || f.name || "") + "::" + (f.cdeState || "");
-    return !atnLatestTransmit(project, key) && (f.cdeState === "SHARED" || f.cdeState === "PUBLISHED");
-  });
-  const packs = (typeof getProductionPackages === "function") ? getProductionPackages(project).slice(0, 80) : [];
+  const cat = (typeof normalizeMidpCatalog === "function") ? normalizeMidpCatalog(project && project.midpCatalog, {strict:true}) : {functionalList:[], roles:[]};
+  const stages = ["S1","S2","S3","S4","S5","S6"];
+  const sel = window.__formaPkgSel || {
+    stage: project.currentStageId || "S4",
+    fb: (cat.functionalList[0] && String(cat.functionalList[0].code||"").replace(/^FB/i,"")) || "01",
+    team: (cat.roles.filter(function(r){return !r.disabled;})[0] || {}).code || "AR"
+  };
+  window.__formaPkgSel = sel;
+  const name = atnFormaPackageName(project, sel);
+  const included = atnPackagesForSelection(project, sel);
+  const files = atnFilesForPackages(project, included);
+  const remote = project.formaDocsPackageList || [];
   let html = '<div class="card" style="padding:12px;margin-bottom:12px;">';
   html += '<div style="font-weight:800;margin-bottom:6px;">FORMA packages & transmit</div>';
-  html += '<div style="font-size:12px;margin-bottom:8px;">Files '+files.length+' · In package '+withPk.length+' · Not in package '+orphans.length+' · Not transmitted '+unsent.length+'</div>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">';
+  html += '<label style="font-size:12px;">Stage <select id="formaSelStage">';
+  stages.forEach(function(s){ html += '<option value="'+s+'"'+(sel.stage===s?' selected':'')+'>'+s+'</option>'; });
+  html += '</select></label>';
+  html += '<label style="font-size:12px;">FB <select id="formaSelFb">';
+  (cat.functionalList||[]).filter(function(f){return !f.disabled;}).forEach(function(f){
+    const code = String(f.code||"").replace(/^FB/i,"");
+    html += '<option value="'+escapeHtml(code)+'"'+(sel.fb===code?' selected':'')+'>FB'+escapeHtml(code)+' '+escapeHtml(f.label||'')+'</option>';
+  });
+  html += '</select></label>';
+  html += '<label style="font-size:12px;">Task team <select id="formaSelTeam">';
+  (cat.roles||[]).filter(function(r){return !r.disabled;}).forEach(function(r){
+    html += '<option value="'+escapeHtml(r.code)+'"'+(sel.team===r.code?' selected':'')+'>'+escapeHtml(r.code)+' '+escapeHtml(r.label||'')+'</option>';
+  });
+  html += '</select></label></div>';
+  html += '<div style="font-size:13px;font-weight:700;margin-bottom:6px;">Name: '+escapeHtml(name)+'</div>';
+  html += '<div style="font-size:12px;margin-bottom:6px;">Production packages in this package: '+included.length+'</div>';
+  html += '<div style="max-height:90px;overflow:auto;font-size:12px;margin-bottom:8px;">';
+  included.slice(0,40).forEach(function(pk){ html += '<div>'+escapeHtml(pk.id||'')+' · '+escapeHtml(pk.name||pk.ss||'')+'</div>'; });
+  html += '</div>';
+  html += '<div style="font-size:12px;margin-bottom:4px;">Matched files / numbers: '+files.length+'</div>';
+  html += '<div style="max-height:90px;overflow:auto;font-size:12px;margin-bottom:8px;">';
+  files.slice(0,40).forEach(function(f){ html += '<div>'+escapeHtml(f.number||'')+' '+escapeHtml(f.name||'')+'</div>'; });
+  html += '</div>';
   html += '<button type="button" class="btn btn-ghost btn-sm" id="formaListPkg">Refresh FORMA packages</button> ';
   html += '<button type="button" class="btn btn-gold btn-sm" id="formaMkPkg">Create Docs package on FORMA</button> ';
-  html += '<select id="formaMkPkgId" style="min-height:36px;border-radius:10px;padding:0 8px;">';
-  packs.forEach(function(pk){ html += '<option value="'+escapeHtml(pk.id)+'">'+escapeHtml((pk.id||"")+" · "+(pk.name||pk.ss||""))+'</option>'; });
-  html += '</select>';
-  html += '<label style="font-size:12px;margin-left:8px;"><input type="checkbox" id="formaGwShared" checked> SHARED</label>';
+  html += '<label style="font-size:12px;"><input type="checkbox" id="formaGwShared" checked> SHARED</label> ';
   html += '<label style="font-size:12px;"><input type="checkbox" id="formaGwPub"> PUBLISHED</label>';
-  const remote = project.formaDocsPackageList || [];
-  if(remote.length){
-    html += '<div style="font-size:12px;font-weight:800;margin:8px 0 4px;">FORMA Docs packages</div>';
-    remote.slice(0,30).forEach(function(r){
-      html += '<div style="font-size:12px;">#'+escapeHtml(String(r.displayId||r.id||""))+' · '+escapeHtml(r.name||"")+'</div>';
-    });
-  }
-  if(orphans.length){
-    html += '<div style="font-size:12px;font-weight:800;color:#b5442e;margin:8px 0 4px;">SHARED / PUBLISHED not in a package</div>';
-    orphans.slice(0,25).forEach(function(f){
-      html += '<div style="font-size:12px;">'+escapeHtml(f.cdeState||"")+' · '+escapeHtml(f.name||"")+'</div>';
-    });
-  }
+  html += '<div style="font-size:12px;font-weight:800;margin:10px 0 4px;">FORMA Docs packages — click to open</div>';
+  html += '<div style="max-height:180px;overflow:auto;font-size:12px;">';
+  if(!remote.length) html += '<div style="color:#888;">Refresh to load packages from FORMA.</div>';
+  remote.forEach(function(r){
+    html += '<div class="forma-pkg-link" data-forma-pkg="'+escapeHtml(r.id||'')+'" style="cursor:pointer;padding:4px 0;color:#6d28d9;">#'+escapeHtml(String(r.displayId||''))+' · '+escapeHtml(r.name||'')+(r.resourceCount!=null?' · '+r.resourceCount+' files':'')+'</div>';
+  });
+  html += '</div>';
   html += '<div style="margin-top:8px;"><input id="formaTxTo" placeholder="To (name)" style="min-height:36px;border-radius:10px;padding:0 8px;border:1px solid #c9bdc8;"> ';
   html += '<input id="formaTxRole" placeholder="Role" style="min-height:36px;width:110px;border-radius:10px;padding:0 8px;border:1px solid #c9bdc8;"> ';
   html += '<button type="button" class="btn btn-sm" id="formaTxBtn">Record transmit</button></div></div>';
   host.innerHTML = html;
+  function readSel(){
+    window.__formaPkgSel = {
+      stage: (document.getElementById("formaSelStage")||{}).value || sel.stage,
+      fb: (document.getElementById("formaSelFb")||{}).value || sel.fb,
+      team: (document.getElementById("formaSelTeam")||{}).value || sel.team
+    };
+    renderFormaPackagePanel(project);
+  }
+  ["formaSelStage","formaSelFb","formaSelTeam"].forEach(function(id){
+    const el = document.getElementById(id);
+    if(el) el.onchange = readSel;
+  });
   const lst = document.getElementById("formaListPkg");
   if(lst) lst.onclick = async function(){
     try {
@@ -8038,28 +8069,27 @@ function renderFormaPackagePanel(project){
   };
   const mk = document.getElementById("formaMkPkg");
   if(mk) mk.onclick = function(){
-    const id = (document.getElementById("formaMkPkgId")||{}).value;
-    const pack = packs.find(function(x){ return x.id === id; });
-    if(!pack){ showToast("Select a package"); return; }
+    const dummy = included[0] || { id: name, fb: sel.fb, ro: sel.team, name: name };
     const gws = [];
     if((document.getElementById("formaGwShared")||{}).checked) gws.push("SHARED");
     if((document.getElementById("formaGwPub")||{}).checked) gws.push("PUBLISHED");
-    atnCreateFormaPackageFolders(project, pack, gws.length?gws:["SHARED"]);
+    atnCreateFormaPackageFolders(project, dummy, gws.length?gws:["SHARED"], window.__formaPkgSel);
   };
+  host.querySelectorAll("[data-forma-pkg]").forEach(function(el){
+    el.onclick = function(){
+      window.open(atnFormaDocsProjectUrl(project, el.getAttribute("data-forma-pkg")), "_blank");
+    };
+  });
   const txb = document.getElementById("formaTxBtn");
   if(txb) txb.onclick = function(){
     const to = ((document.getElementById("formaTxTo")||{}).value||"").trim();
     const role = ((document.getElementById("formaTxRole")||{}).value||"").trim();
     if(!to){ showToast("Enter who it was transmitted to"); return; }
-    const now = new Date().toISOString().slice(0,16).replace("T"," ");
-    unsent.forEach(function(f){
-      atnFormaTransmits(project).push({ key:(f.id||f.name||"")+"::"+(f.cdeState||""), name:f.name, package:f.formaPackage||"", to:to, role:role, date:now, gateway:f.cdeState||"" });
-    });
-    try { saveData(DATA); } catch(e){}
-    showToast("Recorded " + unsent.length + " transmits");
-    renderFormaPackagePanel(project);
+    showToast("Open the package in FORMA to transmit. Recorded locally for "+to+" ("+role+")");
   };
 }
+
+
 function renderAccDocsTracking(project){
   try { renderFormaPackagePanel(project); } catch(e){}
 
@@ -15255,7 +15285,7 @@ function renderRoleGuide(project){
   html += '<p class="section-sub" style="margin:4px 0 8px;">Same methodology for every role. Task team managers complete their own scope and TIDP in this order.</p>';
   html += '<div class="atn-stepper">';
   steps.forEach(function(s, i){
-    html += '<button type="button" class="atn-step" data-guide-go="' + s[1] + '"><span class="atn-step-num">' + (i+1) + '</span><span class="atn-step-lbl">' + s[0] + '</span></button>';
+    html += '<button type="button" class="atn-step" data-guide-go="' + s[1] + '" style="box-shadow:var(--pill-shadow,0 2px 10px rgba(62,11,59,.1));"><span class="atn-step-num">' + (i+1) + '</span><span class="atn-step-lbl">' + s[0] + '</span></button>';
   });
   html += '</div></div>';
   host.innerHTML = html;
@@ -19870,23 +19900,96 @@ async function apsCreateDocsPackage(project, name, description){
     body: JSON.stringify({ name: String(name||"").slice(0,255), description: String(description||"").slice(0,1000), versionType: "FIXED" })
   });
 }
-async function atnCreateFormaPackageFolders(project, pack, gateways){
-  if(!project.accProjectId){ showToast("Link a FORMA project first"); return; }
-  const name = String(pack.id || pack.name || "").slice(0,120);
-  const desc = [pack.fb, pack.ss, pack.name, (gateways||[]).join("/")].filter(Boolean).join(" · ");
-  showToast("Creating Docs package: " + name);
-  try {
-    const created = await apsCreateDocsPackage(project, name, desc);
-    const id = created && (created.id || (created.data && created.data.id)) || "";
-    if(!project.formaDocsPackages) project.formaDocsPackages = [];
-    project.formaDocsPackages.push({ atanaId: pack.id, formaId: id, name: name, createdAt: new Date().toISOString() });
-    try { saveData(DATA); } catch(e){}
-    showToast("FORMA package created: " + name);
-    try { project.formaDocsPackageList = await apsListDocsPackages(project); } catch(e){}
-  } catch(e){
-    showToast("FORMA Packages API: " + (e.message || e));
-  }
+function atnFormaDocsProjectUrl(project, packageId){
+  const raw = apsDocsProjectId(project);
+  const reg = (typeof apsPreferredRegion === "function") ? String(apsPreferredRegion()||"").toUpperCase() : "";
+  const host = (reg === "EMEA") ? "https://acc.autodesk.com" : "https://acc.autodesk.com";
+  let url = host + "/docs/files/projects/" + encodeURIComponent(raw);
+  if(packageId) url += "?tab=packages&packageId=" + encodeURIComponent(packageId);
+  else url += "?tab=packages";
+  return url;
 }
+function atnFormaPackageName(project, sel){
+  sel = sel || {};
+  const stage = String(sel.stage || project.currentStageId || "S1").toUpperCase();
+  const fb = String(sel.fb || "").replace(/^FB/i,"");
+  const team = String(sel.team || "").toUpperCase();
+  const cat = (typeof normalizeMidpCatalog === "function") ? normalizeMidpCatalog(project && project.midpCatalog, {strict:true}) : {functionalList:[]};
+  const fbRow = (cat.functionalList||[]).find(function(f){ return String(f.code||"").replace(/^FB/i,"") === fb; });
+  const fbName = (fbRow && (fbRow.label || fbRow.description)) || sel.fbName || "";
+  return (stage + "-FB" + fb + "-" + team + " - " + fbName).replace(/\s+/g," ").trim();
+}
+function atnPackagesForSelection(project, sel){
+  const packs = (typeof getProductionPackages === "function") ? getProductionPackages(project) : [];
+  const fb = String(sel.fb || "").replace(/^FB/i,"").toUpperCase();
+  const team = String(sel.team || "").toUpperCase();
+  return packs.filter(function(p){
+    const pfb = String(p.fb || "").replace(/^FB/i,"").toUpperCase();
+    const pro = String(p.ro || p.role || p.taskTeam || "").toUpperCase();
+    return (!fb || pfb === fb) && (!team || pro === team || !pro);
+  });
+}
+function atnFilesForPackages(project, packs){
+  const files = (project && project.accDeliverablesCache) || [];
+  const keys = {};
+  (packs||[]).forEach(function(p){
+    keys[String(p.id||"").toLowerCase()] = true;
+    keys[String(p.ss||"").toLowerCase()] = true;
+    keys[String(p.fb||"").toLowerCase()] = true;
+  });
+  return files.filter(function(f){
+    const hay = ((f.folderPath||"")+" "+(f.name||"")+" "+(f.functional||"")+" "+(f.role||"")).toLowerCase();
+    return Object.keys(keys).some(function(k){ return k && hay.indexOf(k) >= 0; });
+  });
+}
+async function atnCreateFormaPackageFolders(project, pack, gateways, sel){
+  if(!project.accProjectId){ showToast("Link a FORMA project first"); return; }
+  sel = sel || { fb: pack && pack.fb, team: pack && (pack.ro||pack.role), stage: project.currentStageId };
+  const name = atnFormaPackageName(project, sel);
+  const included = atnPackagesForSelection(project, sel);
+  const files = atnFilesForPackages(project, included);
+  const desc = "Atana " + name + " · " + included.length + " PP · " + files.length + " files · " + (gateways||[]).join("/");
+  showToast("Creating Docs package: " + name);
+  let created = null;
+  const raw = apsDocsProjectId(project);
+  const bodies = [
+    "https://developer.api.autodesk.com/construction/packages/v1/projects/" + encodeURIComponent(raw) + "/packages",
+    "https://developer.api.autodesk.com/construction/files/v1/projects/" + encodeURIComponent(raw) + "/packages"
+  ];
+  let lastErr = "";
+  for(let u=0; u<bodies.length && !created; u++){
+    try {
+      created = await apsDmFetch(bodies[u], {
+        method: "POST",
+        region: apsPreferredRegion(),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.slice(0,255), description: desc.slice(0,1000), versionType: "FIXED" })
+      });
+    } catch(e){ lastErr = e && e.message ? e.message : String(e); }
+  }
+  const id = created && (created.id || (created.data && created.data.id)) || "";
+  if(!project.formaDocsPackages) project.formaDocsPackages = [];
+  project.formaDocsPackages.push({
+    atanaId: pack && pack.id,
+    formaId: id,
+    name: name,
+    files: files.map(function(f){ return { id:f.id, name:f.name, number:f.number }; }),
+    pps: included.map(function(p){ return p.id; }),
+    createdAt: new Date().toISOString()
+  });
+  try { saveData(DATA); } catch(e){}
+  try { project.formaDocsPackageList = await apsListDocsPackages(project); } catch(e){}
+  if(id){
+    showToast("FORMA package created: " + name);
+  } else {
+    showToast("API cannot create packages (" + lastErr.slice(0,80) + "). Opening FORMA Packages — paste the name.");
+    try { await navigator.clipboard.writeText(name); } catch(e){}
+  }
+  try { window.open(atnFormaDocsProjectUrl(project, id), "_blank"); } catch(e){}
+  try { renderFormaPackagePanel(project); } catch(e){}
+}
+
+
 async function loadAccDeliverables(project, force){
   if(!project) return [];
   window.__apsSyncInProgress = true;
@@ -22013,7 +22116,8 @@ function roleDisplayBanner(roleCode){
 
 function wireShowAllRoleTasksBtn(project){
   const btn = document.getElementById("showAllRoleTasksBtn");
-  if(!btn) return;
+  const allBtn = document.getElementById("showEveryRoleTasksBtn");
+  if(btn){
   const on = !!(project && project.showDepRoleTasks) || !!window.__showDepRoleTasks;
   btn.textContent = on ? "Hide dependency tasks" : "Show dependency tasks";
   btn.onclick = function(){
@@ -22021,16 +22125,31 @@ function wireShowAllRoleTasksBtn(project){
     if(!p) return;
     p.showDepRoleTasks = !p.showDepRoleTasks;
     window.__showDepRoleTasks = !!p.showDepRoleTasks;
-    p.showAllRoleTasks = false;
-    window.__showAllRoleTasks = false;
+    if(p.showDepRoleTasks){ p.showAllRoleTasks = false; window.__showAllRoleTasks = false; }
     try { invalidateHierarchyCache(p.id); } catch(e){}
     try { saveData(DATA); } catch(e){}
     try { renderWorkspace(); } catch(e){}
   };
+  }
+  if(allBtn){
+    const onAll = !!(project && project.showAllRoleTasks) || !!window.__showAllRoleTasks;
+    allBtn.textContent = onAll ? "Hide all role tasks" : "Show all role tasks";
+    allBtn.onclick = function(){
+      const p = projectById(currentProjectId);
+      if(!p) return;
+      p.showAllRoleTasks = !p.showAllRoleTasks;
+      window.__showAllRoleTasks = !!p.showAllRoleTasks;
+      if(p.showAllRoleTasks){ p.showDepRoleTasks = false; window.__showDepRoleTasks = false; }
+      try { invalidateHierarchyCache(p.id); } catch(e){}
+      try { saveData(DATA); } catch(e){}
+      try { renderWorkspace(); } catch(e){}
+    };
+  }
   const ban = document.getElementById("activeRoleBanner");
   if(ban){
     const vis = getVisibleTaskRoles(project);
-    ban.textContent = "Active: " + roleDisplayBanner(vis.primary || "IM") + (on ? " · + other roles (view)" : "");
+    const extra = vis.showAll ? " · all roles (locked)" : (vis.showDep ? " · dependency tasks (locked)" : "");
+    ban.textContent = "Active: " + roleDisplayBanner(vis.primary || "IM") + extra;
   }
 }
 
@@ -22074,8 +22193,24 @@ function invalidateHierarchyCache(projectId){
   }
 }
 
+function atnRoleFromCode(code){
+  const c = String(code || "").toUpperCase();
+  if(/^ZZ/.test(c)) return "ZZ";
+  const m = c.match(/^(DTL|PDM|IM|TTM|TTIM|IA|DM)/);
+  return m ? m[1] : "";
+}
 function atnDepRolesFor(primary){
   const roles = {};
+  const chain = {
+    TTM: ["PDM","IM","DTL"],
+    TTIM: ["TTM","IM"],
+    IA: ["TTM","TTIM","IM"],
+    IM: ["DTL","PDM"],
+    PDM: ["DTL","IM"],
+    DTL: ["IM","PDM"],
+    DM: ["PDM","IM"]
+  };
+  (chain[primary] || []).forEach(function(r){ roles[r] = true; });
   const packs = (typeof ROLE_TASK_PACKS !== "undefined") ? ROLE_TASK_PACKS : {};
   const mine = (packs[primary] && packs[primary].tasks) || [];
   const myIds = {};
@@ -22087,12 +22222,17 @@ function atnDepRolesFor(primary){
         if(myIds[d] || myIds[String(d).toLowerCase()]) roles[role] = true;
       });
     });
-    mine.forEach(function(tk){
-      (tk.dependencies || []).forEach(function(d){
-        if((packs[role].tasks || []).some(function(x){ return x.id === d || String(x.name||"").toLowerCase() === String(d).toLowerCase(); })) roles[role] = true;
-      });
-    });
   });
+  if(typeof ATN_TASK_DEPS !== "undefined"){
+    ATN_TASK_DEPS.forEach(function(d){
+      const pred = atnRoleFromCode(d.pred);
+      const succ = atnRoleFromCode(d.succ || d.task);
+      const self = atnRoleFromCode(d.task);
+      if(succ === primary && pred && pred !== primary) roles[pred] = true;
+      if(pred === primary && succ && succ !== primary) roles[succ] = true;
+      if(self === primary && pred && pred !== primary) roles[pred] = true;
+    });
+  }
   return Object.keys(roles);
 }
 function atnRenumberHierarchy(base){
@@ -22559,9 +22699,9 @@ let currentWsView = "imtasks";
 
 const ATN_METHOD_NAV = [
   { id:"scope", n:"1", title:"Define scope", color:"#f3e8ff", ink:"#6d28d9",
-    views:[["method","How it works"],["dpow","DPoW / packages"],["air","AIR"]] },
+    views:[["method","How it works"],["team","Project Team"],["dpow","DPoW"],["air","AIR"]] },
   { id:"plan", n:"2", title:"Plan production", color:"#fef3c7", ink:"#b45309",
-    views:[["roleos","My Role"],["imtasks","Tasks"],["planner-wbs","WBS"],["planner-gantt","Gantt"],["midp","MIDP"]] },
+    views:[["imtasks","Tasks"],["progress","Progress"],["planner-wbs","WBS"],["planner-gantt","Gantt"],["midp","MIDP"],["roleos","My Role"]] },
   { id:"verify", n:"3", title:"Verify delivery", color:"#dcfce7", ink:"#047857",
     views:[["ite","ITE"],["graph","Graph"],["decide","Decide"]] },
   { id:"produce", n:"4", title:"Produce information", color:"#ffedd5", ink:"#c2410c",
@@ -22625,7 +22765,9 @@ function renderAtnMethodNav(activeView){
 
 function setActiveWsView(view){
   // Map legacy names
-  const map = { tasks: "imtasks", progress: "imtasks", wbs: "planner", gantt: "planner", "planner-wbs":"planner", "planner-gantt":"planner", clash: "planner", tools: "prjtools", documents: "prjdocs", how: "method", method: "method" };
+  const map = { tasks: "imtasks", progress: "imtasks", wbs: "planner", gantt: "planner", team: "team", "planner-wbs":"planner", "planner-gantt":"planner", clash: "planner", tools: "prjtools", documents: "prjdocs", how: "method", method: "method" };
+  if(view === "progress") window.__imSub = "progress";
+  if(view === "imtasks" || view === "tasks") window.__imSub = "tasks";
   if(view === "planner-wbs" || view === "wbs") window.__planSub = "wbs";
   if(view === "planner-gantt" || view === "gantt") window.__planSub = "gantt";
   if(view === "planner" && !window.__planSub) window.__planSub = "gantt";
@@ -22713,6 +22855,17 @@ function setActiveWsView(view){
     if(main === "decide" && typeof renderAtnDecide === "function") renderAtnDecide(project);
     if(main === "ecc" && typeof renderAtnEcc === "function") renderAtnEcc(project);
     if(main === "agents" && typeof renderAtnAgents === "function") renderAtnAgents(project);
+    if(main === "team"){
+      const host = document.getElementById("scopeTeamRoot");
+      if(host && typeof renderProjectTeamPanel === "function"){
+        host.innerHTML = renderProjectTeamPanel(project);
+        if(typeof bindProjectTeamPanel === "function") bindProjectTeamPanel(project);
+      }
+    }
+    if(main === "dpow" && typeof renderAtnRoleOs === "function"){
+      const dhost = document.getElementById("atnRoleOsRoot");
+      if(dhost) renderAtnRoleOs(project);
+    }
     if(main === "roleos" && typeof renderAtnRoleOs === "function") renderAtnRoleOs(project);
     if(main === "prjtools" && typeof bindProjectTools === "function") bindProjectTools(project);
     if(main === "prjdocs" && typeof bindProjectDocs === "function") bindProjectDocs(project);
@@ -23303,9 +23456,10 @@ function defaultDpowScope(base){
   const stages = {};
   const defLod = base.defaultLod || "";
   getHierarchy().forEach(s => {
+    const n = (typeof atnPlannedLodNum === "function") ? atnPlannedLodNum(s.id) : (s.id==="S1"?1:s.id==="S2"?2:s.id==="S3"?3:s.id==="S4"?4:5);
     stages[s.id] = {
-      lod: defLod || "",
-      loi: defLod ? String(defLod).replace("LOD","LOI") : "",
+      lod: "LOD " + n,
+      loi: "LOI " + n,
       designResponsibility: base.company || "",
       included: true
     };
@@ -23345,8 +23499,21 @@ function ensureProjectDpow(project){
   project.dpow.scopes.forEach(sc => {
     if(!sc.stages) sc.stages = {};
     if(sc.midpLinked === undefined) sc.midpLinked = true;
+    const nums = Object.keys(sc.stages).map(function(k){ return (typeof atnLodRank==="function"?atnLodRank(sc.stages[k].lod):0); });
+    const flat = nums.length > 2 && nums.every(function(n){ return n === nums[0]; });
+    if(flat){
+      getHierarchy().forEach(function(s){
+        const n = (typeof atnPlannedLodNum==="function")?atnPlannedLodNum(s.id):2;
+        if(!sc.stages[s.id]) sc.stages[s.id] = {};
+        sc.stages[s.id].lod = "LOD "+n;
+        sc.stages[s.id].loi = "LOI "+n;
+      });
+    }
     getHierarchy().forEach(s => {
-      if(!sc.stages[s.id]) sc.stages[s.id] = { lod: "", loi: "", designResponsibility: "", included: true };
+      if(!sc.stages[s.id]) {
+        const n = (typeof atnPlannedLodNum === "function") ? atnPlannedLodNum(s.id) : 2;
+        sc.stages[s.id] = { lod: "LOD "+n, loi: "LOI "+n, designResponsibility: "", included: true };
+      }
       if(sc.stages[s.id].designResponsibility === undefined) sc.stages[s.id].designResponsibility = sc.company || "";
     });
   });
@@ -32415,8 +32582,11 @@ function atnEnsureFbSpatial(project){
   fbs.forEach(function(fb){
     const code = String(fb.code||"").toUpperCase();
     if(!code) return;
+    const MIN_SP = ["ZZ","00","01","SI"];
     if(!Array.isArray(project.fbSpatial[code]) || !project.fbSpatial[code].length){
-      project.fbSpatial[code] = levels.map(function(l){ return l.code; });
+      project.fbSpatial[code] = levels.map(function(l){ return String(l.code||"").toUpperCase(); }).filter(function(c){ return MIN_SP.indexOf(c) >= 0; });
+    } else if(project.fbSpatial[code].length === levels.length){
+      project.fbSpatial[code] = project.fbSpatial[code].filter(function(c){ return MIN_SP.indexOf(String(c).toUpperCase()) >= 0; });
     }
   });
   return project.fbSpatial;
@@ -32515,8 +32685,14 @@ function renderDpowLoinBoard(project){
   const packs = ((typeof getProductionPackages === "function") ? getProductionPackages(project) : []).filter(function(p){
     return String(p.fb||"").toUpperCase() !== "XX";
   });
+  const activeTeams = ((project.midpCatalog && project.midpCatalog.roles) || []).filter(function(r){ return r.selected !== false && !r.disabled; }).map(function(r){ return String(r.code||"").toUpperCase(); });
   const roles = {};
-  packs.forEach(function(p){ const r = p.ro || "ZZ"; if(!roles[r]) roles[r] = []; roles[r].push(p); });
+  packs.forEach(function(p){
+    const r = String(p.ro || "ZZ").toUpperCase();
+    if(activeTeams.length && activeTeams.indexOf(r) < 0 && r !== "ZZ") return;
+    if(!roles[r]) roles[r] = [];
+    roles[r].push(p);
+  });
   const fbs = Object.keys(project.fbSpatial||{});
   const allLevels = ((project.midpCatalog && project.midpCatalog.levels) || []);
   let html = '<div class="card" style="margin:12px 0;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
@@ -33438,7 +33614,8 @@ function atnIdmGuidance(role, project){
   return ["Complete next unchecked task"];
 }
 function renderAtnRoleOs(project){
-  const host = document.getElementById("atnRoleOsRoot");
+  const dpowOn = document.querySelector("#wsview-dpow.active");
+  const host = (dpowOn && document.getElementById("atnRoleOsRootDpow")) || document.getElementById("atnRoleOsRoot");
   if(!host) return;
   const role = atnActiveRole(project);
   atnEnsureRoleWorkState(project);
