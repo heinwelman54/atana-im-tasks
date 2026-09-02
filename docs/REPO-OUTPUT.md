@@ -1,7 +1,7 @@
 # Repo output
 
-**App version: 3.47.0**
+**App version: 3.47.1**
 **Pages file:** app.html
-Open app.html?v=3470 after push. Badge **v3.47.0**.
+Open app.html?v=3471 after push. Badge **v3.47.1**.
 
-Own-role tasks only by default. Toggle shows locked gold dependency tasks from other roles. Section numbers resequenced to match the filtered WBS.
+Fixed boot crash: main script failed to parse (await in non-async sync), so APP_VERSION never loaded.

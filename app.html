@@ -1550,7 +1550,7 @@
     var b = document.getElementById("atanaBootBeacon");
     if(b){
       b.style.background="#14532d";
-      b.innerHTML = "Atana IM <strong>v" + APP_VERSION + "</strong> ready";
+      b.innerHTML = "Atana IM <strong>v" + (window.APP_VERSION || (typeof APP_VERSION!=="undefined"?APP_VERSION:"") || "") + "</strong> ready";
       setTimeout(function(){ try{ b.remove(); }catch(e){} }, 4000);
     }
     // Kill stale service workers on first load of 3.0.0
@@ -2579,7 +2579,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.47.0";
+const APP_VERSION = "3.47.1";
+window.APP_VERSION = APP_VERSION;
 const APP_BUILD = "2026-09-02-role-deps";
 
 /* ---- Header customisation (local) ---- */
@@ -19955,7 +19956,7 @@ async function atnCreateFormaPackageFolders(project, pack, gateways){
 }
 
 
-function loadAccDeliverables(project, force){
+async function loadAccDeliverables(project, force){
   if(!project) return [];
   window.__apsSyncInProgress = true;
   // Always write back onto the live DATA project so UI + localStorage stay in sync
