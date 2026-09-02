@@ -480,9 +480,6 @@
   .task-row.depth-1{margin-left:8px;}
   .task-row.depth-2{margin-left:16px;}
   .task-row.depth-3{margin-left:24px;}
-  .task-row.dep-locked{background:#f9f7e5;box-shadow:inset 4px 0 0 #d5c427;}
-  .task-row.dep-locked .task-check{opacity:.35;pointer-events:none;}
-  .task-row.dep-locked .task-name{color:#5c3d1a;}
   .wbs-task-row.blocker .wbs-task-name{color:var(--danger);font-weight:700;}
   .wbs-task-row.disabled-task{opacity:0.55;}
   .wbs-task-row.disabled-task .wbs-task-name{text-decoration:line-through;}
@@ -1550,7 +1547,7 @@
     var b = document.getElementById("atanaBootBeacon");
     if(b){
       b.style.background="#14532d";
-      b.innerHTML = "Atana IM <strong>v" + (window.APP_VERSION || (typeof APP_VERSION!=="undefined"?APP_VERSION:"") || "") + "</strong> ready";
+      b.innerHTML = "Atana IM <strong>v" + APP_VERSION + "</strong> ready";
       setTimeout(function(){ try{ b.remove(); }catch(e){} }, 4000);
     }
     // Kill stale service workers on first load of 3.0.0
@@ -2025,7 +2022,7 @@
         <div class="stage-picker-label" id="wsStagePickerLabel">CURRENT WORK STAGE</div>
         <div class="stage-picker" id="stagePicker"></div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;">
-          <button type="button" class="btn btn-ghost btn-xs" id="showAllRoleTasksBtn" title="Show predecessor / successor tasks from other roles. Those rows stay locked.">Show dependency tasks</button>
+          <button type="button" class="btn btn-ghost btn-xs" id="showAllRoleTasksBtn" title="Load other functional role tasks as read-only (slower)">Show other roles</button>
           <span id="activeRoleBanner" style="font-size:11px;font-weight:600;color:var(--purple-900);"></span>
         </div>
         <div class="ws-stage-meta">
@@ -2579,9 +2576,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.47.1";
-window.APP_VERSION = APP_VERSION;
-const APP_BUILD = "2026-09-02-role-deps";
+const APP_VERSION = "3.46.2";
+const APP_BUILD = "2026-09-02-catalog-apply";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -19956,7 +19952,7 @@ async function atnCreateFormaPackageFolders(project, pack, gateways){
 }
 
 
-async function loadAccDeliverables(project, force){
+function loadAccDeliverables(project, force){
   if(!project) return [];
   window.__apsSyncInProgress = true;
   // Always write back onto the live DATA project so UI + localStorage stay in sync
@@ -22084,15 +22080,13 @@ function roleDisplayBanner(roleCode){
 function wireShowAllRoleTasksBtn(project){
   const btn = document.getElementById("showAllRoleTasksBtn");
   if(!btn) return;
-  const on = !!(project && project.showDepRoleTasks) || !!window.__showDepRoleTasks;
-  btn.textContent = on ? "Hide dependency tasks" : "Show dependency tasks";
+  const on = !!(project && project.showAllRoleTasks) || !!window.__showAllRoleTasks;
+  btn.textContent = on ? "Hide other roles" : "Show other roles";
   btn.onclick = function(){
     const p = projectById(currentProjectId);
     if(!p) return;
-    p.showDepRoleTasks = !p.showDepRoleTasks;
-    window.__showDepRoleTasks = !!p.showDepRoleTasks;
-    p.showAllRoleTasks = false;
-    window.__showAllRoleTasks = false;
+    p.showAllRoleTasks = !p.showAllRoleTasks;
+    window.__showAllRoleTasks = !!p.showAllRoleTasks;
     try { invalidateHierarchyCache(p.id); } catch(e){}
     try { saveData(DATA); } catch(e){}
     try { renderWorkspace(); } catch(e){}
@@ -22128,8 +22122,7 @@ function hierarchyCacheKey(project){
     vis.primary || "IM",
     (vis.edit || []).slice().sort().join(","),
     showAll ? (vis.view || []).slice().sort().join(",") : (vis.primary || "IM") + ",ZZ",
-    showAll ? "1" : "0",
-    ((project && project.showDepRoleTasks) || (typeof window!=="undefined" && window.__showDepRoleTasks)) ? "d1" : "d0"
+    showAll ? "1" : "0"
   ].join("|");
 }
 
@@ -22144,50 +22137,6 @@ function invalidateHierarchyCache(projectId){
   }
 }
 
-
-function atnDepRolesFor(primary){
-  const roles = {};
-  const packs = (typeof ROLE_TASK_PACKS !== "undefined") ? ROLE_TASK_PACKS : {};
-  const mine = (packs[primary] && packs[primary].tasks) || [];
-  const myIds = {};
-  mine.forEach(function(tk){ myIds[tk.id] = true; myIds[String(tk.name||"").toLowerCase()] = true; });
-  Object.keys(packs).forEach(function(role){
-    if(role === primary) return;
-    (packs[role].tasks || []).forEach(function(tk){
-      (tk.dependencies || []).forEach(function(d){
-        if(myIds[d] || myIds[String(d).toLowerCase()]) roles[role] = true;
-      });
-    });
-    mine.forEach(function(tk){
-      (tk.dependencies || []).forEach(function(d){
-        if((packs[role].tasks || []).some(function(x){ return x.id === d || String(x.name||"").toLowerCase() === String(d).toLowerCase(); })) roles[role] = true;
-      });
-    });
-  });
-  if(typeof ATN_TASK_DEPS !== "undefined"){
-    ATN_TASK_DEPS.forEach(function(d){
-      const pred = String(d.pred || "");
-      const succ = String(d.succ || d.task || "");
-      const pr = pred.split(/[-.]/)[0];
-      const su = succ.split(/[-.]/)[0];
-      if(su === primary && pr && pr !== primary) roles[pr] = true;
-      if(pr === primary && su && su !== primary) roles[su] = true;
-    });
-  }
-  return Object.keys(roles);
-}
-function atnRenumberHierarchy(base){
-  (base || []).forEach(function(stage){
-    (stage.categories || []).forEach(function(cat, ci){
-      cat.num = String(ci + 1);
-      (cat.subs || []).forEach(function(sub, si){
-        sub.num = cat.num + "." + (si + 1);
-      });
-    });
-  });
-  return base;
-}
-
 function getVisibleTaskRoles(project){
   const all = ["IM","DTL","PDM","TTM","ZZ"];
   const user = (typeof getCurrentUser === "function") ? getCurrentUser() : null;
@@ -22197,15 +22146,37 @@ function getVisibleTaskRoles(project){
   if(primary === "ADMIN") primary = "IM";
 
   const showAll = !!(project && project.showAllRoleTasks) || !!window.__showAllRoleTasks;
-  const showDep = !!(project && project.showDepRoleTasks) || !!window.__showDepRoleTasks;
-  const edit = [primary];
-  let view = [primary];
-  if(showAll){
-    all.forEach(function(r){ if(view.indexOf(r) < 0) view.push(r); });
-  } else if(showDep){
-    atnDepRolesFor(primary).forEach(function(r){ if(view.indexOf(r) < 0) view.push(r); });
+
+  let edit = [];
+  let view = [];
+  all.forEach(function(r){
+    if(typeof canRoleTask === "function"){
+      if(canRoleTask("edit", r)) edit.push(r);
+      if(canRoleTask("view", r) || canRoleTask("edit", r)) view.push(r);
+    }
+  });
+  // Own role always editable
+  if(["IM","DTL","PDM","TTM"].indexOf(primary) >= 0){
+    if(edit.indexOf(primary) < 0) edit.push(primary);
+    if(view.indexOf(primary) < 0) view.push(primary);
   }
-  return { edit: edit, view: view, primary: primary, showAll: showAll, showDep: showDep };
+  // ZZ always visible (small shared list)
+  if(view.indexOf("ZZ") < 0) view.push("ZZ");
+  if(userRole === "ADMIN" || primary === "IM"){
+    if(edit.indexOf("IM") < 0) edit.push("IM");
+    if(edit.indexOf("ZZ") < 0) edit.push("ZZ");
+  }
+  // Performance default: only primary + ZZ unless show-all is on
+  if(!showAll){
+    view = view.filter(function(r){ return r === primary || r === "ZZ" || edit.indexOf(r) >= 0; });
+  } else {
+    // IM/Admin/DTL/PDM may view every pack when show-all is enabled
+    if(userRole === "ADMIN" || userRole === "IM" || userRole === "DTL" || userRole === "PDM" ||
+       primary === "IM" || primary === "DTL" || primary === "PDM"){
+      all.forEach(function(r){ if(view.indexOf(r) < 0) view.push(r); });
+    }
+  }
+  return { edit: edit, view: view, primary: primary, showAll: showAll };
 }
 
 function cloneHierarchyDeep(hier){
@@ -22310,7 +22281,6 @@ function getProjectHierarchy(project){
     base.push({ id: String(ex.id), label: String(ex.label || ex.id), categories: Array.isArray(ex.categories) ? ex.categories : [] });
   });
 
-  if(typeof atnRenumberHierarchy === "function") atnRenumberHierarchy(base);
   window.__hierCache[key] = base;
   return base;
 }
@@ -25468,10 +25438,10 @@ function renderTaskRow(project, task, taskSched, wbsCode){
   if(parent && state.done !== showDone){ state.done = showDone; }
   const dateRowCls = taskDateToneClass(project, task.id, taskSched);
   return `
-    <div class="task-row ${showDone ? "done" : ""} ${late ? "late" : ""} ${disabled ? "disabled-task" : ""} ${isBlocker ? "blocker" : ""} ${parent ? "parent-task" : ""} ${task && task.ghost ? "ghost dep-locked" : ""} ${isMyDayTask(project, task.id) ? "my-day" : ""} depth-${depth} ${dateRowCls}" data-task-id="${task.id}" data-edit-task="${task.id}">
+    <div class="task-row ${showDone ? "done" : ""} ${late ? "late" : ""} ${disabled ? "disabled-task" : ""} ${isBlocker ? "blocker" : ""} ${parent ? "parent-task" : ""} ${task && task.ghost ? "ghost" : ""} ${isMyDayTask(project, task.id) ? "my-day" : ""} depth-${depth} ${dateRowCls}" data-task-id="${task.id}" data-edit-task="${task.id}">
       <div class="task-row-main">
         <button type="button" class="btn-star ${isMyDayTask(project, task.id) ? "on" : ""}" data-my-day="${task.id}" title="Add to my day" aria-label="Add to my day">${isMyDayTask(project, task.id) ? "★" : "☆"}</button>
-        <button class="task-check ${showDone ? "checked" : ""}" data-toggle-task="${task.id}" aria-label="Toggle done" ${disabled || parent || (task && task.ghost) ? "disabled" : ""}>${showDone ? "&#10003;" : ""}</button>
+        <button class="task-check ${showDone ? "checked" : ""}" data-toggle-task="${task.id}" aria-label="Toggle done" ${disabled || parent ? "disabled" : ""}>${showDone ? "&#10003;" : ""}</button>
         <div class="task-name">${code ? `<span class="wbs-code small">${escapeHtml(code)}</span> ` : ""}${escapeHtml(displayName)}${(task && task.sourceRole) ? `<span class="role-pill ${task.ghost?"ghost":""} ${task.sourceRole==="ZZ"?"zz":""}">${escapeHtml(task.sourceRole)}</span>` : ""}${msDate?` <span class="ms-date-inline">${escapeHtml(fmtMilestoneDate(msDate))}</span>`:""}${isRepeating ? ` <span class="rep-badge">REPEATING</span>` : ""}${state.milestone ? ` <span class="iso-badge on" title="Milestone">⚑</span>` : ""}${isBlocker ? ` <span class="blocker-badge">BLOCKER</span>` : ""}${task.custom ? ` <span class="iso-badge">Custom</span>` : ""}${appTask ? ` <span class="iso-badge ${project.clientAppRequirements ? "on" : ""}" title="Depends on appointing party / client requirements">APP</span>` : ""}${late ? ` <span class="late-badge">LATE</span>` : ""}${disabled ? ` <span class="iso-badge">Off</span>` : ""}</div>
         <div class="task-row-actions">
           <button type="button" class="btn-xxs ${state.milestone?"on":""}" data-toggle-milestone="${task.id}" title="Mark as milestone for roadmap">⚑</button>
@@ -31792,15 +31762,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // (parent sync wired below when toggle runs)
     if(toggleBtn){
       if(toggleBtn.disabled) return;
-      try {
-        const vis = getVisibleTaskRoles(project);
-        const row = toggleBtn.closest(".task-row");
-        if(row && row.classList.contains("dep-locked")) return;
-        if(row && vis && vis.primary){
-          const pill = row.querySelector(".role-pill");
-          if(pill && pill.textContent && pill.textContent.trim() !== vis.primary && pill.textContent.trim() !== "") return;
-        }
-      } catch(e){}
       e.preventDefault();
       e.stopPropagation();
       const id = toggleBtn.dataset.toggleTask || toggleBtn.getAttribute("data-toggle-task");
