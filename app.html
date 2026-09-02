@@ -2576,8 +2576,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.46.1";
-const APP_BUILD = "2026-09-02-docs-packages";
+const APP_VERSION = "3.46.0";
+const APP_BUILD = "2026-09-02-forma-sync";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -8007,8 +8007,7 @@ function renderFormaPackagePanel(project){
   html += '<span class="role-pill" style="background:#f9f7e5;">Not transmitted '+unsent.length+'</span>';
   html += '<span class="role-pill">Transmits '+txs.length+'</span></div>';
   html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">';
-  html += '<button type="button" class="btn btn-ghost btn-sm" id="formaListPkg">Refresh FORMA packages</button>';
-  html += '<button type="button" class="btn btn-gold btn-sm" id="formaMkPkg">Create Docs package on FORMA</button>';
+  html += '<button type="button" class="btn btn-gold btn-sm" id="formaMkPkg">Create selected package on FORMA</button>';
   html += '<select id="formaMkPkgId" style="min-height:36px;border-radius:10px;padding:0 8px;">';
   packs.forEach(function(pk){
     html += '<option value="'+escapeHtml(pk.id)+'">'+escapeHtml((pk.id||"")+" · "+(pk.name||pk.ss||""))+'</option>';
@@ -8017,14 +8016,6 @@ function renderFormaPackagePanel(project){
   html += '<label style="font-size:12px;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="formaGwShared" checked> SHARED</label>';
   html += '<label style="font-size:12px;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="formaGwPub"> PUBLISHED</label>';
   html += '</div>';
-  const remote = project.formaDocsPackageList || [];
-  if(remote.length){
-    html += '<div style="font-size:12px;font-weight:800;margin:8px 0 4px;">FORMA Docs packages</div><div style="max-height:140px;overflow:auto;font-size:12px;">';
-    remote.slice(0,40).forEach(function(r){
-      html += '<div>#'+escapeHtml(String(r.displayId||r.id||""))+' · '+escapeHtml(r.name||"")+' · '+(r.resourceCount!=null?r.resourceCount+" files":"")+' · '+escapeHtml(r.versionType||"")+'</div>';
-    });
-    html += '</div>';
-  }
   if(orphans.length){
     html += '<div style="font-size:12px;font-weight:800;color:#b5442e;margin:8px 0 4px;">SHARED / PUBLISHED not in a package</div>';
     html += '<div style="max-height:160px;overflow:auto;font-size:12px;">';
@@ -8046,16 +8037,6 @@ function renderFormaPackagePanel(project){
   });
   html += '</div></div>';
   host.innerHTML = html;
-  const lst = document.getElementById("formaListPkg");
-  if(lst) lst.onclick = async function(){
-    try {
-      showToast("Loading FORMA packages…");
-      project.formaDocsPackageList = await apsListDocsPackages(project);
-      try { saveData(DATA); } catch(e){}
-      showToast(((project.formaDocsPackageList||[]).length) + " FORMA packages");
-      renderFormaPackagePanel(project);
-    } catch(e){ showToast(e.message || String(e)); }
-  };
   const mk = document.getElementById("formaMkPkg");
   if(mk) mk.onclick = function(){
     const id = (document.getElementById("formaMkPkgId")||{}).value;
@@ -19896,58 +19877,37 @@ async function apsCreateFolder(projectId, parentFolderId, name){
   };
   return apsDmFetch(url, { method: "POST", region: apsPreferredRegion(), body: JSON.stringify(body) });
 }
-async function apsListDocsPackages(project){
-  const raw = String(project.accProjectId || "").replace(/^b\./i, "");
-  if(!raw) throw new Error("No FORMA project linked");
-  const url = "https://developer.api.autodesk.com/construction/packages/v1/projects/" + encodeURIComponent(raw) + "/packages?limit=200";
-  const json = await apsDmFetch(url, { region: apsPreferredRegion() });
-  return (json && (json.results || json.data)) || [];
-}
-async function apsCreateDocsPackage(project, name, description){
-  const raw = String(project.accProjectId || "").replace(/^b\./i, "");
-  const url = "https://developer.api.autodesk.com/construction/packages/v1/projects/" + encodeURIComponent(raw) + "/packages";
-  const body = JSON.stringify({
-    name: String(name || "").slice(0, 255),
-    description: String(description || "").slice(0, 1000),
-    versionType: "FIXED"
-  });
-  return apsDmFetch(url, {
-    method: "POST",
-    region: apsPreferredRegion(),
-    headers: { "Content-Type": "application/json" },
-    body: body
-  });
-}
 async function atnCreateFormaPackageFolders(project, pack, gateways){
-  if(!project.accProjectId){
-    showToast("Link a FORMA project first");
+  gateways = gateways || ["SHARED"];
+  if(!project.accProjectId || !project.accRootFolderId){
+    showToast("Link a FORMA project and root folder first");
     return;
   }
-  const name = String(pack.id || pack.name || "").slice(0, 120);
-  const desc = [pack.fb, pack.ss, pack.name, (gateways||[]).join("/")].filter(Boolean).join(" · ");
-  showToast("Creating Docs package: " + name);
-  try {
-    const created = await apsCreateDocsPackage(project, name, desc);
-    const id = (created && (created.id || (created.data && created.data.id))) || "";
-    if(!project.formaDocsPackages) project.formaDocsPackages = [];
-    project.formaDocsPackages.push({
-      atanaId: pack.id,
-      formaId: id,
-      name: name,
-      gateways: gateways || [],
-      createdAt: new Date().toISOString()
-    });
-    try { saveData(DATA); } catch(e){}
-    showToast("FORMA package created: " + name);
+  showToast("Creating " + (pack.id || pack.name) + " on FORMA…");
+  // find gateway folders by scanning root once
+  const packed = await apsFolderItemsAndFolders(apsNormalizeProjectId(project.accProjectId), project.accRootFolderId);
+  const folders = packed.folders || [];
+  const want = {};
+  folders.forEach(function(f){
+    const n = (f.attributes && (f.attributes.name || f.attributes.displayName)) || "";
+    const st = detectCdeStateFromPath(n);
+    if(st) want[st] = f.id;
+  });
+  const name = String(pack.id || ("PP-" + (pack.fb||"") + "-" + String(pack.ss||"").replace(/[^A-Za-z0-9_]/g,"_")));
+  let made = 0;
+  for(const gw of gateways){
+    const parent = want[gw];
+    if(!parent){ showToast("No " + gw + " folder at FORMA root"); continue; }
     try {
-      project.formaDocsPackageList = await apsListDocsPackages(project);
-    } catch(e){}
-  } catch(e){
-    console.warn(e);
-    showToast("FORMA Packages API: " + (e.message || e) + " — check package manager permission");
+      await apsCreateFolder(project.accProjectId, parent, name);
+      made++;
+    } catch(e){
+      console.warn(e);
+      showToast("Could not create " + gw + " / " + name + " (may already exist)");
+    }
   }
+  showToast("FORMA package folders created: " + made);
 }
-
 
 function loadAccDeliverables(project, force){
   if(!project) return [];
@@ -20048,10 +20008,8 @@ function loadAccDeliverables(project, force){
           const stNext = detectCdeStateFromPath(nextPath) || cur.cdeState || "";
           if(cur.depth === 0 && !stNext) continue;
           if(stNext === "ARCHIVED") continue;
-          const maxDepth = Number(live.accScanMaxDepth || 3);
-          const maxFolders = Number(live.accScanMaxFolders || 150);
-          if(cur.depth >= maxDepth) continue;
-          if(folderCount + queue.length > maxFolders) continue;
+          if(cur.depth >= 3) continue;
+          if(folderCount + queue.length > 90) continue;
           if(isoOn && cur.depth === 1 && teamCodes.length && !folderMatchesTaskTeam(name, teamCodes, live)) continue;
           queue.push({ id: it.id, path: nextPath, depth: cur.depth + 1, cdeState: stNext });
         }
@@ -28748,14 +28706,6 @@ function renderProjectTeamPanel(project){
     return false;
   }).map(m => m.id));
   const orphans = team.members.filter(m => !known.has(m.id));
-  const remote = project.formaDocsPackageList || [];
-  if(remote.length){
-    html += '<div style="font-size:12px;font-weight:800;margin:8px 0 4px;">FORMA Docs packages</div><div style="max-height:140px;overflow:auto;font-size:12px;">';
-    remote.slice(0,40).forEach(function(r){
-      html += '<div>#'+escapeHtml(String(r.displayId||r.id||""))+' · '+escapeHtml(r.name||"")+' · '+(r.resourceCount!=null?r.resourceCount+" files":"")+' · '+escapeHtml(r.versionType||"")+'</div>';
-    });
-    html += '</div>';
-  }
   if(orphans.length){
     html += `<div class="org-band"><h4>Unassigned / other roles</h4><div class="org-roles"><div class="org-role-col" data-drop-func="OTHER" data-drop-disc="">
       <div class="role-title">OTHER</div>${orphans.map(plate).join("")}
@@ -30175,10 +30125,6 @@ function openEditProjectSheet(project){
     const rootPath = document.getElementById("f-acc-root-path");
     if(rootId) project.accRootFolderId = rootId.value || "";
     if(rootPath) project.accRootFolderPath = rootPath.value || "";
-    const capF = document.getElementById("f-acc-folder-cap");
-    const capD = document.getElementById("f-acc-depth-cap");
-    if(capF) project.accScanMaxFolders = Math.max(20, Math.min(400, Number(capF.value)||150));
-    if(capD) project.accScanMaxDepth = Math.max(1, Math.min(8, Number(capD.value)||3));
     const teamFilt = document.getElementById("f-acc-team-filter");
     if(teamFilt) project.accFilterByTaskTeams = !!teamFilt.checked;
     const isoFilt = document.getElementById("f-acc-iso-gateways");
