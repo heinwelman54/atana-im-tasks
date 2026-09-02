@@ -1,8 +1,10 @@
 # Repo output
 
-**App version: 3.44.0**
+**App version: 3.45.0**
 **Pages file:** app.html
-Open app.html?v=3440 after push. Badge **v3.44.0**.
+Open app.html?v=3450 after push. Badge **v3.45.0**.
 
-## What changed on the app
-IM Tasks / WBS and My Role now use numbered framework tasks (DTL-011, PDM-011, IM-031) instead of Leadership / Assurance category shells.
+## What changed
+- Top nav follows How Atana Works: 1 Define scope → 5 Exchange, plus Workspace
+- Submenus under the active step
+- Planner Gantt lists DTL/PDM/IM framework tasks on the stage calendar, then packages

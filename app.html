@@ -1478,7 +1478,15 @@
   .role-pill.ghost{background:#e5e7eb;color:#6b7280;}
   .role-pill.zz{background:#fef3c7;color:#92400e;}
 
-  #wsSegmented{display:flex;flex-wrap:nowrap;width:100%;box-sizing:border-box;border-radius:16px;gap:2px;overflow-x:auto;}
+  
+  .atn-method-nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px;width:100%;}
+  .atn-method-step{flex:1 1 140px;border:0;border-radius:14px;padding:10px 12px;text-align:left;cursor:pointer;min-height:64px;box-shadow:0 1px 3px rgba(0,0,0,.08);}
+  .atn-method-step .n{font-size:10px;font-weight:800;letter-spacing:.06em;opacity:.85;}
+  .atn-method-step .t{font-size:13px;font-weight:800;display:block;margin-top:2px;}
+  .atn-method-step.on{outline:2px solid #3e0b3b;outline-offset:1px;}
+  #wsSegmented{display:flex;flex-wrap:wrap;width:100%;gap:6px;overflow:visible;}
+  #wsSegmented button{flex:0 1 auto;min-width:auto;padding:8px 12px;}
+#wsSegmented{display:flex;flex-wrap:wrap;width:100%;box-sizing:border-box;border-radius:16px;gap:6px;overflow:visible;}
   #wsSegmented button{flex:1 1 0;min-width:0;min-height:42px;padding:8px 4px;font-size:12px;white-space:nowrap;}
   .atn-stepper{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 14px;}
   .atn-step{display:flex;align-items:center;gap:8px;border:0;background:#f3f0f6;border-radius:999px;padding:6px 10px 6px 6px;cursor:pointer;font:inherit;color:var(--ink);}
@@ -1999,24 +2007,8 @@
           </div>
         </div>
       </div>
-      <div class="segmented" id="wsSegmented">
-        <button class="active" data-wsview="imtasks">IM Tasks</button>
-        <button data-wsview="roleos">My Role</button>
-        <button data-wsview="planner">IM Planner</button>
-        <button data-wsview="method">How Atana Works</button>
-        <button data-wsview="dpow">DPoW</button>
-        <button data-wsview="midp">MIDP</button>
-        <button data-wsview="ite">ITE</button>
-        <button data-wsview="air">AIR</button>
-        <button data-wsview="aim">AIM</button>
-        <button data-wsview="graph">Graph</button>
-        <button data-wsview="decide">Decide</button>
-        <button data-wsview="ecc">Command</button>
-        <button data-wsview="agents">Agents</button>
-        <button data-wsview="prjtools">Tools</button>
-        <button data-wsview="prjdocs">Documents</button>
-        <button data-wsview="models">Models</button>
-      </div>
+      <div id="atnMethodNav" class="atn-method-nav" aria-label="Methodology steps"></div>
+      <div class="segmented" id="wsSegmented"></div>
       <div class="segmented" id="imtasksSub" style="margin-top:8px;margin-bottom:0;">
         <button class="active" data-imsub="tasks">Tasks</button>
         <button data-imsub="progress">Progress</button>
@@ -2558,8 +2550,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.44.0";
-const APP_BUILD = "2026-09-02-fw-freeze";
+const APP_VERSION = "3.45.0";
+const APP_BUILD = "2026-09-02-method-nav";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -15529,15 +15521,47 @@ function renderProductionGantt(project){
   const end = project.endDate || (schedule && schedule.length && schedule[schedule.length-1].end) || null;
 
   let htmlOut = '<div class="card" style="padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);">';
-  htmlOut += '<div style="font-weight:700;font-size:12px;margin-bottom:4px;">Production Gantt — package maturity across work stages</div>';
-  htmlOut += '<div style="font-size:11px;color:#555;">Each bar is a persistent Production Package (FB+Ss). Stage boundaries from Project Settings. Showing up to 200 packages.</div>';
+  htmlOut += '<div style="font-weight:700;font-size:12px;margin-bottom:4px;">Gantt — role tasks + production packages</div>';
+  htmlOut += '<div style="font-size:11px;color:#555;">DTL / PDM / IM framework tasks sit on the stage calendar. Packages follow. Toggle is not required — both layers render.</div>';
   if(start && end){
     htmlOut += '<div style="font-size:11px;margin-top:6px;">Project window: <strong>' + escapeHtml(String(start)) + '</strong> → <strong>' + escapeHtml(String(end)) + '</strong></div>';
   }
   htmlOut += '</div>';
 
+  const roleRows = [];
+  try {
+    const fw = window.ATN_FW || {};
+    ["DTL","PDM","IM"].forEach(function(role){
+      (fw[role] || []).forEach(function(tk){
+        roleRows.push({ role: role, code: tk.taskCode || tk.taskId, name: tk.taskName || tk.name, stage: tk.stage || "S1" });
+      });
+    });
+  } catch(e){}
+  if(roleRows.length && schedule && schedule.length){
+    htmlOut += '<div style="font-weight:800;font-size:12px;margin:8px 0 6px;">Framework tasks</div>';
+    const byStage = {};
+    schedule.forEach(function(s){ byStage[s.id]=s; });
+    const span0 = schedule[0].start ? new Date(schedule[0].start).getTime() : 0;
+    const span1 = schedule[schedule.length-1].end ? new Date(schedule[schedule.length-1].end).getTime() : 1;
+    const span = Math.max(1, span1-span0);
+    roleRows.forEach(function(r){
+      const se = byStage[r.stage] || schedule[0];
+      const a = se.start ? new Date(se.start).getTime() : span0;
+      const b = se.end ? new Date(se.end).getTime() : a+86400000;
+      const left = ((a-span0)/span)*100;
+      const w = Math.max(3, ((b-a)/span)*100);
+      const col = r.role==="IM"?"#6d28d9":(r.role==="PDM"?"#b45309":"#3e0b3b");
+      htmlOut += '<div style="display:grid;grid-template-columns:240px 1fr;gap:8px;align-items:center;margin-bottom:3px;">';
+      htmlOut += '<div style="font-size:11px;"><strong>'+escapeHtml(r.code)+'</strong> '+escapeHtml(r.name)+'</div>';
+      htmlOut += '<div style="height:10px;background:#f3f0f6;border-radius:6px;position:relative;"><div style="position:absolute;left:'+left.toFixed(2)+'%;width:'+w.toFixed(2)+'%;height:10px;border-radius:6px;background:'+col+';" title="'+escapeHtml(r.role+' · '+r.stage)+'"></div></div></div>';
+    });
+  }
+  if(!packages.length && !roleRows.length){
+    host.innerHTML = htmlOut + '<div class="card" style="padding:12px;">No packages or framework tasks yet.</div>';
+    return;
+  }
   if(!packages.length){
-    host.innerHTML = htmlOut + '<div class="card" style="padding:12px;">No packages — sync from settings on the WBS tab.</div>';
+    host.innerHTML = htmlOut;
     return;
   }
 
@@ -22294,6 +22318,57 @@ let currentTab = "projects";
 let currentProjectId = null;
 let currentWsView = "imtasks";
 
+
+const ATN_METHOD_NAV = [
+  { id:"scope", n:"1", title:"Define scope", color:"#f3e8ff", ink:"#6d28d9",
+    views:[["method","How it works"],["dpow","DPoW / packages"],["air","AIR"]] },
+  { id:"plan", n:"2", title:"Plan production", color:"#fef3c7", ink:"#b45309",
+    views:[["roleos","My Role"],["imtasks","Tasks"],["planner","Planner + Gantt"],["midp","MIDP"]] },
+  { id:"verify", n:"3", title:"Verify delivery", color:"#dcfce7", ink:"#047857",
+    views:[["ite","ITE"],["graph","Graph"],["decide","Decide"]] },
+  { id:"produce", n:"4", title:"Produce information", color:"#ffedd5", ink:"#c2410c",
+    views:[["aim","AIM"],["models","Models"]] },
+  { id:"exchange", n:"5", title:"Exchange information", color:"#dbeafe", ink:"#1d4ed8",
+    views:[["prjdocs","Documents"],["ecc","Command"]] },
+  { id:"more", n:"•", title:"Workspace", color:"#f3f0f6", ink:"#3e0b3b",
+    views:[["prjtools","Tools"],["agents","Agents"]] }
+];
+function atnStepForView(view){
+  const hit = ATN_METHOD_NAV.find(function(s){ return s.views.some(function(v){ return v[0]===view; }); });
+  return hit ? hit.id : "plan";
+}
+function renderAtnMethodNav(activeView){
+  const host = document.getElementById("atnMethodNav");
+  const sub = document.getElementById("wsSegmented");
+  if(!host || !sub) return;
+  const view = activeView || currentWsView || "method";
+  const stepId = atnStepForView(view);
+  window.__methodStep = stepId;
+  host.innerHTML = ATN_METHOD_NAV.map(function(s){
+    return '<button type="button" class="atn-method-step'+(s.id===stepId?' on':'')+'" data-method-step="'+s.id+'" style="background:'+s.color+';color:'+s.ink+';"><span class="n">'+s.n+'</span><span class="t">'+s.title+'</span></button>';
+  }).join("");
+  const step = ATN_METHOD_NAV.find(function(s){ return s.id===stepId; }) || ATN_METHOD_NAV[1];
+  sub.innerHTML = step.views.map(function(v){
+    return '<button type="button" class="'+(v[0]===view?'active':'')+'" data-wsview="'+v[0]+'">'+v[1]+'</button>';
+  }).join("");
+  host.querySelectorAll("[data-method-step]").forEach(function(b){
+    b.onclick = function(){
+      const s = ATN_METHOD_NAV.find(function(x){ return x.id===b.getAttribute("data-method-step"); });
+      if(!s) return;
+      window.__methodStep = s.id;
+      setActiveWsView(s.views[0][0]);
+    };
+  });
+  sub.querySelectorAll("[data-wsview]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      const v = btn.dataset.wsview;
+      if(v === "imtasks") window.__imSub = window.__imSub || "tasks";
+      if(v === "planner") window.__planSub = window.__planSub || "gantt";
+      setActiveWsView(v);
+    });
+  });
+}
+
 function setActiveWsView(view){
   // Map legacy names
   const map = { tasks: "imtasks", progress: "imtasks", wbs: "planner", gantt: "planner", clash: "planner", tools: "prjtools", documents: "prjdocs", how: "method", method: "method" };
@@ -22305,6 +22380,7 @@ function setActiveWsView(view){
   if(view === "clash") window.__planSub = "clash";
   if(view === "wbs") window.__planSub = "wbs";
 
+  if(typeof renderAtnMethodNav === "function") renderAtnMethodNav(main);
   document.querySelectorAll("#wsSegmented > button").forEach(b => {
     b.classList.toggle("active", b.dataset.wsview === main);
   });
@@ -31246,11 +31322,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Segmented control inside workspace (main areas only)
+  if(typeof renderAtnMethodNav === "function") renderAtnMethodNav(currentWsView || "method");
   document.querySelectorAll("#wsSegmented > button").forEach(btn => {
     btn.addEventListener("click", () => {
       const view = btn.dataset.wsview;
       if(view === "imtasks") window.__imSub = window.__imSub || "tasks";
-      if(view === "planner") window.__planSub = window.__planSub || "wbs";
+      if(view === "planner") window.__planSub = window.__planSub || "gantt";
       setActiveWsView(view);
     });
   });
