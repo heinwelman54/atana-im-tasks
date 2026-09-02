@@ -2576,8 +2576,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.46.2";
-const APP_BUILD = "2026-09-02-catalog-apply";
+const APP_VERSION = "3.46.1";
+const APP_BUILD = "2026-09-02-docs-packages";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -6835,7 +6835,7 @@ function isIsoNamingCompliant(fileName){
 }
 function projectTaskTeamCodes(project){
   const cat = normalizeMidpCatalog(project && project.midpCatalog);
-  const roles = (cat.roles || []).filter(r => r.selected !== false && !r.disabled);
+  const roles = (cat.roles || []).filter(r => r.selected !== false);
   return roles.map(r => String(r.code || "").toUpperCase()).filter(Boolean);
 }
 /** True if folder name matches a project task team (code or label prefix). */
@@ -9156,7 +9156,7 @@ function normalizeMidpCatalog(src, opts){
   const d = defaultMidpCatalog();
   if(!src || typeof src !== "object") return d;
   const mapList = (arr, fallback) => {
-    if(!Array.isArray(arr)){
+    if(!Array.isArray(arr) || !arr.length){
       return strict ? [] : fallback.map(x => Object.assign({description:""}, x));
     }
     return arr.map(x => ({
@@ -9164,15 +9164,13 @@ function normalizeMidpCatalog(src, opts){
       label: String(x.label || x.description || x.code || "").toUpperCase().trim(),
       description: String(x.description || x.label || "").trim(),
       selected: x.selected === false ? false : true,
-      disabled: !!x.disabled,
       generationModel: String(x.generationModel || x.model || "").toUpperCase().trim(),
       generationSubjects: Array.isArray(x.generationSubjects) ? x.generationSubjects.map(function(s){ return String(s).toUpperCase(); }).filter(Boolean) : (x.generationSubjects ? String(x.generationSubjects).split(",").map(function(s){ return s.trim().toUpperCase(); }).filter(Boolean) : [])
     })).filter(x => x.code);
   };
   // If roles missing, use full DEFAULT_ROLES; if partial, merge so all defaults available (unless strict)
-  const rolesMissing = !Array.isArray(src.roles);
   let roles = mapList(src.roles, d.roles);
-  if(!strict && rolesMissing){
+  if(!strict){
     const have = new Set(roles.map(r => r.code));
     DEFAULT_ROLES.forEach(([code,label]) => {
       if(!have.has(code)) roles.push({code, label: String(label).toUpperCase(), description: "", selected:false});
@@ -15020,18 +15018,22 @@ function renderScopeWizard(project){
   if(!host) return;
   if((window.__psdView || "scope") !== "wizard"){ host.innerHTML = ""; return; }
   const cat = (project && project.midpCatalog) || {};
-  const catLive = normalizeMidpCatalog(project && project.midpCatalog, { strict: !!(project && project.midpCatalog && Array.isArray(project.midpCatalog.roles)) });
   const dge = (typeof normalizeDgeState === "function") ? normalizeDgeState(project && project.dge) : {};
-  const levelsSrc = (catLive.levels && catLive.levels.length) ? catLive.levels.filter(function(l){ return !l.disabled; }) : (cat.levels||[]);
-  const fbSrc = (catLive.functionalList && catLive.functionalList.length) ? catLive.functionalList.filter(function(f){ return !f.disabled; }) : (cat.functionalList||[]);
   const wz = window.__setupWz || {
     step: 1,
     name: (project && (project.name || project.projectName)) || "",
     type: project && project.projectType || "Commercial Building",
     industry: project && project.industry || "",
     client: project && (project.clientName || project.client) || "",
-    spatials: [],
-    fbs: [],
+    spatials: (cat.levels && cat.levels.length) ? cat.levels.map(function(l){ return { code: l.code, label: l.label, selected: l.selected !== false }; }) : [
+      { code: "SI", label: "SITE", selected: true },
+      { code: "00", label: "GROUND FLOOR", selected: true },
+      { code: "01", label: "FIRST FLOOR", selected: false },
+      { code: "R1", label: "ROOF LEVEL", selected: true }
+    ],
+    fbs: (cat.functionalList && cat.functionalList.length) ? cat.functionalList.map(function(f){ return { code: f.code, label: f.label, selected: f.selected !== false }; }) : [
+      { code: "01", label: "ADMINISTRATION", selected: true }
+    ],
     teams: {},
     systems: {},
     assets: {},
@@ -15040,18 +15042,12 @@ function renderScopeWizard(project){
     types: ["Data Centre", "Industrial Plant", "Commercial Building", "Mining", "Water Infrastructure"]
   };
   window.__setupWz = wz;
-  wz.spatials = levelsSrc.map(function(l){ return { code: l.code, label: l.label, selected: l.selected !== false }; });
-  wz.fbs = fbSrc.map(function(f){
-    const code = String(f.code||"").replace(/^FB/i,"");
-    return { code: code, label: f.label, selected: f.selected !== false };
-  });
-
   const SYS = ["HVAC","LIGHTING","POWER","FIRE DETECTION","FIRE PROTECTION","CCTV","ACCESS CONTROL","HOT WATER","WATER RETICULATION","STORMWATER","SOIL AND WASTE"];
   const AST = ["FOUNDATION","CONCRETE","STRUCTURAL STEEL","STAIR","PLATFORM","ROAD","BRIDGE","TANK","PUMP STATION","RETAINING WALL"];
   const SPC = ["OFFICE","BOARDROOM","PUMP ROOM","MCC ROOM","LABORATORY","RECEPTION"];
   const OPT = ["VESDA","BEAM DETECTION","ASPIRATING DETECTION","BIOMETRICS","ANPR","SMOKE EXTRACTION","HEAT RECOVERY"];
-  const TEAMS = (catLive.roles || []).filter(function(r){ return !r.disabled; }).map(function(r){ return [r.code, r.label]; });
-  const steps = ["Framework","Spatial","Functional","Task teams","Systems","Assets","Optional","Stages","Generate"];
+  const TEAMS = (typeof DEFAULT_ROLES !== "undefined" ? DEFAULT_ROLES : []).slice();
+  const steps = ["Framework","Spatial","Functional","Task teams","Systems","Assets","Spaces","Optional","Stages","Generate"];
   function chk(id, on, label){
     return '<label style="display:flex;gap:8px;align-items:center;padding:5px 0;font-size:13px;"><input type="checkbox" data-wz="' + id + '" ' + (on ? "checked" : "") + '> ' + escapeHtml(label) + '</label>';
   }
@@ -15065,7 +15061,7 @@ function renderScopeWizard(project){
     html += '<button type="button" class="atn-step' + on + '" data-wz-step="' + s + '"><span class="atn-step-num">' + s + '</span><span class="atn-step-lbl">' + label + '</span></button>';
   });
   html += '</div>';
-  html += '<p class="section-sub">IM / PDM / admin: complete 1→9 in order. Each number is a diligence gate. Do not skip Generate until teams and systems are true.</p>';
+  html += '<p class="section-sub">IM / PDM / admin: complete 1→10 in order. Each number is a diligence gate. Do not skip Generate until teams and systems are true.</p>';
 
   if(wz.step === 1){
     html += '<label style="font-size:11px;font-weight:700;">Project name</label>';
@@ -15106,20 +15102,21 @@ function renderScopeWizard(project){
     AST.forEach(function(s){ html += chk("as-"+s, !!wz.assets[s], s); });
   }
   if(wz.step === 7){
+    html += '<p class="section-sub">Uniclass SL spaces drive AR / ID packages.</p>';
+    SPC.forEach(function(s){ html += chk("sc-"+s, !!wz.spaces[s], s); });
+  }
+  if(wz.step === 8){
     html += '<p class="section-sub">Optional systems never auto-generate unless you tick them.</p>';
     OPT.forEach(function(s){ html += chk("op-"+s, !!wz.optional[s], s); });
   }
-  if(wz.step === 8){
+  if(wz.step === 9){
     const fw = (typeof defaultDeliveryFramework === "function") ? defaultDeliveryFramework() : { stages: [] };
-    const stageList = (project && project.stageLabels && Object.keys(project.stageLabels).length)
-      ? Object.keys(project.stageLabels).sort().map(function(id){ return { id: id, label: project.stageLabels[id], lod: "", loi: "", suitability: "" }; })
-      : (fw.stages || []);
-    html += '<p class="section-sub">Delivery stages from project settings.</p>';
-    (stageList || []).forEach(function(s){
+    html += '<p class="section-sub">Delivery stages (WHEN). Defaults map S1–S6 to Concept → As-built.</p>';
+    (fw.stages || []).forEach(function(s){
       html += '<div style="padding:4px 0;font-size:13px;"><strong>' + escapeHtml(s.id) + '</strong>  ' + escapeHtml(s.label) + '  · LOD' + s.lod + ' / LOI' + s.loi + '  · ' + escapeHtml(s.suitability) + '</div>';
     });
   }
-  if(wz.step === 9){
+  if(wz.step === 10){
     const sysN = Object.keys(wz.systems).filter(function(k){ return wz.systems[k]; }).length;
     const astN = Object.keys(wz.assets).filter(function(k){ return wz.assets[k]; }).length;
     html += '<p class="section-sub">WHERE ' + wz.spatials.filter(function(s){ return s.selected; }).length + ' spatials · WHAT ' + sysN + ' systems / ' + astN + ' assets · WHO task teams · WHEN stages.</p>';
@@ -15160,7 +15157,7 @@ function renderScopeWizard(project){
   });
 
   const next = document.getElementById("wzNext");
-  if(next) next.onclick = function(){ persistInputs(); wz.step = Math.min(9, wz.step + 1); renderScopeWizard(project); };
+  if(next) next.onclick = function(){ persistInputs(); wz.step = Math.min(10, wz.step + 1); renderScopeWizard(project); };
   const go = document.getElementById("wzGo");
   if(go) go.onclick = function(){
     persistInputs();
@@ -28111,12 +28108,11 @@ function catalogEditorHtml(list, idPrefix, title){
     const value = item.code || "";
     const desc = item.label || item.description || "";
     return `
-    <div class="catalog-row" data-idx="${i}" style="grid-template-columns:88px 1fr auto auto;align-items:center;gap:8px;${item.disabled?"opacity:.45;":""}">
+    <div class="catalog-row" data-idx="${i}" style="grid-template-columns:88px 1fr auto auto;align-items:center;gap:8px;">
       <span class="code mono" title="Value">${escapeHtml(value)}</span>
       <span class="lbl" title="Description">${escapeHtml(desc)}</span>
       <button type="button" class="cat-edit" data-cat-edit="${idPrefix}" data-idx="${i}">Edit</button>
-      <button type="button" class="cat-edit" data-cat-dis="${idPrefix}" data-idx="${i}">${item.disabled?"Enable":"Disable"}</button>
-      <button type="button" class="cat-edit" data-cat-del="${idPrefix}" data-idx="${i}" style="color:#b91c1c;border-color:#fecaca;" title="Remove from this project">Del</button>
+      <button type="button" class="cat-edit" data-cat-del="${idPrefix}" data-idx="${i}" style="color:#b91c1c;border-color:#fecaca;" title="Delete">Del</button>
     </div>`;
   }).join("");
   return `
@@ -28231,7 +28227,7 @@ function atnRequestCloseSheet(){
 }
 
 function bindCatalogEditors(initialCatalog){
-  const cat = JSON.parse(JSON.stringify(normalizeMidpCatalog(initialCatalog, { strict: !!(initialCatalog && Array.isArray(initialCatalog.roles)) })));
+  const cat = JSON.parse(JSON.stringify(normalizeMidpCatalog(initialCatalog)));
   const keyMap = { func: "functionalList", level: "levels", role: "roles", orig: "originators", form: "forms", status: "statuses", rev: "revisions", phase: "phases" };
   const redraw = (prefix) => {
     const list = cat[keyMap[prefix]] || [];
@@ -28273,18 +28269,6 @@ function bindCatalogEditors(initialCatalog){
       document.getElementById("cat-label-" + prefix).value = "";
       const descEl = document.getElementById("cat-desc-" + prefix);
       if(descEl) descEl.value = "";
-      redraw(prefix);
-      atnApplyCatalogLive(cat);
-      return;
-    }
-    const disBtn = e.target.closest("[data-cat-dis]");
-    if(disBtn){
-      const prefix = disBtn.getAttribute("data-cat-dis");
-      const idx = parseInt(disBtn.getAttribute("data-idx"), 10);
-      const item = cat[keyMap[prefix]][idx];
-      if(!item) return;
-      item.disabled = !item.disabled;
-      if(item.disabled) item.selected = false;
       redraw(prefix);
       atnApplyCatalogLive(cat);
       return;
@@ -30028,7 +30012,6 @@ function openEditProjectSheet(project){
 
         <div class="sheet-actions" style="margin-top:16px;">
       <button class="btn btn-danger" id="f-p-delete">Delete</button>
-      <button class="btn btn-ghost" id="f-p-apply">Apply</button>
       <button class="btn btn-primary" id="f-p-save">Save</button>
     </div>
   `);
@@ -30148,8 +30131,6 @@ function openEditProjectSheet(project){
     closeWorkspace();
     showToast("Project deleted");
   };
-  const applyBtn = document.getElementById("f-p-apply");
-  if(applyBtn) applyBtn.onclick = function(){ window.__editApplyKeepOpen = true; const b=document.getElementById("f-p-save"); if(b) b.click(); };
   document.getElementById("f-p-save").onclick = () => {
     try {
     const nameEl = document.getElementById("f-p-name");
@@ -30267,12 +30248,6 @@ function openEditProjectSheet(project){
     }
     saveData(DATA);
     window.__editProjectDirty = false;
-    if(window.__editApplyKeepOpen){
-      window.__editApplyKeepOpen = false;
-      showToast("Settings applied");
-      try { if(typeof renderProjects === "function") renderProjects(); } catch(e){}
-      return;
-    }
     closeSheet();
     renderProjects();
     try { renderWorkspace(); } catch(e){ console.warn(e); }
