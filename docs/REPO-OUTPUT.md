@@ -1,10 +1,8 @@
 # Repo output
 
-**App version: 3.45.0**
+**App version: 3.45.1**
 **Pages file:** app.html
-Open app.html?v=3450 after push. Badge **v3.45.0**.
+Open app.html?v=3451 after push. Badge **v3.45.1**.
 
-## What changed
-- Top nav follows How Atana Works: 1 Define scope → 5 Exchange, plus Workspace
-- Submenus under the active step
-- Planner Gantt lists DTL/PDM/IM framework tasks on the stage calendar, then packages
+Method steps: Atana purple/gold, gold step disc, larger centred title, selected fill #3e0b3b.
+Nav no longer rebuilds on every click.
