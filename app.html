@@ -2558,8 +2558,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.42.0";
-const APP_BUILD = "2026-09-01-pdom-p2";
+const APP_VERSION = "3.43.0";
+const APP_BUILD = "2026-09-02-dom-v1";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -32867,6 +32867,8 @@ function atnRenderSaSeat(project, activeRole){
         html += ' <span style="font-size:10px;color:#666;">R '+t.r+' · A '+t.a+'</span>';
         const iso = (typeof ATN_ISO_MAP!=="undefined") && ATN_ISO_MAP[t.categoryCode];
         if(iso) html += '<div style="font-size:10px;color:#7c3aed;">'+escapeHtml(iso.iso)+' · '+escapeHtml(iso.lrqa)+'</div>';
+        const arts = (typeof ATN_ARTEFACTS!=="undefined") && ATN_ARTEFACTS[t.taskCode];
+        if(arts) html += '<div style="font-size:10px;color:#847918;">Creates · '+arts.map(escapeHtml).join(" · ")+'</div>';
         html += '</span></label>';
         if(t.taskCode==="DTL.02.01"){
           html += '<div style="margin:4px 0 8px 26px;font-size:11px;color:#555;">VP evidence (do not duplicate VP): VP Project Created · Contract Loaded · Labour Planned · Budget Loaded · Risks Loaded</div>';
@@ -32908,6 +32910,40 @@ const ATN_IDM_STAGES = [
 ];
 const ATN_PKG_LIFE = ["DEFINED","PLANNED","IN PRODUCTION","READY FOR REVIEW","READY FOR APPROVAL","APPROVED","ISSUED","AS-BUILT","HANDOVER COMPLETE","ARCHIVED"];
 const ATN_PKG_TYPES = ["Design Package","Council Submission","Authority Submission","Permit Submission","Tender Package","Construction Package","As Built Package","Handover Package"];
+const ATN_ARTEFACTS = {
+  "DTL.02.01":["VP evidence pack"],
+  "DTL.02.03":["ART-AMX Assignment Matrix"],
+  "DTL.02.04":["REG-STK Stakeholder Register"],
+  "DTL.02.05":["ART-COM Communication Plan"],
+  "DTL.03.01":["ART-WBS"],
+  "DTL.03.02":["ART-PRG Programme"],
+  "DTL.03.04":["ART-PEP"],
+  "DTL.05.02":["REG-RISK"],
+  "DTL.05.04":["REG-LL"],
+  "DTL.07.01":["ART-EIR"],
+  "DTL.07.02":["ART-BEP"],
+  "DTL.07.03":["ART-MIDP"],
+  "DTL.07.04":["ART-ISTD"],
+  "DTL.07.05":["ART-IPRO"],
+  "DTL.10.01":["ART-CLO"],
+  "PDM.01.01":["ART-WBS"],
+  "PDM.01.02":["Package register"],
+  "IM.01.01":["ART-CAPA","REG-CAP"],
+  "IM.01.02":["ART-CAPC"],
+  "IM.01.03":["ART-MOB"],
+  "IM.02.01":["CDE record"],
+  "IM.03.01":["ART-MIDP"],
+  "IM.03.03":["ART-TIDP"],
+  "IM.04.01":["ART-ISTD"],
+  "IM.05.01":["DPoW"],
+  "IM.06.01":["REG-AUD"],
+  "IM.07.03":["REG-ISS"],
+  "IM.08.04":["ART-AIM","ART-CLO"]
+};
+const ATN_REGISTERS = ["REG-RISK","REG-ISS","REG-DEC","REG-ACT","REG-CHG","REG-STK","REG-REV","REG-AUD","REG-LL","REG-CAP"];
+const ATN_PKG_TEMPLATES = ["Architecture","Civil Roads","Civil Earthworks","Structural","Bridge","Mechanical","HVAC","Electrical","Public Health","Fire","Security","Process"];
+const ATN_SUBMISSION_TYPES = ["Council Submission","Environmental Submission","Permit Submission","Planning Submission","Authority Approval","Tender Submission","Construction Submission","Closeout Submission"];
+
 const ATN_TASK_DEPS = [
   { task:"DTL.02.01", pred:"ZZ-001", succ:"IM.01.01", type:"FS" },
   { task:"IM.01.01", pred:"DTL.02.01", succ:"IM.01.02", type:"FS" },

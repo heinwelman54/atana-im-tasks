@@ -1,0 +1,4 @@
+{
+  "version": "1.0",
+  "rule": "tasks create artefacts; DTL approves IM artefacts"
+}

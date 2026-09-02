@@ -1,12 +1,10 @@
 # Repo output
 
-**App version: 3.42.0**
+**App version: 3.43.0**
 **Pages file:** app.html
-Open app.html?v=3420 after push. Badge **v3.42.0**.
+Open app.html?v=3430 after push. Badge **v3.43.0**.
 
-## What changed on the app
-- Package types: Council / Authority / Permit / Tender / Construction / As Built / Handover
-- Core FS spine `ATN_TASK_DEPS` for Gantt/WBS
-- Phase 2 model documented in docs/ATANA-PDOM-PHASE2.md (outputs 1–10)
+Master document: docs/ATANA-DELIVERY-OPERATING-MODEL-v1.0.md
 
-IM execution stays with IM. DTL only approves.
+My Role tasks that create artefacts now show "Creates · ART-…"
+No new tasks were added.
