@@ -1,10 +1,7 @@
 # Repo output
 
-**App version: 3.46.0**
+**App version: 3.45.5**
 **Pages file:** app.html
-Open app.html?v=3460 after push. Badge **v3.46.0**.
+Open app.html?v=3455 after push. Badge **v3.45.5**.
 
-- ACC labels → FORMA
-- FORMA settings collapsed
-- Sync limited to WIP/SHARED/PUBLISHED + task-team folders (cap ~90)
-- MIDP docs panel: package match, orphans, create folder on FORMA, transmit register
+More selected-menu gradients. Light fills (gold, lilac, mint, sage, paper) use dark purple text.
