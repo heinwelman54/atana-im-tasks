@@ -1,7 +1,7 @@
 # Repo output
 
-**App version: 3.45.5**
+**App version: 3.48.0**
 **Pages file:** app.html
-Open app.html?v=3455 after push. Badge **v3.45.5**.
+Open app.html?v=3480 after push. Badge **v3.48.0**.
 
-More selected-menu gradients. Light fills (gold, lilac, mint, sage, paper) use dark purple text.
+Rebuilt on working 3.45.5 plus later features. Main script syntax-checked.
