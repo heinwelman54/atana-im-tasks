@@ -1,7 +1,7 @@
 # Repo output
 
-**App version: 3.45.5**
+**App version: 3.47.0**
 **Pages file:** app.html
-Open app.html?v=3455 after push. Badge **v3.45.5**.
+Open app.html?v=3470 after push. Badge **v3.47.0**.
 
-More selected-menu gradients. Light fills (gold, lilac, mint, sage, paper) use dark purple text.
+Own-role tasks only by default. Toggle shows locked gold dependency tasks from other roles. Section numbers resequenced to match the filtered WBS.

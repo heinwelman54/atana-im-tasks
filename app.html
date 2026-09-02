@@ -480,6 +480,9 @@
   .task-row.depth-1{margin-left:8px;}
   .task-row.depth-2{margin-left:16px;}
   .task-row.depth-3{margin-left:24px;}
+  .task-row.dep-locked{background:#f9f7e5;box-shadow:inset 4px 0 0 #d5c427;}
+  .task-row.dep-locked .task-check{opacity:.35;pointer-events:none;}
+  .task-row.dep-locked .task-name{color:#5c3d1a;}
   .wbs-task-row.blocker .wbs-task-name{color:var(--danger);font-weight:700;}
   .wbs-task-row.disabled-task{opacity:0.55;}
   .wbs-task-row.disabled-task .wbs-task-name{text-decoration:line-through;}
@@ -1406,7 +1409,7 @@
   pointer-events:none;
 }
 .org-plate.ghost .nm{ font-style:italic; color:#64748b; }
-.org-plate.ghost::after{ content:" ACC"; font-size:9px; color:#94a3b8; }
+.org-plate.ghost::after{ content:" FORMA"; font-size:9px; color:#94a3b8; }
 .catalog-row{ display:grid; padding:6px 4px; border-bottom:1px solid var(--slate-100); }
 .catalog-row .code{ font-weight:700; color:var(--purple-950); }
 .catalog-row .lbl{ font-size:13px; color:var(--slate-700); }
@@ -1903,9 +1906,12 @@
         <button type="button" class="btn btn-ghost btn-block" id="accessMatrixResetBtn" style="margin-top:10px;">Reset access matrix defaults</button>
       </details>
 
-      <div class="card" style="margin-top:14px;" id="apsCard">
-        <div class="chart-card-title" style="margin-bottom:6px;">Autodesk ACC</div>
-        <p class="section-sub" style="margin-bottom:12px;">Sign in with your Autodesk account to list ACC hubs/projects, import a project into Atana, and sync Docs. Create an APS app at <strong>aps.autodesk.com</strong> with this exact callback URL.</p>
+      <details class="card" style="margin-top:14px;" id="apsCard">
+        <summary class="chart-card-title" style="margin-bottom:6px;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+          <span>Autodesk FORMA</span>
+          <span style="font-size:12px;font-weight:500;color:var(--muted);">expand</span>
+        </summary>
+        <p class="section-sub" style="margin-bottom:12px;">Sign in with your Autodesk account to list FORMA hubs/projects, import a project into Atana, and sync Docs. Create an APS app at <strong>aps.autodesk.com</strong> with this exact callback URL.</p>
         <div class="field" style="border:1px solid #e9d5ff;background:#faf5ff;border-radius:12px;padding:12px;margin-bottom:12px;box-shadow:0 2px 8px rgba(109,40,217,.08)">
           <div style="font-weight:800;font-size:13px;color:#4c1d95;margin-bottom:6px;">Load APS credentials from SharePoint</div>
           <p class="section-sub" style="margin:0 0 10px;">Restricted library (only intended users). Default path can be changed. Uses Microsoft sign-in + Graph — secrets stay out of the GitHub repo.</p>
@@ -1961,13 +1967,13 @@
           <input type="password" id="apsClientSecret" placeholder="Client Secret (prefer load from SharePoint)" autocomplete="off" spellcheck="false">
         </div>
         <div class="field">
-          <label>ACC / APS region</label>
+          <label>FORMA / APS region</label>
           <select id="apsRegion">
             <option value="EMEA">EMEA (Europe / UK / SA / Middle East)</option>
             <option value="US">US</option>
             <option value="AUS">AUS (Australia)</option>
           </select>
-          <p class="section-sub" style="margin:6px 0 0;">Your ACC is on the <strong>EMEA</strong> server — this must stay on EMEA or hubs stay empty.</p>
+          <p class="section-sub" style="margin:6px 0 0;">Your FORMA is on the <strong>EMEA</strong> server — this must stay on EMEA or hubs stay empty.</p>
         </div>
         <div class="field">
           <label>Callback / redirect URI (must match APS app exactly)</label>
@@ -1985,13 +1991,13 @@
           <span id="apsStatus" class="section-sub" style="margin:0;">Not signed in</span>
         </div>
         <details id="accProjectDetails" style="margin-top:8px;">
-          <summary style="cursor:pointer;font-weight:600;color:var(--purple-950);">ACC projects <span id="accProjectCount" style="font-weight:500;color:var(--slate-500);"></span></summary>
-          <p class="section-sub" style="margin:8px 0;">Import creates or updates an Atana project (name, number, type, business unit, dates) and links the ACC project id.</p>
+          <summary style="cursor:pointer;font-weight:600;color:var(--purple-950);">FORMA projects <span id="accProjectCount" style="font-weight:500;color:var(--slate-500);"></span></summary>
+          <p class="section-sub" style="margin:8px 0;">Import creates or updates an Atana project (name, number, type, business unit, dates) and links the FORMA project id.</p>
           <div id="accProjectList" style="max-height:320px;overflow:auto;margin-top:6px;">
-            <p class="section-sub">Sign in to load ACC projects.</p>
+            <p class="section-sub">Sign in to load FORMA projects.</p>
           </div>
         </details>
-      </div>
+      </details>
 
       <div class="card" style="margin-top:14px;">
         <div class="chart-card-title" style="margin-bottom:6px;">Data backup</div>
@@ -2019,7 +2025,7 @@
         <div class="stage-picker-label" id="wsStagePickerLabel">CURRENT WORK STAGE</div>
         <div class="stage-picker" id="stagePicker"></div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;">
-          <button type="button" class="btn btn-ghost btn-xs" id="showAllRoleTasksBtn" title="Load other functional role tasks as read-only (slower)">Show other roles</button>
+          <button type="button" class="btn btn-ghost btn-xs" id="showAllRoleTasksBtn" title="Show predecessor / successor tasks from other roles. Those rows stay locked.">Show dependency tasks</button>
           <span id="activeRoleBanner" style="font-size:11px;font-weight:600;color:var(--purple-900);"></span>
         </div>
         <div class="ws-stage-meta">
@@ -2573,8 +2579,8 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.45.5";
-const APP_BUILD = "2026-09-02-nav-grads";
+const APP_VERSION = "3.47.0";
+const APP_BUILD = "2026-09-02-role-deps";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -5283,7 +5289,7 @@ function midpAfterMutate(){
 
 
 
-/** Map one ACC Files log report row → deliverable record */
+/** Map one FORMA Files log report row → deliverable record */
 function mapAccLogRow(row){
   // Flexible header match (Excel may vary spacing)
   const get = (...names) => {
@@ -5346,10 +5352,10 @@ async function importAccFilesLogReport(project, file){
     const wb = XLSX.read(buf, { type: "array" });
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-    if(!rows.length){ showToast("No rows in ACC log"); return; }
+    if(!rows.length){ showToast("No rows in FORMA log"); return; }
     const mapped = rows.map(mapAccLogRow).filter(Boolean);
     if(!mapped.length){
-      showToast("No usable Name column — is this an ACC Files log report?");
+      showToast("No usable Name column — is this an FORMA Files log report?");
       return;
     }
     const live = projectById(project.id) || project;
@@ -5386,11 +5392,11 @@ async function importAccFilesLogReport(project, file){
     project.accDeliverablesSyncedAt = live.accDeliverablesSyncedAt;
     saveData(DATA);
     // Field mapping UI removed — columns use FORMA attribute ids/names directly
-    showToast("ACC log: " + mapped.length + " rows · " + updated + " updated · " + added + " added");
+    showToast("FORMA log: " + mapped.length + " rows · " + updated + " updated · " + added + " added");
     try{ renderAccDocsTracking(live); }catch(e){}
   } catch(e){
     console.error(e);
-    showToast("ACC log import failed: " + (e.message || e));
+    showToast("FORMA log import failed: " + (e.message || e));
   }
 }
 
@@ -5433,7 +5439,7 @@ function renderMidpTool(project){
   };
   const clrAcc = document.getElementById("midp-docs-clear-acc");
   if(clrAcc) clrAcc.onclick = () => {
-    if(!confirm("Clear FORMA file cache for this project?\n\nYou will need to sync again to reload files from ACC.")) return;
+    if(!confirm("Clear FORMA file cache for this project?\n\nYou will need to sync again to reload files from FORMA.")) return;
     if(clearAccDeliverablesCache(project)){
       try{ renderAccDocsTracking(project); }catch(e){}
     }
@@ -5530,7 +5536,7 @@ async function openImportDeliverablesExport(project){
   const defaultStage = window.__docsTrackStage || project.currentStageId || "S4";
   openSheet(`
     <h2>Import plan (MIDP/TIDP)</h2>
-    <p class="section-sub">This import becomes the <strong>live MIDP/TIDP plan</strong> for the stage. ACC is used only to check issued / approved status on the CDE.</p>
+    <p class="section-sub">This import becomes the <strong>live MIDP/TIDP plan</strong> for the stage. FORMA is used only to check issued / approved status on the CDE.</p>
     <div class="field"><label>Work stage for this export</label>
       <select id="f-deliv-stage">
         ${stages.map(s => `<option value="${escapeHtml(s.id)}" ${s.id===defaultStage?"selected":""}>${escapeHtml(s.id)} — ${escapeHtml(s.label)}</option>`).join("")}
@@ -5666,7 +5672,7 @@ function isApprovedReview(s){
  */
 
 
-/** Fill empty Published review status only from real ACC labels on the same Document ID (never invent). */
+/** Fill empty Published review status only from real FORMA labels on the same Document ID (never invent). */
 
 /**
  * QMS / ISO 19650 review-status model (workflows start only under WIP & SHARED):
@@ -5689,7 +5695,7 @@ function isApprovedReview(s){
  *  2. Status “belongs” to a destination gateway — only apply if compatible.
  *  3. Published ← latest Shared publish-authorisation only.
  *  4. Shared ← latest Shared-compatible status (share-approval or publish-auth).
- *  5. WIP ← WIP-compatible (internal / share-approval), not pure publish-auth unless only ACC value.
+ *  5. WIP ← WIP-compatible (internal / share-approval), not pure publish-auth unless only FORMA value.
  */
 function classifyReviewStatusLabel(label){
   const s = String(label || "").trim();
@@ -5710,7 +5716,7 @@ function classifyReviewStatusLabel(label){
   return { kind: "other", destination: null, rank: 10, label: s };
 }
 
-/** Infer outcome + destination from ACC workflow / review name (QMS). */
+/** Infer outcome + destination from FORMA workflow / review name (QMS). */
 function inferFromWorkflowName(reviewName, approvalLabel, approvalValue){
   const n = String(reviewName || "").toUpperCase();
   const raw = String(approvalLabel || approvalValue || "").trim();
@@ -5726,7 +5732,7 @@ function inferFromWorkflowName(reviewName, approvalLabel, approvalValue){
   if(/FOR\s*PUBLISH/.test(n)){
     if(/REJECT/.test(u)) return { label: raw, kind: "rejected", destination: "PUBLISHED", rank: 40, reviewName: reviewName || "" };
     const lab = (/AUTHORIS|AUTHORIZ/.test(u) ? raw : (raw && /APPROV/.test(u) ? raw : "AUTHORISED (PUBLISHED)"));
-    // Prefer exact ACC text when it already says Authorised
+    // Prefer exact FORMA text when it already says Authorised
     const finalLab = /AUTHORIS|AUTHORIZ/.test(u) ? raw : "AUTHORISED (PUBLISHED)";
     return { label: finalLab, kind: "authorised_published", destination: "PUBLISHED", rank: 100, reviewName: reviewName || "" };
   }
@@ -5981,7 +5987,7 @@ function applyQmsReviewStatusMapping(accFiles){
             // in-review does not belong on Published copy for display — keep searching already done
             resolved = "AUTHORISED (PUBLISHED)";
           } else if(cls.kind !== "authorised_published" && /authoris|authoriz/i.test(resolved)){
-            // keep exact ACC text
+            // keep exact FORMA text
           } else if(cls.kind !== "authorised_published"){
             // suitability-driven default already set above; keep AUTHORISED text
             if(!/authoris|authoriz/i.test(resolved)) resolved = "AUTHORISED (PUBLISHED)";
@@ -6117,7 +6123,7 @@ function gatewayFlowHtml(docId, flowMap, accFiles){
 
 
 function normalizeReviewStatusForGateway(status, cdeState, suitability){
-  return String(status || "").trim(); // passthrough — ACC only
+  return String(status || "").trim(); // passthrough — FORMA only
 }
 
 function statusCodeLabelMap(project){
@@ -6185,7 +6191,7 @@ function reviewStatusDescription(status, project){
   if(/APPROV/.test(s)) return "Approved in workflow";
   if(/REJECT/.test(s)) return "Rejected — revise and resubmit";
   if(/IN_REVIEW|IN REVIEW|REVIEWED/.test(s)) return "In review / reviewed (internal)";
-  if(/NOT_IN_REVIEW/.test(s)) return "Not in an ACC review workflow";
+  if(/NOT_IN_REVIEW/.test(s)) return "Not in an FORMA review workflow";
   return "Workflow review status from FORMA";
 }
 
@@ -6193,7 +6199,7 @@ function displayReviewStatus(f){
   if(!f) return "";
   const gw = String(f.cdeState || "").toUpperCase();
   const rs = String(f.reviewState || "").toUpperCase();
-  // Live ACC review on Shared/WIP
+  // Live FORMA review on Shared/WIP
   if((gw === "SHARED" || gw === "WIP") && rs === "IN_REVIEW")
     return "IN REVIEW";
   let v = String(f.reviewStatus || f.approvalStatusValue || "").trim();
@@ -6268,7 +6274,7 @@ const PLAN_COLUMN_DEFS = [
   { key: "workStage", label: "Work Stage", default: false }
 ];
 const ACC_IMPORT_KEYS = ACC_COLUMN_DEFS.map(c => c.key);
-/** FORMA/ACC custom attribute IDs (from GET …/custom-attribute-definitions, EMEA). */
+/** FORMA/FORMA custom attribute IDs (from GET …/custom-attribute-definitions, EMEA). */
 const FORMA_ATTR_ID_MAP = {
   documentTitle: "3066112",      // Document Title
   revision: "3066113",           // Revision
@@ -6287,7 +6293,7 @@ const FORMA_ATTR_ID_MAP = {
   sheet: "3552395"               // Sheet
 };
 
-/** Resolve attribute whether ACC returns id keys or display names. */
+/** Resolve attribute whether FORMA returns id keys or display names. */
 function getAttr(record, attrId, displayName){
   if(!record) return "";
   const bag = record.customAttributes || record.attrs || record.custom || record;
@@ -6832,7 +6838,7 @@ function isIsoNamingCompliant(fileName){
 }
 function projectTaskTeamCodes(project){
   const cat = normalizeMidpCatalog(project && project.midpCatalog);
-  const roles = (cat.roles || []).filter(r => r.selected !== false);
+  const roles = (cat.roles || []).filter(r => r.selected !== false && !r.disabled);
   return roles.map(r => String(r.code || "").toUpperCase()).filter(Boolean);
 }
 /** True if folder name matches a project task team (code or label prefix). */
@@ -6959,7 +6965,7 @@ function docsCdeGatewayBarHtml(project, files){
     ${ISO19650_STATES.map(st =>
       `<button type="button" class="btn btn-xs ${cur===st?"btn-primary":"btn-ghost"}" data-cde-state="${st}">${st} · ${counts[st]||0}</button>`
     ).join("")}
-    <span class="section-sub" style="margin:0;">Select WIP / SHARED / PUBLISHED, then Sync ACC for that gateway only. Archive is excluded.</span>
+    <span class="section-sub" style="margin:0;">Select WIP / SHARED / PUBLISHED, then Sync FORMA for that gateway only. Archive is excluded.</span>
   </div>`;
 }
 
@@ -6987,7 +6993,7 @@ function docsFilterBarHtml(filesOrRows, view, stageId){
     const ws = r.workStage || r.stage || "";
     const st = r.status || "";
     if(ws && (looksLikeWorkStage(ws) || !st || String(ws) !== String(st))){
-      // Keep hierarchy stages; add ACC workStage if it looks like a stage
+      // Keep hierarchy stages; add FORMA workStage if it looks like a stage
       if(looksLikeWorkStage(ws) || /^S[1-6]$/i.test(ws) || /^WS/i.test(ws)) wsSet.add(String(ws));
     }
     if(st) stSet.add(String(st));
@@ -7190,7 +7196,7 @@ function ensureDocsCtxMenu(){
   return m;
 }
 
-/** Event delegation only — safe with large ACC lists */
+/** Event delegation only — safe with large FORMA lists */
 function bindDocsRowSelection(root){
   if(!root) return;
   if(root.dataset.docsSelectBound === "1"){
@@ -7343,7 +7349,7 @@ function emailTtmOutstanding(project, stageId, items){
     lines.push("");
     lines.push("Please submit / progress the following deliverables to their required destination (Shared or Published) as defined by suitability status.");
     lines.push("");
-    lines.push("Document ID | Description | Tracking | Gateway | Expected | Plan status | ACC status | Version added at | Due | Flags");
+    lines.push("Document ID | Description | Tracking | Gateway | Expected | Plan status | FORMA status | Version added at | Due | Flags");
     lines.push("-".repeat(100));
     rows.forEach(r => {
       const added = r.versionAddedAt ? (function(){ try { return new Date(r.versionAddedAt).toLocaleDateString(); } catch(e){ return r.versionAddedAt; } })() : "";
@@ -7537,7 +7543,7 @@ function buildPlanVsAccStatus(project, stageId){
     });
   });
 
-  // ACC-only files (not on plan) — still track for wrong stage / gateway
+  // FORMA-only files (not on plan) — still track for wrong stage / gateway
   accFiles.forEach(f => {
     const docId = normalizeDocId(f.name || "");
     if(!docId || usedAcc.has(docId)) return;
@@ -7975,7 +7981,118 @@ function bindDocsViewTabs(project){
   });
 }
 
+
+function renderFormaPackagePanel(project){
+  const list = document.getElementById("midp-docs-list");
+  if(!list) return;
+  let host = document.getElementById("formaPkgPanel");
+  if(!host){
+    host = document.createElement("div");
+    host.id = "formaPkgPanel";
+    list.parentNode.insertBefore(host, list);
+  }
+  const files = (project && project.accDeliverablesCache) || [];
+  const orphans = files.filter(function(f){ return f.formaOrphan; });
+  const withPk = files.filter(function(f){ return f.formaPackageId; });
+  const txs = atnFormaTransmits(project);
+  const unsent = files.filter(function(f){
+    const key = (f.id || f.name || "") + "::" + (f.cdeState || "");
+    return !atnLatestTransmit(project, key) && (f.cdeState === "SHARED" || f.cdeState === "PUBLISHED");
+  });
+  const packs = (typeof getProductionPackages === "function") ? getProductionPackages(project).slice(0, 80) : [];
+  let html = '<div class="card" style="padding:12px;margin-bottom:12px;box-shadow:var(--pill-shadow);">';
+  html += '<div style="font-weight:800;margin-bottom:6px;">FORMA packages & transmit</div>';
+  html += '<div style="font-size:12px;color:#555;margin-bottom:8px;">Sync limited to WIP / SHARED / PUBLISHED + task-team folders. Files in SHARED/PUBLISHED without a matching Atana package are flagged.</div>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;">';
+  html += '<span class="role-pill">Files '+files.length+'</span>';
+  html += '<span class="role-pill">In a package '+withPk.length+'</span>';
+  html += '<span class="role-pill" style="background:#fbe6e0;color:#b5442e;">Not in package '+orphans.length+'</span>';
+  html += '<span class="role-pill" style="background:#f9f7e5;">Not transmitted '+unsent.length+'</span>';
+  html += '<span class="role-pill">Transmits '+txs.length+'</span></div>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">';
+  html += '<button type="button" class="btn btn-ghost btn-sm" id="formaListPkg">Refresh FORMA packages</button>';
+  html += '<button type="button" class="btn btn-gold btn-sm" id="formaMkPkg">Create Docs package on FORMA</button>';
+  html += '<select id="formaMkPkgId" style="min-height:36px;border-radius:10px;padding:0 8px;">';
+  packs.forEach(function(pk){
+    html += '<option value="'+escapeHtml(pk.id)+'">'+escapeHtml((pk.id||"")+" · "+(pk.name||pk.ss||""))+'</option>';
+  });
+  html += '</select>';
+  html += '<label style="font-size:12px;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="formaGwShared" checked> SHARED</label>';
+  html += '<label style="font-size:12px;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="formaGwPub"> PUBLISHED</label>';
+  html += '</div>';
+  const remote = project.formaDocsPackageList || [];
+  if(remote.length){
+    html += '<div style="font-size:12px;font-weight:800;margin:8px 0 4px;">FORMA Docs packages</div><div style="max-height:140px;overflow:auto;font-size:12px;">';
+    remote.slice(0,40).forEach(function(r){
+      html += '<div>#'+escapeHtml(String(r.displayId||r.id||""))+' · '+escapeHtml(r.name||"")+' · '+(r.resourceCount!=null?r.resourceCount+" files":"")+' · '+escapeHtml(r.versionType||"")+'</div>';
+    });
+    html += '</div>';
+  }
+  if(orphans.length){
+    html += '<div style="font-size:12px;font-weight:800;color:#b5442e;margin:8px 0 4px;">SHARED / PUBLISHED not in a package</div>';
+    html += '<div style="max-height:160px;overflow:auto;font-size:12px;">';
+    orphans.slice(0,40).forEach(function(f){
+      html += '<div>'+escapeHtml(f.cdeState||"")+' · '+escapeHtml(f.name||"")+' <span style="color:#888;">'+escapeHtml(f.folderPath||"")+'</span></div>';
+    });
+    html += '</div>';
+  }
+  html += '<div style="font-size:12px;font-weight:800;margin:10px 0 4px;">Transmits</div>';
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">';
+  html += '<input id="formaTxTo" placeholder="To (name)" style="min-height:36px;border-radius:10px;padding:0 8px;border:1px solid #c9bdc8;">';
+  html += '<input id="formaTxRole" placeholder="Role" style="min-height:36px;border-radius:10px;padding:0 8px;border:1px solid #c9bdc8;width:110px;">';
+  html += '<button type="button" class="btn btn-sm" id="formaTxBtn">Record transmit for unsent SHARED/PUBLISHED</button>';
+  html += '</div>';
+  html += '<div style="max-height:140px;overflow:auto;font-size:12px;">';
+  if(!txs.length) html += '<div style="color:#888;">Nothing transmitted yet.</div>';
+  txs.slice().reverse().slice(0,20).forEach(function(x){
+    html += '<div>'+escapeHtml(x.date||"")+' · '+escapeHtml(x.name||"")+' → '+escapeHtml(x.to||"")+' ('+escapeHtml(x.role||"")+') · '+escapeHtml(x.gateway||"")+'</div>';
+  });
+  html += '</div></div>';
+  host.innerHTML = html;
+  const lst = document.getElementById("formaListPkg");
+  if(lst) lst.onclick = async function(){
+    try {
+      showToast("Loading FORMA packages…");
+      project.formaDocsPackageList = await apsListDocsPackages(project);
+      try { saveData(DATA); } catch(e){}
+      showToast(((project.formaDocsPackageList||[]).length) + " FORMA packages");
+      renderFormaPackagePanel(project);
+    } catch(e){ showToast(e.message || String(e)); }
+  };
+  const mk = document.getElementById("formaMkPkg");
+  if(mk) mk.onclick = function(){
+    const id = (document.getElementById("formaMkPkgId")||{}).value;
+    const pack = packs.find(function(p){ return p.id === id; });
+    if(!pack){ showToast("Select a package"); return; }
+    const gws = [];
+    if((document.getElementById("formaGwShared")||{}).checked) gws.push("SHARED");
+    if((document.getElementById("formaGwPub")||{}).checked) gws.push("PUBLISHED");
+    atnCreateFormaPackageFolders(project, pack, gws.length?gws:["SHARED"]);
+  };
+  const txb = document.getElementById("formaTxBtn");
+  if(txb) txb.onclick = function(){
+    const to = ((document.getElementById("formaTxTo")||{}).value||"").trim();
+    const role = ((document.getElementById("formaTxRole")||{}).value||"").trim();
+    if(!to){ showToast("Enter who it was transmitted to"); return; }
+    const now = new Date().toISOString().slice(0,16).replace("T"," ");
+    unsent.forEach(function(f){
+      atnFormaTransmits(project).push({
+        key: (f.id || f.name || "") + "::" + (f.cdeState || ""),
+        name: f.name,
+        package: f.formaPackage || "",
+        to: to,
+        role: role,
+        date: now,
+        gateway: f.cdeState || ""
+      });
+    });
+    try { saveData(DATA); } catch(e){}
+    showToast("Recorded " + unsent.length + " transmits");
+    renderFormaPackagePanel(project);
+  };
+}
 function renderAccDocsTracking(project){
+  try { renderFormaPackagePanel(project); } catch(e){ console.warn(e); }
 
   // Cross-gateway flow — only when cache fingerprint changes (stops freeze on tab switch)
   try {
@@ -8002,7 +8119,7 @@ function renderAccDocsTracking(project){
     if(typeof renderGeneratedMidpTab === "function") renderGeneratedMidpTab(project, list);
     return;
   }
-  // Hydrate ACC cache from IndexedDB if memory empty
+  // Hydrate FORMA cache from IndexedDB if memory empty
   if(project && (!project.accDeliverablesCache || !project.accDeliverablesCache.length)){
     ensureAccCacheLoaded(project).then(files => {
       if(files && files.length) renderAccDocsTracking(projectById(project.id) || project);
@@ -8050,7 +8167,7 @@ function renderAccDocsTracking(project){
         <div style="display:flex;flex-wrap:wrap;gap:10px;">
           <div style="flex:1;min-width:80px;text-align:center;">
             <div style="font-size:22px;font-weight:800;color:var(--purple-950);">${t.pctOnCde}%</div>
-            <div class="section-sub">plan on ACC</div>
+            <div class="section-sub">plan on FORMA</div>
           </div>
           <div style="flex:1;min-width:80px;text-align:center;">
             <div style="font-size:22px;font-weight:800;color:#15803d;">${t.published || 0}</div>
@@ -8140,12 +8257,12 @@ function renderAccDocsTracking(project){
       : "Import last sync: never (no plan for this stage)";
     const accN = (project.accDeliverablesCache && project.accDeliverablesCache.length) || 0;
     const accInfo = project.accRootFolderId
-      ? `ACC last sync: ${fmtTs(project.accDeliverablesSyncedAt)} · ${accN} files` + (project.accDeliverablesFolderCount ? ` · ${project.accDeliverablesFolderCount} folders` : "")
-      : "ACC last sync: — (set root folder under Edit project → ACC / Docs)";
+      ? `FORMA last sync: ${fmtTs(project.accDeliverablesSyncedAt)} · ${accN} files` + (project.accDeliverablesFolderCount ? ` · ${project.accDeliverablesFolderCount} folders` : "")
+      : "FORMA last sync: — (set root folder under Edit project → FORMA / Docs)";
     const titled = (project.accDeliverablesCache || []).filter(f => f.documentTitle).length;
     const metaTip = (accN > 0 && titled === 0)
-      ? `<div style="margin-top:6px;color:#b45309;">Document Title / Status / Revision are blank from the ACC API. Use FORMA sync from ACC to fill them.</div>`
-      : (project.accLogImportedAt ? `<div style="margin-top:4px;color:var(--slate-500);">ACC log import: ${fmtTs(project.accLogImportedAt)}${project.accLogFileName ? " · " + escapeHtml(project.accLogFileName) : ""}</div>` : "");
+      ? `<div style="margin-top:6px;color:#b45309;">Document Title / Status / Revision are blank from the FORMA API. Use FORMA sync from FORMA to fill them.</div>`
+      : (project.accLogImportedAt ? `<div style="margin-top:4px;color:var(--slate-500);">FORMA log import: ${fmtTs(project.accLogImportedAt)}${project.accLogFileName ? " · " + escapeHtml(project.accLogFileName) : ""}</div>` : "");
     meta.innerHTML = `<div><strong>${escapeHtml(impInfo)}</strong></div><div style="margin-top:4px;"><strong>${escapeHtml(accInfo)}</strong></div>${metaTip}`;
   }
 
@@ -8156,7 +8273,7 @@ function renderAccDocsTracking(project){
     if(viewTab === "compare"){
       filters.innerHTML =
         `<button type="button" class="btn btn-xs ${!bucketFilter?"btn-primary":"btn-ghost"}" data-docs-bucket="">All</button>` +
-        [["outstanding","Outstanding"],["stuck_wip","Stuck in WIP"],["shared","Shared"],["awaiting_publish","Awaiting publish"],["published","Published"],["outdated","Outdated"],["acc_only","ACC only"]].map(([k,l]) =>
+        [["outstanding","Outstanding"],["stuck_wip","Stuck in WIP"],["shared","Shared"],["awaiting_publish","Awaiting publish"],["published","Published"],["outdated","Outdated"],["acc_only","FORMA only"]].map(([k,l]) =>
           `<button type="button" class="btn btn-xs ${bucketFilter===k?"btn-primary":"btn-ghost"}" data-docs-bucket="${k}">${l}</button>`
         ).join("") +
         `<span class="section-sub" style="width:100%;margin:6px 0 0;">Task team</span>` +
@@ -8286,7 +8403,7 @@ function renderAccDocsTracking(project){
   if(viewTab === "acc"){
     let files = (project.accDeliverablesCache || []).slice();
     if(!files.length){
-      list.innerHTML = '<p class="section-sub">No ACC files loaded. Link a root Docs folder and click <strong>Sync FORMA</strong>.</p>';
+      list.innerHTML = '<p class="section-sub">No FORMA files loaded. Link a root Docs folder and click <strong>Sync FORMA</strong>.</p>';
       return;
     }
     // ISO19650 gateway filter
@@ -8439,7 +8556,7 @@ function renderAccDocsTracking(project){
   if(bucketFilter) items = items.filter(i => i.bucket === bucketFilter || (i.flags || []).includes(bucketFilter));
   if(roleFilter) items = items.filter(i => i.role === roleFilter);
   if(!status.planned.length){
-    list.innerHTML = '<p class="section-sub">Import a Deliverables export for this work stage to compare against ACC.</p>';
+    list.innerHTML = '<p class="section-sub">Import a Deliverables export for this work stage to compare against FORMA.</p>';
     return;
   }
   if(!items.length){
@@ -8454,7 +8571,7 @@ function renderAccDocsTracking(project){
     published: "On PUBLISHED",
     outdated: "Outdated revision",
     wip: "On WIP",
-    acc_only: "ACC only (not in plan)",
+    acc_only: "FORMA only (not in plan)",
     wrong_workstage: "Wrong work stage",
     not_planned_for_stage: "Not planned for this stage"
   };
@@ -8498,14 +8615,14 @@ function renderAccDocsTracking(project){
             <th data-sort-key="expected" class="sortable-th">Expected</th>
             <th data-sort-key="planStatus" class="sortable-th">Plan status</th>
             <th data-sort-key="planRev" class="sortable-th">Plan rev</th>
-            <th data-sort-key="accStatus" class="sortable-th">ACC status</th>
-            <th data-sort-key="accRev" class="sortable-th">ACC rev</th>
-            <th data-sort-key="accReview" class="sortable-th">ACC review</th>
+            <th data-sort-key="accStatus" class="sortable-th">FORMA status</th>
+            <th data-sort-key="accRev" class="sortable-th">FORMA rev</th>
+            <th data-sort-key="accReview" class="sortable-th">FORMA review</th>
             <th data-sort-key="versionAdded" class="sortable-th">Version added at</th>
             <th data-sort-key="due" class="sortable-th">Due</th>
             <th data-sort-key="flags" class="sortable-th">Flags</th>
             <th data-sort-key="plan" class="sortable-th">Plan</th>
-            <th data-sort-key="acc" class="sortable-th">ACC</th>
+            <th data-sort-key="acc" class="sortable-th">FORMA</th>
           </tr></thead>
           <tbody>
             ${rows.map(f => {
@@ -9042,7 +9159,7 @@ function normalizeMidpCatalog(src, opts){
   const d = defaultMidpCatalog();
   if(!src || typeof src !== "object") return d;
   const mapList = (arr, fallback) => {
-    if(!Array.isArray(arr) || !arr.length){
+    if(!Array.isArray(arr)){
       return strict ? [] : fallback.map(x => Object.assign({description:""}, x));
     }
     return arr.map(x => ({
@@ -9050,13 +9167,15 @@ function normalizeMidpCatalog(src, opts){
       label: String(x.label || x.description || x.code || "").toUpperCase().trim(),
       description: String(x.description || x.label || "").trim(),
       selected: x.selected === false ? false : true,
+      disabled: !!x.disabled,
       generationModel: String(x.generationModel || x.model || "").toUpperCase().trim(),
       generationSubjects: Array.isArray(x.generationSubjects) ? x.generationSubjects.map(function(s){ return String(s).toUpperCase(); }).filter(Boolean) : (x.generationSubjects ? String(x.generationSubjects).split(",").map(function(s){ return s.trim().toUpperCase(); }).filter(Boolean) : [])
     })).filter(x => x.code);
   };
   // If roles missing, use full DEFAULT_ROLES; if partial, merge so all defaults available (unless strict)
+  const rolesMissing = !Array.isArray(src.roles);
   let roles = mapList(src.roles, d.roles);
-  if(!strict){
+  if(!strict && rolesMissing){
     const have = new Set(roles.map(r => r.code));
     DEFAULT_ROLES.forEach(([code,label]) => {
       if(!have.has(code)) roles.push({code, label: String(label).toUpperCase(), description: "", selected:false});
@@ -9173,7 +9292,7 @@ function normalizeProject(p){
     accOnlyCompliantNames: !!p.accOnlyCompliantNames,
     accDbFolderId: p.accDbFolderId || "",
     accDbFolderPath: p.accDbFolderPath || "",
-    // ACC CDE file cache (must survive normalize/reload)
+    // FORMA CDE file cache (must survive normalize/reload)
     accDeliverablesCache: Array.isArray(p.accDeliverablesCache) ? p.accDeliverablesCache : [],
     accDeliverablesSyncedAt: p.accDeliverablesSyncedAt || null,
     accDeliverablesFolderCount: Number(p.accDeliverablesFolderCount) || 0,
@@ -14904,22 +15023,18 @@ function renderScopeWizard(project){
   if(!host) return;
   if((window.__psdView || "scope") !== "wizard"){ host.innerHTML = ""; return; }
   const cat = (project && project.midpCatalog) || {};
+  const catLive = normalizeMidpCatalog(project && project.midpCatalog, { strict: !!(project && project.midpCatalog && Array.isArray(project.midpCatalog.roles)) });
   const dge = (typeof normalizeDgeState === "function") ? normalizeDgeState(project && project.dge) : {};
+  const levelsSrc = (catLive.levels && catLive.levels.length) ? catLive.levels.filter(function(l){ return !l.disabled; }) : (cat.levels||[]);
+  const fbSrc = (catLive.functionalList && catLive.functionalList.length) ? catLive.functionalList.filter(function(f){ return !f.disabled; }) : (cat.functionalList||[]);
   const wz = window.__setupWz || {
     step: 1,
     name: (project && (project.name || project.projectName)) || "",
     type: project && project.projectType || "Commercial Building",
     industry: project && project.industry || "",
     client: project && (project.clientName || project.client) || "",
-    spatials: (cat.levels && cat.levels.length) ? cat.levels.map(function(l){ return { code: l.code, label: l.label, selected: l.selected !== false }; }) : [
-      { code: "SI", label: "SITE", selected: true },
-      { code: "00", label: "GROUND FLOOR", selected: true },
-      { code: "01", label: "FIRST FLOOR", selected: false },
-      { code: "R1", label: "ROOF LEVEL", selected: true }
-    ],
-    fbs: (cat.functionalList && cat.functionalList.length) ? cat.functionalList.map(function(f){ return { code: f.code, label: f.label, selected: f.selected !== false }; }) : [
-      { code: "01", label: "ADMINISTRATION", selected: true }
-    ],
+    spatials: [],
+    fbs: [],
     teams: {},
     systems: {},
     assets: {},
@@ -14928,12 +15043,18 @@ function renderScopeWizard(project){
     types: ["Data Centre", "Industrial Plant", "Commercial Building", "Mining", "Water Infrastructure"]
   };
   window.__setupWz = wz;
+  wz.spatials = levelsSrc.map(function(l){ return { code: l.code, label: l.label, selected: l.selected !== false }; });
+  wz.fbs = fbSrc.map(function(f){
+    const code = String(f.code||"").replace(/^FB/i,"");
+    return { code: code, label: f.label, selected: f.selected !== false };
+  });
+
   const SYS = ["HVAC","LIGHTING","POWER","FIRE DETECTION","FIRE PROTECTION","CCTV","ACCESS CONTROL","HOT WATER","WATER RETICULATION","STORMWATER","SOIL AND WASTE"];
   const AST = ["FOUNDATION","CONCRETE","STRUCTURAL STEEL","STAIR","PLATFORM","ROAD","BRIDGE","TANK","PUMP STATION","RETAINING WALL"];
   const SPC = ["OFFICE","BOARDROOM","PUMP ROOM","MCC ROOM","LABORATORY","RECEPTION"];
   const OPT = ["VESDA","BEAM DETECTION","ASPIRATING DETECTION","BIOMETRICS","ANPR","SMOKE EXTRACTION","HEAT RECOVERY"];
-  const TEAMS = (typeof DEFAULT_ROLES !== "undefined" ? DEFAULT_ROLES : []).slice();
-  const steps = ["Framework","Spatial","Functional","Task teams","Systems","Assets","Spaces","Optional","Stages","Generate"];
+  const TEAMS = (catLive.roles || []).filter(function(r){ return !r.disabled; }).map(function(r){ return [r.code, r.label]; });
+  const steps = ["Framework","Spatial","Functional","Task teams","Systems","Assets","Optional","Stages","Generate"];
   function chk(id, on, label){
     return '<label style="display:flex;gap:8px;align-items:center;padding:5px 0;font-size:13px;"><input type="checkbox" data-wz="' + id + '" ' + (on ? "checked" : "") + '> ' + escapeHtml(label) + '</label>';
   }
@@ -14947,7 +15068,7 @@ function renderScopeWizard(project){
     html += '<button type="button" class="atn-step' + on + '" data-wz-step="' + s + '"><span class="atn-step-num">' + s + '</span><span class="atn-step-lbl">' + label + '</span></button>';
   });
   html += '</div>';
-  html += '<p class="section-sub">IM / PDM / admin: complete 1→10 in order. Each number is a diligence gate. Do not skip Generate until teams and systems are true.</p>';
+  html += '<p class="section-sub">IM / PDM / admin: complete 1→9 in order. Each number is a diligence gate. Do not skip Generate until teams and systems are true.</p>';
 
   if(wz.step === 1){
     html += '<label style="font-size:11px;font-weight:700;">Project name</label>';
@@ -14988,21 +15109,20 @@ function renderScopeWizard(project){
     AST.forEach(function(s){ html += chk("as-"+s, !!wz.assets[s], s); });
   }
   if(wz.step === 7){
-    html += '<p class="section-sub">Uniclass SL spaces drive AR / ID packages.</p>';
-    SPC.forEach(function(s){ html += chk("sc-"+s, !!wz.spaces[s], s); });
-  }
-  if(wz.step === 8){
     html += '<p class="section-sub">Optional systems never auto-generate unless you tick them.</p>';
     OPT.forEach(function(s){ html += chk("op-"+s, !!wz.optional[s], s); });
   }
-  if(wz.step === 9){
+  if(wz.step === 8){
     const fw = (typeof defaultDeliveryFramework === "function") ? defaultDeliveryFramework() : { stages: [] };
-    html += '<p class="section-sub">Delivery stages (WHEN). Defaults map S1–S6 to Concept → As-built.</p>';
-    (fw.stages || []).forEach(function(s){
+    const stageList = (project && project.stageLabels && Object.keys(project.stageLabels).length)
+      ? Object.keys(project.stageLabels).sort().map(function(id){ return { id: id, label: project.stageLabels[id], lod: "", loi: "", suitability: "" }; })
+      : (fw.stages || []);
+    html += '<p class="section-sub">Delivery stages from project settings.</p>';
+    (stageList || []).forEach(function(s){
       html += '<div style="padding:4px 0;font-size:13px;"><strong>' + escapeHtml(s.id) + '</strong>  ' + escapeHtml(s.label) + '  · LOD' + s.lod + ' / LOI' + s.loi + '  · ' + escapeHtml(s.suitability) + '</div>';
     });
   }
-  if(wz.step === 10){
+  if(wz.step === 9){
     const sysN = Object.keys(wz.systems).filter(function(k){ return wz.systems[k]; }).length;
     const astN = Object.keys(wz.assets).filter(function(k){ return wz.assets[k]; }).length;
     html += '<p class="section-sub">WHERE ' + wz.spatials.filter(function(s){ return s.selected; }).length + ' spatials · WHAT ' + sysN + ' systems / ' + astN + ' assets · WHO task teams · WHEN stages.</p>';
@@ -15043,7 +15163,7 @@ function renderScopeWizard(project){
   });
 
   const next = document.getElementById("wzNext");
-  if(next) next.onclick = function(){ persistInputs(); wz.step = Math.min(10, wz.step + 1); renderScopeWizard(project); };
+  if(next) next.onclick = function(){ persistInputs(); wz.step = Math.min(9, wz.step + 1); renderScopeWizard(project); };
   const go = document.getElementById("wzGo");
   if(go) go.onclick = function(){
     persistInputs();
@@ -15873,7 +15993,7 @@ const RIBA_STAGE_LABELS = {
 };
 
 
-/* ========== Autodesk APS (PKCE) + ACC project list ========== */
+/* ========== Autodesk APS (PKCE) + FORMA project list ========== */
 const APS_AUTH = "https://developer.api.autodesk.com/authentication/v2";
 const APS_DM = "https://developer.api.autodesk.com/project/v1";
 const APS_SCOPES = "data:read data:write account:read user-profile:read";
@@ -16383,7 +16503,7 @@ async function apsExchangeCode(code){
 async function apsRefreshIfNeeded(force){
   let auth = apsLoadAuth();
   if(!auth || !auth.access_token) return null;
-  // Refresh 5 minutes before expiry (long ACC syncs can run past a short buffer)
+  // Refresh 5 minutes before expiry (long FORMA syncs can run past a short buffer)
   const skewMs = 5 * 60 * 1000;
   if(!force && auth.expires_at && Date.now() < (auth.expires_at - skewMs)) return auth;
   if(!auth.refresh_token){
@@ -16501,7 +16621,7 @@ async function promptApsReauth(message){
       noSettings: true
     }, ctx)));
   } catch(e){}
-  const msg = message || "Your Autodesk / ACC session has expired.";
+  const msg = message || "Your Autodesk / FORMA session has expired.";
   const go = confirm(msg + "\n\nSign in again now? You will return to the same place afterwards.");
   if(!go) throw new Error("Session expired — sign in again");
   // Start OAuth immediately — do NOT open Settings
@@ -16698,17 +16818,17 @@ async function apsFetch(url, opts){
       auth = await apsRefreshIfNeeded(true);
     }
     if(!auth || !auth.access_token){
-      await promptApsReauth("Not signed in to Autodesk / ACC.");
+      await promptApsReauth("Not signed in to Autodesk / FORMA.");
       auth = await apsRefreshIfNeeded();
     }
-    if(!auth || !auth.access_token) throw new Error("Not signed in to Autodesk / ACC");
+    if(!auth || !auth.access_token) throw new Error("Not signed in to Autodesk / FORMA");
   }
   const doFetch = (token) => {
     const base = {
       Authorization: "Bearer " + token,
       Accept: "application/json"
     };
-    // Default region for Data Management / ACC calls when caller did not set one
+    // Default region for Data Management / FORMA calls when caller did not set one
     try {
       if(!opts.headers || (!opts.headers.Region && !opts.headers["x-ads-region"])){
         if(/\/project\/v1\//.test(url) || /\/data\/v1\//.test(url) || /\/construction\//.test(url) || /\/dm\//.test(url)){
@@ -16732,15 +16852,15 @@ async function apsFetch(url, opts){
     if(res.status === 401){
       // Truly expired — clear and prompt
       apsSaveAuth(null);
-      await promptApsReauth("ACC session expired during request.");
+      await promptApsReauth("FORMA session expired during request.");
       auth = await apsRefreshIfNeeded();
-      if(!auth || !auth.access_token) throw new Error("ACC session expired");
+      if(!auth || !auth.access_token) throw new Error("FORMA session expired");
       res = await doFetch(auth.access_token);
     }
   }
   if(!res.ok){
     const body = await res.text().catch(() => "");
-    throw new Error("ACC API " + res.status + " for " + url + (body ? (" — " + body.slice(0, 120)) : ""));
+    throw new Error("FORMA API " + res.status + " for " + url + (body ? (" — " + body.slice(0, 120)) : ""));
   }
   if(opts.raw) return res;
   const ct = res.headers.get("content-type") || "";
@@ -16748,7 +16868,7 @@ async function apsFetch(url, opts){
   return res.text();
 }
 
-/** Call periodically during long ACC walks so the token never goes stale mid-sync */
+/** Call periodically during long FORMA walks so the token never goes stale mid-sync */
 async function apsKeepAliveDuringSync(){
   window.__apsSyncInProgress = true;
   try {
@@ -16901,7 +17021,7 @@ async function modelsEnsureViewer(hostEl){
   if(!host) throw new Error("Viewer host missing");
   if(typeof Autodesk === "undefined" || !Autodesk.Viewing) throw new Error("APS Viewer script not loaded");
   const pair = await modelsGetTokenPair();
-  if(!pair) throw new Error("Forma/ACC not signed in");
+  if(!pair) throw new Error("Forma/FORMA not signed in");
   if(_modelsViewerReady && _modelsViewer && !hostEl) return _modelsViewer;
   const env = modelsViewerEnv();
   await new Promise(function(resolve, reject){
@@ -17319,14 +17439,14 @@ async function modelsOpenItem(project, itemId, label, opts){
   try {
     const found = await modelsTipDerivativeUrn(project.accProjectId, itemId);
     if(!found.urn){
-      modelsSetStatus("No derivative URN — open this file once in Forma/ACC so a viewable exists.");
+      modelsSetStatus("No derivative URN — open this file once in Forma/FORMA so a viewable exists.");
       return;
     }
     await modelsLoadUrn(found.urn, label, opts.isolateSs || _modelsIsolateSs);
     _modelsLastItem.urn = found.urn;
     modelsSetStatus("Viewing " + escapeHtml(label || "") +
       (opts.isolateSs ? (" · isolating " + escapeHtml(opts.isolateSs)) : "") +
-      ' · <a href="' + escapeHtml(modelsAccFileUrl(project, _modelsLastItem.folderId, itemId)) + '" target="_blank" rel="noopener">Open in ACC</a>');
+      ' · <a href="' + escapeHtml(modelsAccFileUrl(project, _modelsLastItem.folderId, itemId)) + '" target="_blank" rel="noopener">Open in FORMA</a>');
   } catch(err){
     console.error(err);
     modelsSetStatus("Viewer error: " + escapeHtml(err.message || String(err)));
@@ -17372,7 +17492,7 @@ async function modelsOpenByDocName(project, docName){
   }
   try { setActiveWsView("models"); } catch(e){}
   if(hit) await modelsOpenItem(project, hit.item.id, hit.name, { folderId: hit.folderId });
-  else showToast("No ACC item found for " + docName);
+  else showToast("No FORMA item found for " + docName);
 }
 
 function modelsPopOutCurrent(){
@@ -17447,11 +17567,11 @@ async function renderModelsViewer(project){
   bindModelsViewerUi(project);
   const auth = (typeof apsLoadAuth === "function") ? apsLoadAuth() : null;
   if(!(auth && auth.access_token)){
-    modelsSetStatus("Not signed in to Forma/ACC. Use the Forma button, then refresh.");
+    modelsSetStatus("Not signed in to Forma/FORMA. Use the Forma button, then refresh.");
     return;
   }
   if(!project.accProjectId){
-    modelsSetStatus("Link a Forma/ACC project under Edit project → Integration.");
+    modelsSetStatus("Link a Forma/FORMA project under Edit project → Integration.");
     return;
   }
   if(!project.accRootFolderId){
@@ -17468,7 +17588,7 @@ function apsPreferredRegion(){
     const cfg = apsLoadCfg();
     if(cfg && cfg.region) return String(cfg.region).toUpperCase();
   } catch(e){}
-  return "EMEA"; // SA / EU ACC tenants
+  return "EMEA"; // SA / EU FORMA tenants
 }
 function apsRegionHeaders(region){
   const h = { "Accept": "application/json" };
@@ -17478,11 +17598,11 @@ function apsRegionHeaders(region){
   }
   return h;
 }
-/** All Data Management + ACC folder/item calls go through here — always EMEA/US region headers */
+/** All Data Management + FORMA folder/item calls go through here — always EMEA/US region headers */
 async function apsDmFetch(url, opts){
   opts = opts || {};
   let auth = await apsRefreshIfNeeded();
-  if(!auth || !auth.access_token) throw new Error("Not signed in to Autodesk / ACC");
+  if(!auth || !auth.access_token) throw new Error("Not signed in to Autodesk / FORMA");
   const reg = opts.region || apsPreferredRegion();
   const headers = Object.assign(
     {
@@ -17501,11 +17621,11 @@ async function apsDmFetch(url, opts){
     let json = null;
     try { json = text ? JSON.parse(text) : null; } catch(e){}
     if(!res.ok){
-      throw new Error("ACC " + res.status + " · " + reg + " · " + (text || "").slice(0, 180));
+      throw new Error("FORMA " + res.status + " · " + reg + " · " + (text || "").slice(0, 180));
     }
     return json;
   } catch(e){
-    if(e && e.name === "AbortError") throw new Error("ACC timeout after " + timeoutMs + "ms · " + reg);
+    if(e && e.name === "AbortError") throw new Error("FORMA timeout after " + timeoutMs + "ms · " + reg);
     throw e;
   } finally {
     if(timer) clearTimeout(timer);
@@ -17565,7 +17685,7 @@ async function apsLoadAllProjects(){
       hubs: [],
       projects: out,
       errors: errors.concat(attempts),
-      hint: "No hubs for region " + preferred + ". EU/SA ACC needs header Region=EMEA on every Data Management call. Also confirm the APS Client ID is added on the EMEA ACC account (Account Admin → Custom integrations)."
+      hint: "No hubs for region " + preferred + ". EU/SA FORMA needs header Region=EMEA on every Data Management call. Also confirm the APS Client ID is added on the EMEA FORMA account (Account Admin → Custom integrations)."
     };
   }
   const region = window.__apsLastHubRegion && window.__apsLastHubRegion !== "default" ? window.__apsLastHubRegion : preferred;
@@ -17605,7 +17725,7 @@ async function apsLoadAllProjects(){
     return { projects: collected, pageLog };
   }
 
-  /** ACC Admin API fallback — account id is hub id without leading b. */
+  /** FORMA Admin API fallback — account id is hub id without leading b. */
   async function listAdminProjectsForHub(hubId){
     const accountId = String(hubId || "").replace(/^b\./i, "");
     if(!accountId) return { projects: [], error: "no account id" };
@@ -17787,7 +17907,7 @@ async function apsTopFolders(projectId){
 function apsNormalizeProjectId(projectId){
   const id = String(projectId || "").trim();
   if(!id) return id;
-  // Data Management / ACC project ids are usually b.{guid}
+  // Data Management / FORMA project ids are usually b.{guid}
   if(/^b\./i.test(id)) return id;
   if(/^[0-9a-f-]{36}$/i.test(id)) return "b." + id;
   return id;
@@ -17908,12 +18028,12 @@ function accFolderDisplay(f){
 }
 async function openAccFolderPicker(project, kind){
   // kind: root | db
-  if(!project.accProjectId){ showToast("Link an ACC project first"); return; }
-  if(!project.accHubId){ showToast("Missing ACC hub id — re-link the project"); return; }
+  if(!project.accProjectId){ showToast("Link an FORMA project first"); return; }
+  if(!project.accHubId){ showToast("Missing FORMA hub id — re-link the project"); return; }
   try {
-    showToast("Loading ACC folders (" + apsPreferredRegion() + ")…");
+    showToast("Loading FORMA folders (" + apsPreferredRegion() + ")…");
     if(!project.accHubId){
-      showToast("Missing hub id on this project — re-import/link the ACC project");
+      showToast("Missing hub id on this project — re-import/link the FORMA project");
       return;
     }
     let tops = [];
@@ -17922,7 +18042,7 @@ async function openAccFolderPicker(project, kind){
     } catch(err){
       console.error(err);
       openSheet(`
-        <h2>ACC folders</h2>
+        <h2>FORMA folders</h2>
         <p class="section-sub" style="color:var(--danger);">Could not load top folders.</p>
         <pre class="section-sub" style="white-space:pre-wrap;font-size:11px;">${escapeHtml(String(err && err.message || err))}</pre>
         <p class="section-sub">Hub: ${escapeHtml(project.accHubId || "")}<br>Project: ${escapeHtml(project.accProjectId || "")}<br>Region: ${escapeHtml(apsPreferredRegion())}</p>
@@ -17934,7 +18054,7 @@ async function openAccFolderPicker(project, kind){
         <h2>Select root Docs folder</h2>
         <p class="section-sub">No top folders returned for this project.</p>
         <p class="section-sub">Hub: ${escapeHtml(project.accHubId || "")}<br>Project: ${escapeHtml(project.accProjectId || "")}<br>Region: ${escapeHtml(apsPreferredRegion())}</p>
-        <p class="section-sub">Check that your user can open this project in ACC Docs, and that region is <strong>EMEA</strong>.</p>
+        <p class="section-sub">Check that your user can open this project in FORMA Docs, and that region is <strong>EMEA</strong>.</p>
         <div class="sheet-actions"><button class="btn btn-ghost" onclick="closeSheet()">Close</button></div>`);
       return;
     }
@@ -18036,12 +18156,12 @@ async function openAccFolderPicker(project, kind){
 }
 async function openAccProjectLinkPicker(project){
   try {
-    showToast("Loading ACC projects…");
+    showToast("Loading FORMA projects…");
     const result = await apsLoadAllProjects();
     const projects = result.projects || [];
     openSheet(`
-      <h2>Link ACC project</h2>
-      <p class="section-sub">Select the ACC project to link to <strong>${escapeHtml(project.name)}</strong></p>
+      <h2>Link FORMA project</h2>
+      <p class="section-sub">Select the FORMA project to link to <strong>${escapeHtml(project.name)}</strong></p>
       <div style="max-height:55vh;overflow:auto;">
         ${projects.map(p => `
           <div class="acc-proj-row">
@@ -18083,7 +18203,7 @@ function bindAccProjectSettings(project){
   if(pick) pick.onclick = () => openAccProjectLinkPicker(project);
   const unlink = document.getElementById("f-acc-unlink");
   if(unlink) unlink.onclick = () => {
-    if(!confirm("Unlink ACC project?")) return;
+    if(!confirm("Unlink FORMA project?")) return;
     project.accProjectId = "";
     project.accHubId = "";
     project.accHubName = "";
@@ -18142,7 +18262,7 @@ function pickAttr(obj, names){
       if(s) return s;
     }
   }
-  // 1b) Key ends with wanted name (ACC sometimes prefixes)
+  // 1b) Key ends with wanted name (FORMA sometimes prefixes)
   for(const want of names){
     const w = norm(want);
     if(!w || w.length < 4) continue;
@@ -18724,7 +18844,7 @@ async function apsItemTip(projectId, itemId){
   }
 }
 async function apsItemCustomAttributes(projectId, versionOrItemId){
-  // ACC/FORMA: construction/files + EMEA is the working combo for this tenant
+  // FORMA/FORMA: construction/files + EMEA is the working combo for this tenant
   const vid = versionOrItemId;
   if(!vid) return {};
   const vidEnc = encodeURIComponent(vid);
@@ -18784,7 +18904,7 @@ function normalizeCustomAttrDefinition(row){
 }
 
 /**
- * GET custom-attribute-definitions for the ACC/FORMA project.
+ * GET custom-attribute-definitions for the FORMA/FORMA project.
  * Tries project-level and folder-level Docs endpoints (with region headers).
  * Returns { definitions: [{id,name,type}], attempts: [...] }
  */
@@ -18794,7 +18914,7 @@ async function apsProjectCustomAttributeDefinitions(projectId, folderId){
   const attempts = [];
   const urls = [];
   pids.forEach(pid => {
-    // Project-level (as used by ACC/FORMA attribute admin)
+    // Project-level (as used by FORMA/FORMA attribute admin)
     urls.push("https://developer.api.autodesk.com/bim360/docs/v1/projects/" + encodeURIComponent(pid) + "/custom-attribute-definitions");
     urls.push("https://developer.api.autodesk.com/construction/files/v1/projects/" + encodeURIComponent(pid) + "/custom-attribute-definitions");
     urls.push("https://developer.api.autodesk.com/dm/v2/projects/" + encodeURIComponent(pid) + "/custom-attribute-definitions");
@@ -18838,7 +18958,7 @@ async function apsFolderCustomAttributeDefinitions(projectId, folderId){
 
 async function fetchAndDownloadCustomAttributeDefinitions(project){
   const live = projectById(project.id) || project;
-  if(!live.accProjectId){ showToast("Link FORMA/ACC project first"); return null; }
+  if(!live.accProjectId){ showToast("Link FORMA/FORMA project first"); return null; }
   if(!isApsSessionActive()){ showToast("Sign in to FORMA first"); return null; }
   showToast("Fetching custom-attribute-definitions…");
   let projectId = String(live.accProjectId || "");
@@ -18890,7 +19010,7 @@ async function fetchAndDownloadCustomAttributeDefinitions(project){
 
 
 /**
- * Diagnostic: probe tip + custom-attributes for sample ACC files.
+ * Diagnostic: probe tip + custom-attributes for sample FORMA files.
  * Downloads JSON showing exact URLs, status codes, and bodies.
  */
 
@@ -18898,7 +19018,7 @@ async function fetchAndDownloadCustomAttributeDefinitions(project){
 async function probeReviewStatusAttributes(project){
   const live = projectById(project.id) || project;
   if(!live.accProjectId){
-    showToast("Link an ACC project first");
+    showToast("Link an FORMA project first");
     return;
   }
   const auth = (typeof apsRefreshIfNeeded === "function") ? await apsRefreshIfNeeded() : apsLoadAuth();
@@ -19046,7 +19166,7 @@ async function probeReviewStatusAttributes(project){
       <h2>Probe: Reviews → approvalStatus</h2>
       <p class="section-sub">Uses <code>dm/v2</code> and <code>construction/reviews/v1</code> review lists + review versions, then per-version approval-status as fallback.</p>
       <div style="font-size:13px;line-height:1.55;max-height:55vh;overflow:auto;">${lines.join("<br>")}</div>
-      <p class="section-sub" style="margin-top:12px;">JSON downloaded. Re-sync ACC to apply the same map to Review Status.</p>
+      <p class="section-sub" style="margin-top:12px;">JSON downloaded. Re-sync FORMA to apply the same map to Review Status.</p>
       <div class="sheet-actions"><button class="btn btn-primary" id="probe-review-close">Close</button></div>
     `);
     const b = document.getElementById("probe-review-close");
@@ -19062,7 +19182,7 @@ async function probeReviewStatusAttributes(project){
 async function runAccAttributeDiagnostics(project){
   const live = projectById(project.id) || project;
   if(!live.accProjectId){
-    showToast("Link an ACC/FORMA project first");
+    showToast("Link an FORMA/FORMA project first");
     return;
   }
   if(!isApsSessionActive()){
@@ -19076,7 +19196,7 @@ async function runAccAttributeDiagnostics(project){
   }
   const cache = Array.isArray(live.accDeliverablesCache) ? live.accDeliverablesCache.slice(0, 5) : [];
   if(!cache.length){
-    showToast("Sync ACC first so there are sample files to probe");
+    showToast("Sync FORMA first so there are sample files to probe");
     return;
   }
 
@@ -19222,7 +19342,7 @@ function fileMatchesAccTypes(name, types){
 function openAccFileTypeSettings(project){
   const cur = new Set(getAccFileTypes(project));
   openSheet(`
-    <h2>ACC file types</h2>
+    <h2>FORMA file types</h2>
     <p class="section-sub">Only these extensions are collected from the Docs root (and subfolders). Default is <strong>PDF only</strong> — faster sync and cleaner tracking.</p>
     ${ACC_FILE_TYPE_OPTIONS.map(o => `
       <label class="checklabel" style="display:flex;gap:8px;align-items:center;margin:8px 0;">
@@ -19246,7 +19366,7 @@ function openAccFileTypeSettings(project){
     project.accFileTypes = live.accFileTypes;
     saveData(DATA);
     closeSheet();
-    showToast("File types saved — run Sync ACC again");
+    showToast("File types saved — run Sync FORMA again");
   };
 }
 
@@ -19307,16 +19427,16 @@ function openAccFieldMapPrompt(project, discoveredKeys){
     .concat(keys.map(k => `<option value="${escapeHtml(k)}">${escapeHtml(k)}</option>`))
     .join("");
   openSheet(`
-    <h2>Map ACC attributes</h2>
-    <p class="section-sub">Document Title in ACC maps to <strong>Description</strong> on the imported plan. Name (file name) is always <strong>Document ID</strong>. Choose which ACC custom attribute fills each column. Save and re-sync if needed.</p>
-    ${!keys.length ? `<p class="section-sub" style="color:#b45309;">No custom attribute names discovered yet. Run <strong>Sync FORMA</strong> first, then open this map again — or type exact ACC attribute names.</p>` : ""}
+    <h2>Map FORMA attributes</h2>
+    <p class="section-sub">Document Title in FORMA maps to <strong>Description</strong> on the imported plan. Name (file name) is always <strong>Document ID</strong>. Choose which FORMA custom attribute fills each column. Save and re-sync if needed.</p>
+    ${!keys.length ? `<p class="section-sub" style="color:#b45309;">No custom attribute names discovered yet. Run <strong>Sync FORMA</strong> first, then open this map again — or type exact FORMA attribute names.</p>` : ""}
     ${ACC_FIELD_TARGETS.map(t => `
       <div class="field">
         <label>${escapeHtml(t.label)}</label>
         <select data-acc-map="${t.key}">
           ${keys.length ? keys.map(k => `<option value="${escapeHtml(k)}" ${map[t.key]===k?"selected":""}>${escapeHtml(k)}</option>`).join("") + `<option value="" ${!map[t.key]?"selected":""}>— not mapped —</option>` : `<option value="${escapeHtml(map[t.key]||"")}">${escapeHtml(map[t.key]||"—")}</option>`}
         </select>
-        ${!keys.length ? `<input type="text" data-acc-map-text="${t.key}" value="${escapeHtml(map[t.key]||"")}" placeholder="Exact ACC attribute name">` : ""}
+        ${!keys.length ? `<input type="text" data-acc-map-text="${t.key}" value="${escapeHtml(map[t.key]||"")}" placeholder="Exact FORMA attribute name">` : ""}
       </div>
     `).join("")}
     <div class="sheet-actions">
@@ -19354,14 +19474,14 @@ function openAccFieldMapPrompt(project, discoveredKeys){
   document.getElementById("acc-map-save").onclick = () => {
     saveMap();
     closeSheet();
-    showToast("ACC field mapping saved");
+    showToast("FORMA field mapping saved");
   };
   document.getElementById("acc-map-reapply").onclick = () => {
     saveMap();
     reapplyAccFieldMap(project);
     closeSheet();
     if(typeof renderAccDocsTracking === "function") renderAccDocsTracking(project);
-    showToast("Mapping applied to cached ACC files");
+    showToast("Mapping applied to cached FORMA files");
   };
 }
 function reapplyAccFieldMap(project){
@@ -19385,11 +19505,11 @@ function reapplyAccFieldMap(project){
 function mapAccFileRecord(name, attrs, custom, tipAttrs){
   const ca = custom && typeof custom === "object" ? custom : {};
   const parsed = parseIsoFileName(name);
-  // ACC Files log report column names (exact) + common API variants
+  // FORMA Files log report column names (exact) + common API variants
   const documentTitle = (typeof valueByFormaAttr === "function" ? valueByFormaAttr(ca, "documentTitle", [
     "Document Title", "DocumentTitle", "Title", "Description", "Sheet title"
   ]) : pickAttrMapped(ca, "documentTitle", ["Document Title"])) || "";
-  // Review status ONLY from ACC tip extension.data.reviewState (set in enrichAccItem).
+  // Review status ONLY from FORMA tip extension.data.reviewState (set in enrichAccItem).
   // Never map Status / State custom attributes into this field.
   const reviewStatus = "";
   const markups = pickAttrMapped(ca, "markups", [
@@ -19436,7 +19556,7 @@ function mapAccFileRecord(name, attrs, custom, tipAttrs){
   let fileSize = pickAttrMapped(ca, "fileSize", ["File size", "File Size", "Size"])
     || (tipAttrs && (tipAttrs.storageSize || tipAttrs.fileSize))
     || (attrs && (attrs.storageSize || attrs.fileSize)) || "";
-  // Naming attributes: prefer ACC custom (log report), else ISO parse
+  // Naming attributes: prefer FORMA custom (log report), else ISO parse
   const functional = (typeof valueByFormaAttr === "function" ? valueByFormaAttr(ca, "functional", ["Functional Breakdown"]) : "")
     || parsed.functional || "";
   const spatial = (typeof valueByFormaAttr === "function" ? valueByFormaAttr(ca, "spatial", ["Spatial Breakdown"]) : "")
@@ -19557,7 +19677,7 @@ function applyFormaAttrsToRecord(rec, byId){
   rec.spatial       = getAttr(rec, "3066121", "Spatial Breakdown") || rec.spatial || "";
   rec.number        = getAttr(rec, "3066122", "Number") || rec.number || "";
   rec.status        = getAttr(rec, "3066123", "Status") || rec.status || "";
-  // Review status comes from ACC tip extension.reviewState (not State custom attr)
+  // Review status comes from FORMA tip extension.reviewState (not State custom attr)
   // leave rec.reviewStatus as set from tip system fields
   rec.sheetTitle    = getAttr(rec, "3066496", "Sheet title") || rec.sheetTitle || "";
   rec.sheetNumber   = getAttr(rec, "3066497", "Sheet number") || rec.sheetNumber || "";
@@ -19632,7 +19752,7 @@ async function enrichAccItem(projectId, item, approvalMap, cdeStateHint, opts){
   if(tipAttrs.lastModifiedTime) rec.lastModified = tipAttrs.lastModifiedTime;
   if(tipAttrs.versionNumber != null) rec.versionNumber = String(tipAttrs.versionNumber);
   if(tipAttrs.createUserName) rec.createUser = tipAttrs.createUserName;
-  // Version added at = version createTime (ACC "Version added at")
+  // Version added at = version createTime (FORMA "Version added at")
   rec.versionAddedAt = tipAttrs.createTime || tipAttrs.createdTime || tipAttrs.lastModifiedTime || rec.lastModified || "";
   if(tipAttrs.createTime) rec.createTime = tipAttrs.createTime;
 
@@ -19658,7 +19778,7 @@ async function enrichAccItem(projectId, item, approvalMap, cdeStateHint, opts){
         approval = lookupApprovalInMap(approvalMap, versionUrn, item && item.id, fileName);
       }
     } catch(err){
-      console.warn("[ACC Review Map Lookup Failed]", err);
+      console.warn("[FORMA Review Map Lookup Failed]", err);
       approval = null;
     }
     const hasApprovalValue = !!(approval && (approval.value || approval.label));
@@ -19727,7 +19847,7 @@ async function enrichAccItem(projectId, item, approvalMap, cdeStateHint, opts){
   if(!window.__accEnrichLogCount) window.__accEnrichLogCount = 0;
   if(window.__accEnrichLogCount < 2){
     window.__accEnrichLogCount++;
-    console.log("[ACC enrich Review Status]", fileName, {
+    console.log("[FORMA enrich Review Status]", fileName, {
       versionUrn,
       reviewState_tip: rec.reviewState,
       reviewStatus: rec.reviewStatus,
@@ -19740,7 +19860,102 @@ async function enrichAccItem(projectId, item, approvalMap, cdeStateHint, opts){
 }
 
 
-async function loadAccDeliverables(project, force){
+async 
+function atnMatchFormaPackage(project, folderPath, fileName){
+  const packs = (typeof getProductionPackages === "function") ? getProductionPackages(project) : [];
+  const hay = ((folderPath || "") + " / " + (fileName || "")).toLowerCase();
+  let hit = null;
+  packs.forEach(function(p){
+    if(hit) return;
+    const id = String(p.id || "").toLowerCase();
+    const ss = String(p.ss || p.ssCode || "").toLowerCase();
+    const fb = String(p.fb || "").toLowerCase();
+    const name = String(p.name || "").toLowerCase();
+    if(id && hay.indexOf(id.toLowerCase()) >= 0) hit = p;
+    else if(ss && hay.indexOf(ss) >= 0) hit = p;
+    else if(name && name.length > 4 && hay.indexOf(name) >= 0) hit = p;
+    else if(fb && hay.indexOf(fb.toLowerCase()) >= 0 && ss && hay.indexOf(ss) >= 0) hit = p;
+  });
+  return hit;
+}
+function atnFormaTransmits(project){
+  if(!project.formaTransmits) project.formaTransmits = [];
+  return project.formaTransmits;
+}
+function atnLatestTransmit(project, key){
+  const list = atnFormaTransmits(project).filter(function(x){ return x.key === key; });
+  return list.length ? list[list.length-1] : null;
+}
+async function apsCreateFolder(projectId, parentFolderId, name){
+  const pid = apsNormalizeProjectId(projectId);
+  const url = "https://developer.api.autodesk.com/data/v1/projects/" + encodeURIComponent(pid) + "/folders";
+  const body = {
+    jsonapi: { version: "1.0" },
+    data: {
+      type: "folders",
+      attributes: {
+        name: name,
+        extension: { type: "folders:autodesk.bim360:Folder", version: "1.0" }
+      },
+      relationships: { parent: { data: { type: "folders", id: parentFolderId } } }
+    }
+  };
+  return apsDmFetch(url, { method: "POST", region: apsPreferredRegion(), body: JSON.stringify(body) });
+}
+async function apsListDocsPackages(project){
+  const raw = String(project.accProjectId || "").replace(/^b\./i, "");
+  if(!raw) throw new Error("No FORMA project linked");
+  const url = "https://developer.api.autodesk.com/construction/packages/v1/projects/" + encodeURIComponent(raw) + "/packages?limit=200";
+  const json = await apsDmFetch(url, { region: apsPreferredRegion() });
+  return (json && (json.results || json.data)) || [];
+}
+async function apsCreateDocsPackage(project, name, description){
+  const raw = String(project.accProjectId || "").replace(/^b\./i, "");
+  const url = "https://developer.api.autodesk.com/construction/packages/v1/projects/" + encodeURIComponent(raw) + "/packages";
+  const body = JSON.stringify({
+    name: String(name || "").slice(0, 255),
+    description: String(description || "").slice(0, 1000),
+    versionType: "FIXED"
+  });
+  return apsDmFetch(url, {
+    method: "POST",
+    region: apsPreferredRegion(),
+    headers: { "Content-Type": "application/json" },
+    body: body
+  });
+}
+async function atnCreateFormaPackageFolders(project, pack, gateways){
+  if(!project.accProjectId){
+    showToast("Link a FORMA project first");
+    return;
+  }
+  const name = String(pack.id || pack.name || "").slice(0, 120);
+  const desc = [pack.fb, pack.ss, pack.name, (gateways||[]).join("/")].filter(Boolean).join(" · ");
+  showToast("Creating Docs package: " + name);
+  try {
+    const created = await apsCreateDocsPackage(project, name, desc);
+    const id = (created && (created.id || (created.data && created.data.id))) || "";
+    if(!project.formaDocsPackages) project.formaDocsPackages = [];
+    project.formaDocsPackages.push({
+      atanaId: pack.id,
+      formaId: id,
+      name: name,
+      gateways: gateways || [],
+      createdAt: new Date().toISOString()
+    });
+    try { saveData(DATA); } catch(e){}
+    showToast("FORMA package created: " + name);
+    try {
+      project.formaDocsPackageList = await apsListDocsPackages(project);
+    } catch(e){}
+  } catch(e){
+    console.warn(e);
+    showToast("FORMA Packages API: " + (e.message || e) + " — check package manager permission");
+  }
+}
+
+
+function loadAccDeliverables(project, force){
   if(!project) return [];
   window.__apsSyncInProgress = true;
   // Always write back onto the live DATA project so UI + localStorage stay in sync
@@ -19751,7 +19966,7 @@ async function loadAccDeliverables(project, force){
   if(!live.accProjectId || !live.accRootFolderId){
     live.accDeliverablesCache = [];
     live.accDeliverablesSyncedAt = null;
-    showToast("Set ACC project + root Docs folder under Edit project first");
+    showToast("Set FORMA project + root Docs folder under Edit project first");
     return [];
   }
   try {
@@ -19795,7 +20010,8 @@ async function loadAccDeliverables(project, force){
         continue;
       }
       const teamCodes = live.accFilterByTaskTeams ? projectTaskTeamCodes(live) : [];
-      const isoOn = !!live.accIso19650Gateways;
+      if(live.accIso19650Gateways == null) live.accIso19650Gateways = true;
+    const isoOn = live.accIso19650Gateways !== false;
       for(const it of folders){
         if(cur.depth < 12){
           const name = (it.attributes && (it.attributes.name || it.attributes.displayName)) || it.id;
@@ -19834,7 +20050,16 @@ async function loadAccDeliverables(project, force){
           if(!isoOn && teamCodes.length && cur.depth === 0 && !folderMatchesTaskTeam(name, teamCodes, live)){
             continue;
           }
-          queue.push({ id: it.id, path: nextPath, depth: cur.depth + 1, cdeState: detectCdeStateFromPath(nextPath) || cur.cdeState || "" });
+          // Speed: only WIP/SHARED/PUBLISHED + task-team children. Cap depth and folder count.
+          const stNext = detectCdeStateFromPath(nextPath) || cur.cdeState || "";
+          if(cur.depth === 0 && !stNext) continue;
+          if(stNext === "ARCHIVED") continue;
+          const maxDepth = Number(live.accScanMaxDepth || 3);
+          const maxFolders = Number(live.accScanMaxFolders || 150);
+          if(cur.depth >= maxDepth) continue;
+          if(folderCount + queue.length > maxFolders) continue;
+          if(isoOn && cur.depth === 1 && teamCodes.length && !folderMatchesTaskTeam(name, teamCodes, live)) continue;
+          queue.push({ id: it.id, path: nextPath, depth: cur.depth + 1, cdeState: stNext });
         }
       }
       for(const it of items){
@@ -19847,7 +20072,7 @@ async function loadAccDeliverables(project, force){
         fileItems.push({ item: it, folderPath: cur.path, folderId: cur.id, cdeState });
       }
       if(folderCount === 1 || folderCount % 8 === 0){
-        showToast("ACC scan… " + folderCount + " folders · " + fileItems.length + " items");
+        showToast("FORMA scan… " + folderCount + " folders · " + fileItems.length + " files (WIP/SHARED/PUBLISHED + task teams)");
       }
     }
 
@@ -19883,7 +20108,7 @@ async function loadAccDeliverables(project, force){
         const g = e.cdeState || "OTHER";
         if(gwCounts[g] != null) gwCounts[g]++; else gwCounts.OTHER++;
       });
-      showToast("ACC: " + fileItems.length + " files (WIP " + gwCounts.WIP + " · SHARED " + gwCounts.SHARED + " · PUBLISHED " + gwCounts.PUBLISHED + ")");
+      showToast("FORMA: " + fileItems.length + " files (WIP " + gwCounts.WIP + " · SHARED " + gwCounts.SHARED + " · PUBLISHED " + gwCounts.PUBLISHED + ")");
     }
 
 // Pass 1 — lean records so the list is never empty after a successful scan
@@ -19916,8 +20141,21 @@ async function loadAccDeliverables(project, force){
         number: parsed.number,
         functional: parsed.functional,
         spatial: parsed.spatial,
-        originator: parsed.originator || ""
+        originator: parsed.originator || "",
+        formaPackage: "",
+        formaPackageId: "",
+        formaOrphan: false
       };
+    });
+    lean.forEach(function(rec){
+      const pk = atnMatchFormaPackage(live, rec.folderPath, rec.name);
+      if(pk){
+        rec.formaPackageId = pk.id || "";
+        rec.formaPackage = (pk.id || "") + " · " + (pk.name || pk.ss || "");
+        rec.formaOrphan = false;
+      } else {
+        rec.formaOrphan = (rec.cdeState === "SHARED" || rec.cdeState === "PUBLISHED");
+      }
     });
 
     if(typeof backfillPublishedReviewFromAccLabels === "function") backfillPublishedReviewFromAccLabels(lean);
@@ -19962,7 +20200,7 @@ async function loadAccDeliverables(project, force){
           rec.folderId = base.folderId || rec.folderId || "";
           rec.cdeState = cdeState || base.cdeState || detectCdeStateFromPath(rec.folderPath) || "";
           // Align Review Status to gateway copy (Published ≠ Approved Shared)
-          // Keep ACC Review Status exactly — do not synthesise from suitability / gateway
+          // Keep FORMA Review Status exactly — do not synthesise from suitability / gateway
           if(rec.reviewStatus || rec.approvalStatusValue){
             rec.reviewStatusRaw = rec.reviewStatus || rec.approvalStatusValue || "";
             rec.reviewStatus = String(rec.reviewStatus || rec.approvalStatusValue || "").trim();
@@ -20043,14 +20281,14 @@ async function loadAccDeliverables(project, force){
       project.accCustomAttributeDefinitions = slimDefs;
       saveData(DATA);
       if(slimDefs.length){
-        showToast("ACC sync done: " + slimFiles.length + " docs · " + slimDefs.length + " attribute definitions");
+        showToast("FORMA sync done: " + slimFiles.length + " docs · " + slimDefs.length + " attribute definitions");
       } else {
-        showToast("ACC sync done: " + slimFiles.length + " docs");
+        showToast("FORMA sync done: " + slimFiles.length + " docs");
         console.warn("custom-attribute-definitions attempts", defResult.attempts);
       }
     } catch(e){
       console.warn("definitions fetch", e);
-      showToast("ACC sync done: " + slimFiles.length + " unique docs (" + getAccFileTypes(live).join(", ") + ") · " + folderCount + " folders");
+      showToast("FORMA sync done: " + slimFiles.length + " unique docs (" + getAccFileTypes(live).join(", ") + ") · " + folderCount + " folders");
     }
     // If Document Title mostly empty, offer field mapping
     try {
@@ -20079,7 +20317,7 @@ async function loadAccDeliverables(project, force){
 
 async function pushDbJsonToAcc(project){
   if(!project.accProjectId || !project.accDbFolderId){
-    showToast("Set ACC project + DB folder under Edit project → ACC / Docs first");
+    showToast("Set FORMA project + DB folder under Edit project → FORMA / Docs first");
     return;
   }
   const auth = await apsRefreshIfNeeded();
@@ -20092,7 +20330,7 @@ async function pushDbJsonToAcc(project){
   if(projectId && !projectId.startsWith("b.") && /^[0-9a-f-]{36}$/i.test(projectId)) projectId = "b." + projectId;
 
   try {
-    showToast("Uploading " + fileName + " to ACC…");
+    showToast("Uploading " + fileName + " to FORMA…");
     // 1) Create storage object in target folder
     const storageUrl = "https://developer.api.autodesk.com/data/v1/projects/" + encodeURIComponent(projectId) + "/storage";
     const createRes = await fetch(storageUrl, {
@@ -20213,7 +20451,7 @@ async function pushDbJsonToAcc(project){
       body: JSON.stringify(itemBody)
     });
     if(itemRes.ok){
-      showToast("Uploaded to ACC DB folder: " + fileName);
+      showToast("Uploaded to FORMA DB folder: " + fileName);
     } else if(itemRes.status === 409){
       // Already exists — find item in DB folder and POST a new version (silent overwrite)
       try {
@@ -20260,7 +20498,7 @@ async function pushDbJsonToAcc(project){
             });
           }
           if(verRes.ok){
-            showToast("Updated existing ACC file (new version): " + fileName);
+            showToast("Updated existing FORMA file (new version): " + fileName);
           } else {
             const vt = await verRes.text();
             console.warn("Version create", verRes.status, vt);
@@ -20268,7 +20506,7 @@ async function pushDbJsonToAcc(project){
           }
         } else {
           // Search nested one level if not in root of DB folder
-          showToast("File name exists in ACC storage conflict but item not found in DB folder — check folder");
+          showToast("File name exists in FORMA storage conflict but item not found in DB folder — check folder");
         }
       } catch(ex){
         console.warn(ex);
@@ -20277,7 +20515,7 @@ async function pushDbJsonToAcc(project){
     } else {
       const t = await itemRes.text();
       console.warn("Item create", itemRes.status, t);
-      showToast("File uploaded to storage; item register may need refresh in ACC (" + itemRes.status + ")");
+      showToast("File uploaded to storage; item register may need refresh in FORMA (" + itemRes.status + ")");
     }
     project.lastAccDbPushAt = Date.now();
     project.lastAccDbObjectId = objectId;
@@ -20291,7 +20529,7 @@ async function pushDbJsonToAcc(project){
 function importAccProjectToAtana(accProj){
   if(!accProj) return;
   const fields = extractAccProjectFields(accProj);
-  const name = fields.name || "ACC Project";
+  const name = fields.name || "FORMA Project";
   const code = fields.number || guessProjectNumberFromName(name) || "";
   let project = (DATA.projects || []).find(p => p.accProjectId === fields.id);
   if(!project){
@@ -20321,12 +20559,12 @@ function importAccProjectToAtana(accProj){
     if(fields.endDate) p.endDate = String(fields.endDate).slice(0,10);
   };
   if(project){
-    if(!confirm("Update existing project \"" + project.name + "\" from ACC?\nNumber: " + (code || "(none)") + "\nType: " + (fields.type || "—"))) return;
+    if(!confirm("Update existing project \"" + project.name + "\" from FORMA?\nNumber: " + (code || "(none)") + "\nType: " + (fields.type || "—"))) return;
     applyFields(project);
     saveData(DATA);
     renderProjects();
     renderSettings();
-    showToast("Updated from ACC: " + name + (code ? " · " + code : ""));
+    showToast("Updated from FORMA: " + name + (code ? " · " + code : ""));
     return;
   }
   const np = normalizeProject({
@@ -20349,7 +20587,7 @@ function importAccProjectToAtana(accProj){
   saveData(DATA);
   renderProjects();
   renderSettings();
-  showToast("Created from ACC: " + name + (code ? " · " + code : ""));
+  showToast("Created from FORMA: " + name + (code ? " · " + code : ""));
 }
 async function apsHandleRedirectIfPresent(){
   const params = new URLSearchParams(window.location.search);
@@ -20420,7 +20658,7 @@ async function renderAccProjectList(){
   if(!host) return;
   const auth = await apsRefreshIfNeeded();
   if(!auth){
-    host.innerHTML = '<p class="section-sub">Sign in to load ACC projects.</p>';
+    host.innerHTML = '<p class="section-sub">Sign in to load FORMA projects.</p>';
     renderApsStatus();
     return;
   }
@@ -20433,7 +20671,7 @@ async function renderAccProjectList(){
       const hubCount = (result.hubs || []).length;
       const hint = hubCount
         ? ("Hub found but 0 projects. Your user may lack project membership, or the Admin API needs account:read. See diagnostics below.")
-        : (result.hint || "No hubs/projects. Check EMEA region + ACC custom integration for this Client ID.");
+        : (result.hint || "No hubs/projects. Check EMEA region + FORMA custom integration for this Client ID.");
       host.innerHTML = '<p class="section-sub"><strong>No projects returned.</strong> ' + escapeHtml(hint) + "</p>"
         + (errLines ? '<ul class="section-sub" style="margin:8px 0 0;padding-left:18px;">' + errLines + "</ul>" : "")
         + '<p class="section-sub" style="margin-top:8px;">Hubs found: ' + String((result.hubs || []).length) + " · preferred region " + escapeHtml(apsPreferredRegion()) + (window.__apsLastHubRegion ? (" · matched " + window.__apsLastHubRegion) : "") + "</p>"
@@ -20689,7 +20927,7 @@ async function idbClearAccCache(projectId){
     db.close();
   } catch(e){ console.warn("idbClearAccCache", e); }
 }
-/** Persist ACC files to IndexedDB; keep only a tiny summary in project/localStorage. */
+/** Persist FORMA files to IndexedDB; keep only a tiny summary in project/localStorage. */
 async function persistAccDeliverables(project, files){
   const live = projectById(project.id) || project;
   const slim = (files || []).map(slimAccRecord);
@@ -20708,14 +20946,14 @@ async function persistAccDeliverables(project, files){
     count: slim.length,
     folderCount: live.accDeliverablesFolderCount || 0
   });
-  // localStorage: do NOT store full ACC file list — strip before save
+  // localStorage: do NOT store full FORMA file list — strip before save
   const full = live.accDeliverablesCache;
   live.accDeliverablesCache = []; // strip for localStorage
   project.accDeliverablesCache = [];
   try {
     saveData(DATA);
   } catch(e){
-    console.warn("save after ACC strip", e);
+    console.warn("save after FORMA strip", e);
   }
   // restore in-memory
   live.accDeliverablesCache = full;
@@ -20736,7 +20974,7 @@ async function ensureAccCacheLoaded(project){
 }
 function slimAccRecord(f){
   if(!f || typeof f !== "object") return f;
-  // Minimum fields for ACC list + plan comparison — no attrs/custom bags (quota)
+  // Minimum fields for FORMA list + plan comparison — no attrs/custom bags (quota)
   const name = (typeof stripFileExtension === "function" ? stripFileExtension(f.name || "") : String(f.name||""));
   return {
     id: f.id || "",
@@ -21845,13 +22083,15 @@ function roleDisplayBanner(roleCode){
 function wireShowAllRoleTasksBtn(project){
   const btn = document.getElementById("showAllRoleTasksBtn");
   if(!btn) return;
-  const on = !!(project && project.showAllRoleTasks) || !!window.__showAllRoleTasks;
-  btn.textContent = on ? "Hide other roles" : "Show other roles";
+  const on = !!(project && project.showDepRoleTasks) || !!window.__showDepRoleTasks;
+  btn.textContent = on ? "Hide dependency tasks" : "Show dependency tasks";
   btn.onclick = function(){
     const p = projectById(currentProjectId);
     if(!p) return;
-    p.showAllRoleTasks = !p.showAllRoleTasks;
-    window.__showAllRoleTasks = !!p.showAllRoleTasks;
+    p.showDepRoleTasks = !p.showDepRoleTasks;
+    window.__showDepRoleTasks = !!p.showDepRoleTasks;
+    p.showAllRoleTasks = false;
+    window.__showAllRoleTasks = false;
     try { invalidateHierarchyCache(p.id); } catch(e){}
     try { saveData(DATA); } catch(e){}
     try { renderWorkspace(); } catch(e){}
@@ -21887,7 +22127,8 @@ function hierarchyCacheKey(project){
     vis.primary || "IM",
     (vis.edit || []).slice().sort().join(","),
     showAll ? (vis.view || []).slice().sort().join(",") : (vis.primary || "IM") + ",ZZ",
-    showAll ? "1" : "0"
+    showAll ? "1" : "0",
+    ((project && project.showDepRoleTasks) || (typeof window!=="undefined" && window.__showDepRoleTasks)) ? "d1" : "d0"
   ].join("|");
 }
 
@@ -21902,6 +22143,50 @@ function invalidateHierarchyCache(projectId){
   }
 }
 
+
+function atnDepRolesFor(primary){
+  const roles = {};
+  const packs = (typeof ROLE_TASK_PACKS !== "undefined") ? ROLE_TASK_PACKS : {};
+  const mine = (packs[primary] && packs[primary].tasks) || [];
+  const myIds = {};
+  mine.forEach(function(tk){ myIds[tk.id] = true; myIds[String(tk.name||"").toLowerCase()] = true; });
+  Object.keys(packs).forEach(function(role){
+    if(role === primary) return;
+    (packs[role].tasks || []).forEach(function(tk){
+      (tk.dependencies || []).forEach(function(d){
+        if(myIds[d] || myIds[String(d).toLowerCase()]) roles[role] = true;
+      });
+    });
+    mine.forEach(function(tk){
+      (tk.dependencies || []).forEach(function(d){
+        if((packs[role].tasks || []).some(function(x){ return x.id === d || String(x.name||"").toLowerCase() === String(d).toLowerCase(); })) roles[role] = true;
+      });
+    });
+  });
+  if(typeof ATN_TASK_DEPS !== "undefined"){
+    ATN_TASK_DEPS.forEach(function(d){
+      const pred = String(d.pred || "");
+      const succ = String(d.succ || d.task || "");
+      const pr = pred.split(/[-.]/)[0];
+      const su = succ.split(/[-.]/)[0];
+      if(su === primary && pr && pr !== primary) roles[pr] = true;
+      if(pr === primary && su && su !== primary) roles[su] = true;
+    });
+  }
+  return Object.keys(roles);
+}
+function atnRenumberHierarchy(base){
+  (base || []).forEach(function(stage){
+    (stage.categories || []).forEach(function(cat, ci){
+      cat.num = String(ci + 1);
+      (cat.subs || []).forEach(function(sub, si){
+        sub.num = cat.num + "." + (si + 1);
+      });
+    });
+  });
+  return base;
+}
+
 function getVisibleTaskRoles(project){
   const all = ["IM","DTL","PDM","TTM","ZZ"];
   const user = (typeof getCurrentUser === "function") ? getCurrentUser() : null;
@@ -21911,37 +22196,15 @@ function getVisibleTaskRoles(project){
   if(primary === "ADMIN") primary = "IM";
 
   const showAll = !!(project && project.showAllRoleTasks) || !!window.__showAllRoleTasks;
-
-  let edit = [];
-  let view = [];
-  all.forEach(function(r){
-    if(typeof canRoleTask === "function"){
-      if(canRoleTask("edit", r)) edit.push(r);
-      if(canRoleTask("view", r) || canRoleTask("edit", r)) view.push(r);
-    }
-  });
-  // Own role always editable
-  if(["IM","DTL","PDM","TTM"].indexOf(primary) >= 0){
-    if(edit.indexOf(primary) < 0) edit.push(primary);
-    if(view.indexOf(primary) < 0) view.push(primary);
+  const showDep = !!(project && project.showDepRoleTasks) || !!window.__showDepRoleTasks;
+  const edit = [primary];
+  let view = [primary];
+  if(showAll){
+    all.forEach(function(r){ if(view.indexOf(r) < 0) view.push(r); });
+  } else if(showDep){
+    atnDepRolesFor(primary).forEach(function(r){ if(view.indexOf(r) < 0) view.push(r); });
   }
-  // ZZ always visible (small shared list)
-  if(view.indexOf("ZZ") < 0) view.push("ZZ");
-  if(userRole === "ADMIN" || primary === "IM"){
-    if(edit.indexOf("IM") < 0) edit.push("IM");
-    if(edit.indexOf("ZZ") < 0) edit.push("ZZ");
-  }
-  // Performance default: only primary + ZZ unless show-all is on
-  if(!showAll){
-    view = view.filter(function(r){ return r === primary || r === "ZZ" || edit.indexOf(r) >= 0; });
-  } else {
-    // IM/Admin/DTL/PDM may view every pack when show-all is enabled
-    if(userRole === "ADMIN" || userRole === "IM" || userRole === "DTL" || userRole === "PDM" ||
-       primary === "IM" || primary === "DTL" || primary === "PDM"){
-      all.forEach(function(r){ if(view.indexOf(r) < 0) view.push(r); });
-    }
-  }
-  return { edit: edit, view: view, primary: primary, showAll: showAll };
+  return { edit: edit, view: view, primary: primary, showAll: showAll, showDep: showDep };
 }
 
 function cloneHierarchyDeep(hier){
@@ -22046,6 +22309,7 @@ function getProjectHierarchy(project){
     base.push({ id: String(ex.id), label: String(ex.label || ex.id), categories: Array.isArray(ex.categories) ? ex.categories : [] });
   });
 
+  if(typeof atnRenumberHierarchy === "function") atnRenumberHierarchy(base);
   window.__hierCache[key] = base;
   return base;
 }
@@ -23344,7 +23608,7 @@ function renderTidpSummary(project){
   return `<div class="tidp-panel">
     <div class="chart-card-title" style="margin-bottom:6px;">Task Team IDPs (TIDP)</div>
     <p class="section-sub">From the <strong>imported MIDP plan</strong> (tracking), filtered by task team. Stage due = WBS/DPoW stage end.
-      · Plan ${missInfo.planTotal} · <strong style="color:${missInfo.total?'var(--danger)':'var(--ok)'}">${missInfo.total} missing on ACC</strong></p>
+      · Plan ${missInfo.planTotal} · <strong style="color:${missInfo.total?'var(--danger)':'var(--ok)'}">${missInfo.total} missing on FORMA</strong></p>
     ${cards}
   </div>`;
 }
@@ -24098,7 +24362,7 @@ function renderDpow(project){
           ${(() => {
             const miss = (typeof countMissingAgainstAcc === "function") ? countMissingAgainstAcc(project) : { byRole: {} };
             const m = miss.byRole[sc.role] || 0;
-            return m ? `<span class="dpow-link-badge" style="background:var(--danger-bg);color:var(--danger);">${m} missing on ACC</span>` : "";
+            return m ? `<span class="dpow-link-badge" style="background:var(--danger-bg);color:var(--danger);">${m} missing on FORMA</span>` : "";
           })()}
           ${stageTidpBits}
         </td>
@@ -25203,10 +25467,10 @@ function renderTaskRow(project, task, taskSched, wbsCode){
   if(parent && state.done !== showDone){ state.done = showDone; }
   const dateRowCls = taskDateToneClass(project, task.id, taskSched);
   return `
-    <div class="task-row ${showDone ? "done" : ""} ${late ? "late" : ""} ${disabled ? "disabled-task" : ""} ${isBlocker ? "blocker" : ""} ${parent ? "parent-task" : ""} ${task && task.ghost ? "ghost" : ""} ${isMyDayTask(project, task.id) ? "my-day" : ""} depth-${depth} ${dateRowCls}" data-task-id="${task.id}" data-edit-task="${task.id}">
+    <div class="task-row ${showDone ? "done" : ""} ${late ? "late" : ""} ${disabled ? "disabled-task" : ""} ${isBlocker ? "blocker" : ""} ${parent ? "parent-task" : ""} ${task && task.ghost ? "ghost dep-locked" : ""} ${isMyDayTask(project, task.id) ? "my-day" : ""} depth-${depth} ${dateRowCls}" data-task-id="${task.id}" data-edit-task="${task.id}">
       <div class="task-row-main">
         <button type="button" class="btn-star ${isMyDayTask(project, task.id) ? "on" : ""}" data-my-day="${task.id}" title="Add to my day" aria-label="Add to my day">${isMyDayTask(project, task.id) ? "★" : "☆"}</button>
-        <button class="task-check ${showDone ? "checked" : ""}" data-toggle-task="${task.id}" aria-label="Toggle done" ${disabled || parent ? "disabled" : ""}>${showDone ? "&#10003;" : ""}</button>
+        <button class="task-check ${showDone ? "checked" : ""}" data-toggle-task="${task.id}" aria-label="Toggle done" ${disabled || parent || (task && task.ghost) ? "disabled" : ""}>${showDone ? "&#10003;" : ""}</button>
         <div class="task-name">${code ? `<span class="wbs-code small">${escapeHtml(code)}</span> ` : ""}${escapeHtml(displayName)}${(task && task.sourceRole) ? `<span class="role-pill ${task.ghost?"ghost":""} ${task.sourceRole==="ZZ"?"zz":""}">${escapeHtml(task.sourceRole)}</span>` : ""}${msDate?` <span class="ms-date-inline">${escapeHtml(fmtMilestoneDate(msDate))}</span>`:""}${isRepeating ? ` <span class="rep-badge">REPEATING</span>` : ""}${state.milestone ? ` <span class="iso-badge on" title="Milestone">⚑</span>` : ""}${isBlocker ? ` <span class="blocker-badge">BLOCKER</span>` : ""}${task.custom ? ` <span class="iso-badge">Custom</span>` : ""}${appTask ? ` <span class="iso-badge ${project.clientAppRequirements ? "on" : ""}" title="Depends on appointing party / client requirements">APP</span>` : ""}${late ? ` <span class="late-badge">LATE</span>` : ""}${disabled ? ` <span class="iso-badge">Off</span>` : ""}</div>
         <div class="task-row-actions">
           <button type="button" class="btn-xxs ${state.milestone?"on":""}" data-toggle-milestone="${task.id}" title="Mark as milestone for roadmap">⚑</button>
@@ -25830,13 +26094,13 @@ function exportSingleProjectJson(project){
   const packPreview = buildProjectTransferPack(live, { fileName: defName, exportPath: lastPath });
   openSheet(`
     <h2>Export project pack</h2>
-    <p class="section-sub">Full transfer file for another Atana user: tasks and progress, teams, conventions, MIDP / DPoW / production, work stages, ACC link, role work, sync fields.</p>
+    <p class="section-sub">Full transfer file for another Atana user: tasks and progress, teams, conventions, MIDP / DPoW / production, work stages, FORMA link, role work, sync fields.</p>
     <div class="field"><label>File name (exactly the project name)</label>
       <input id="xp-name" value="${escapeHtml(defName)}"></div>
     <div class="field"><label>Export path / folder hint</label>
       <input id="xp-path" placeholder="e.g. Shared Drive / Atana / Handovers" value="${escapeHtml(lastPath)}">
       <p class="section-sub">Browsers cannot force a disk folder. This hint is stored in the JSON and remembered. Use <strong>Choose location</strong> to pick the folder in the save dialog.</p></div>
-    <p class="section-sub">${packPreview.inventory.length} project keys · ${packPreview.team.length} team members · ACC ${packPreview.acc.projectId || packPreview.acc.url || "not linked"}</p>
+    <p class="section-sub">${packPreview.inventory.length} project keys · ${packPreview.team.length} team members · FORMA ${packPreview.acc.projectId || packPreview.acc.url || "not linked"}</p>
     <div class="sheet-actions">
       <button class="btn btn-ghost" id="xp-cancel">Cancel</button>
       <button class="btn btn-ghost" id="xp-dl">Quick download</button>
@@ -26790,7 +27054,7 @@ function renderSettings(){
       list.innerHTML = DATA.projects.map(p => {
         const sys = p.stageSystem || "SA";
         const wh = Number(p.weeklyHours) > 0 ? p.weeklyHours : 16;
-        const acc = p.accProjectId ? " · ACC linked" : "";
+        const acc = p.accProjectId ? " · FORMA linked" : "";
         return `
         <div class="settings-proj-row">
           <div class="sp-name">${escapeHtml(p.name)}${p.code ? ` <span style="font-weight:400;color:var(--slate-500);">· ${escapeHtml(p.code)}</span>` : ""}
@@ -27733,7 +27997,7 @@ function bindSheetTabs(root){
       panels.forEach(p => {
         const pid = p.getAttribute("data-sptab-panel");
         let on = pid === id;
-        // Integration tab shows ACC + Import/export panels together
+        // Integration tab shows FORMA + Import/export panels together
         if(id === "acc" && (pid === "acc" || pid === "io")) on = true;
         p.classList.toggle("active", on);
       });
@@ -27876,11 +28140,12 @@ function catalogEditorHtml(list, idPrefix, title){
     const value = item.code || "";
     const desc = item.label || item.description || "";
     return `
-    <div class="catalog-row" data-idx="${i}" style="grid-template-columns:88px 1fr auto auto;align-items:center;gap:8px;">
+    <div class="catalog-row" data-idx="${i}" style="grid-template-columns:88px 1fr auto auto;align-items:center;gap:8px;${item.disabled?"opacity:.45;":""}">
       <span class="code mono" title="Value">${escapeHtml(value)}</span>
       <span class="lbl" title="Description">${escapeHtml(desc)}</span>
       <button type="button" class="cat-edit" data-cat-edit="${idPrefix}" data-idx="${i}">Edit</button>
-      <button type="button" class="cat-edit" data-cat-del="${idPrefix}" data-idx="${i}" style="color:#b91c1c;border-color:#fecaca;" title="Delete">Del</button>
+      <button type="button" class="cat-edit" data-cat-dis="${idPrefix}" data-idx="${i}">${item.disabled?"Enable":"Disable"}</button>
+      <button type="button" class="cat-edit" data-cat-del="${idPrefix}" data-idx="${i}" style="color:#b91c1c;border-color:#fecaca;" title="Remove from this project">Del</button>
     </div>`;
   }).join("");
   return `
@@ -27995,7 +28260,7 @@ function atnRequestCloseSheet(){
 }
 
 function bindCatalogEditors(initialCatalog){
-  const cat = JSON.parse(JSON.stringify(normalizeMidpCatalog(initialCatalog)));
+  const cat = JSON.parse(JSON.stringify(normalizeMidpCatalog(initialCatalog, { strict: !!(initialCatalog && Array.isArray(initialCatalog.roles)) })));
   const keyMap = { func: "functionalList", level: "levels", role: "roles", orig: "originators", form: "forms", status: "statuses", rev: "revisions", phase: "phases" };
   const redraw = (prefix) => {
     const list = cat[keyMap[prefix]] || [];
@@ -28037,6 +28302,18 @@ function bindCatalogEditors(initialCatalog){
       document.getElementById("cat-label-" + prefix).value = "";
       const descEl = document.getElementById("cat-desc-" + prefix);
       if(descEl) descEl.value = "";
+      redraw(prefix);
+      atnApplyCatalogLive(cat);
+      return;
+    }
+    const disBtn = e.target.closest("[data-cat-dis]");
+    if(disBtn){
+      const prefix = disBtn.getAttribute("data-cat-dis");
+      const idx = parseInt(disBtn.getAttribute("data-idx"), 10);
+      const item = cat[keyMap[prefix]][idx];
+      if(!item) return;
+      item.disabled = !item.disabled;
+      if(item.disabled) item.selected = false;
       redraw(prefix);
       atnApplyCatalogLive(cat);
       return;
@@ -28415,12 +28692,12 @@ function renderProjectTeamPanel(project){
     const accMatch = !!(slot && slot.slotMatch);
     const accMismatch = !ghost && !(slot && slot.slotMatch);
     const tick = accMatch
-      ? `<span class="org-acc-tick" title="Matches ACC: same person, role and task team">✓</span>`
-      : (accMismatch ? `<span class="org-acc-miss" title="${slot && slot.onAcc ? "On ACC but different role or task team — update ACC" : "Not on ACC organogram — add or update ACC"}">✕</span>` : "");
-    return `<div class="${cls}"${drag} title="${escapeHtml((ghost ? "ACC: " : "") + (m.email||m.roleName||""))}${accMatch ? " · matches ACC slot" : (accMismatch ? " · does not match ACC slot" : "")}">
+      ? `<span class="org-acc-tick" title="Matches FORMA: same person, role and task team">✓</span>`
+      : (accMismatch ? `<span class="org-acc-miss" title="${slot && slot.onAcc ? "On FORMA but different role or task team — update FORMA" : "Not on FORMA organogram — add or update FORMA"}">✕</span>` : "");
+    return `<div class="${cls}"${drag} title="${escapeHtml((ghost ? "FORMA: " : "") + (m.email||m.roleName||""))}${accMatch ? " · matches FORMA slot" : (accMismatch ? " · does not match FORMA slot" : "")}">
       ${rm}
       <span class="nm">${tick}${escapeHtml(m.name)}</span>
-      <span class="em">${escapeHtml(m.func)}${m.discipline && !["DTL","PDM","IM","DM"].includes(m.func) ? " · "+escapeHtml(m.discipline) : ""}${m.email ? " · "+escapeHtml(m.email) : ""}${ghost ? " · ACC" : ""}</span>
+      <span class="em">${escapeHtml(m.func)}${m.discipline && !["DTL","PDM","IM","DM"].includes(m.func) ? " · "+escapeHtml(m.discipline) : ""}${m.email ? " · "+escapeHtml(m.email) : ""}${ghost ? " · FORMA" : ""}</span>
     </div>`;
   };
   const renderSlot = (func, disc) => {
@@ -28440,8 +28717,8 @@ function renderProjectTeamPanel(project){
     <p class="section-sub">Members can appear on multiple teams. Drag plates to move a placement. Use × to remove (with confirm).</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
       <button type="button" class="btn btn-gold btn-xs" id="f-pt-import-hub">Import hub members (.xlsx)</button>
-      <button type="button" class="btn btn-primary btn-xs" id="f-pt-import-acc">Import from ACC</button>
-      <button type="button" class="btn btn-ghost btn-xs" id="f-pt-merge-acc">Merge ACC → app team</button>
+      <button type="button" class="btn btn-primary btn-xs" id="f-pt-import-acc">Import from FORMA</button>
+      <button type="button" class="btn btn-ghost btn-xs" id="f-pt-merge-acc">Merge FORMA → app team</button>
       <button type="button" class="btn btn-ghost btn-xs" id="f-pt-compare-org">Compare organograms</button>
       <button type="button" class="btn btn-ghost btn-xs" id="f-pt-load-seed">Load Atana hub list</button>
       <button type="button" class="btn btn-primary btn-xs" id="f-pt-preview-org">Preview organogram</button>
@@ -28455,7 +28732,7 @@ function renderProjectTeamPanel(project){
       <div class="team-search-results" id="f-pt-search-results"></div>
     </div>
   </div>
-  <p class="section-sub" style="margin:0 0 8px;">Red outline = DTL / PDM / TTM / TTIM / Peer Reviewer has <strong>more than one</strong> assignee (fix on ACC). Ghosted plates = on ACC organogram, not yet on project organogram.</p>
+  <p class="section-sub" style="margin:0 0 8px;">Red outline = DTL / PDM / TTM / TTIM / Peer Reviewer has <strong>more than one</strong> assignee (fix on FORMA). Ghosted plates = on FORMA organogram, not yet on project organogram.</p>
   ${(typeof buildOrgMatrixHtml==="function" ? buildOrgMatrixHtml(activeRoles, byBucket, plate) : "")}
   <div class="org-board" id="f-pt-board" style="${window.__orgMatrixMode ? "display:none" : ""}">
     <div class="org-band">
@@ -28516,6 +28793,14 @@ function renderProjectTeamPanel(project){
     return false;
   }).map(m => m.id));
   const orphans = team.members.filter(m => !known.has(m.id));
+  const remote = project.formaDocsPackageList || [];
+  if(remote.length){
+    html += '<div style="font-size:12px;font-weight:800;margin:8px 0 4px;">FORMA Docs packages</div><div style="max-height:140px;overflow:auto;font-size:12px;">';
+    remote.slice(0,40).forEach(function(r){
+      html += '<div>#'+escapeHtml(String(r.displayId||r.id||""))+' · '+escapeHtml(r.name||"")+' · '+(r.resourceCount!=null?r.resourceCount+" files":"")+' · '+escapeHtml(r.versionType||"")+'</div>';
+    });
+    html += '</div>';
+  }
   if(orphans.length){
     html += `<div class="org-band"><h4>Unassigned / other roles</h4><div class="org-roles"><div class="org-role-col" data-drop-func="OTHER" data-drop-disc="">
       <div class="role-title">OTHER</div>${orphans.map(plate).join("")}
@@ -28609,7 +28894,7 @@ function bindProjectTeamPanel(project){
     const cmpHost = document.getElementById("f-pt-org-compare");
     if(cmpHost) cmpHost.innerHTML = renderOrganogramCompare(live);
   };
-  // Initial ACC organogram snapshot (if already imported)
+  // Initial FORMA organogram snapshot (if already imported)
   try { paintAccOrg(projectById(project.id) || project); } catch(e){}
   
   const clrOtherProj = document.getElementById("f-pt-clear-other");
@@ -28634,10 +28919,10 @@ function bindProjectTeamPanel(project){
   if(accMerge) accMerge.onclick = async () => {
     const live = projectById(project.id) || project;
     if(!live.accOrganogram || !(live.accOrganogram.members||[]).length){
-      showToast("Import ACC organogram first — review the ACC snapshot, then merge");
+      showToast("Import FORMA organogram first — review the FORMA snapshot, then merge");
       return;
     }
-    if(!confirm("Merge ACC organogram members into the project team using their first ACC role?")) return;
+    if(!confirm("Merge FORMA organogram members into the project team using their first FORMA role?")) return;
     await mergeAccMembersIntoAppTeam(live);
     window.__projectTeamDraft = ensureProjectTeam(live);
     redraw();
@@ -28725,9 +29010,9 @@ function bindProjectTeamPanel(project){
   if(prev) prev.onclick = () => openOrganogramPreview(project);
 }
 
-/* ===================== ACC ORGANOGRAM ===================== */
+/* ===================== FORMA ORGANOGRAM ===================== */
 
-/** ACC project role catalog (exact labels from ACC). First role is used for auto-bucket. */
+/** FORMA project role catalog (exact labels from FORMA). First role is used for auto-bucket. */
 const ACC_ROLE_CATALOG = [
   { acc: "ADAG - Associate Director Advisory Group", func: "OTHER", disc: "", code: "ADAG" },
   { acc: "APP - Client", func: "OTHER", disc: "", code: "APP" },
@@ -28974,7 +29259,7 @@ async function apsListProjectUsers(projectId){
       if(results && Array.isArray(results.results)) return results.results;
     } catch(e){ lastErr = e; }
   }
-  throw lastErr || new Error("Could not list ACC project users (check Admin API scopes)");
+  throw lastErr || new Error("Could not list FORMA project users (check Admin API scopes)");
 }
 function extractAccRoles(u){
   const roles = [];
@@ -28998,7 +29283,7 @@ function extractAccRoles(u){
     if(u.accessLevels.projectAdmin) roles.push("Project Admin");
     if(u.accessLevels.executive) roles.push("Executive");
   }
-  // ACC Admin API sometimes nests roles under services
+  // FORMA Admin API sometimes nests roles under services
   if(Array.isArray(u.services)){
     u.services.forEach(svc => {
       if(Array.isArray(svc.roles)) svc.roles.forEach(push);
@@ -29025,7 +29310,7 @@ function normalizeAccUser(u){
   const primaryRole = roleList[0] || "";
   const roleName = primaryRole || roleList.join(" · ") || "";
   const allRoleLabels = roleList.slice();
-  // Map FIRST ACC role via catalog
+  // Map FIRST FORMA role via catalog
   let matched = matchAccRoleLabel(primaryRole);
   if(!matched && roleList.length > 1){
     for(const r of roleList){ matched = matchAccRoleLabel(r); if(matched) break; }
@@ -29069,8 +29354,8 @@ function normalizeAccUser(u){
   };
 }
 async function importAccOrganogram(project){
-  if(!project.accProjectId){ showToast("Link an ACC project first (Edit project → ACC)"); return; }
-  showToast("Fetching ACC project members…");
+  if(!project.accProjectId){ showToast("Link an FORMA project first (Edit project → FORMA)"); return; }
+  showToast("Fetching FORMA project members…");
   try {
     await apsRefreshIfNeeded();
     const raw = await apsListProjectUsers(project.accProjectId);
@@ -29079,8 +29364,8 @@ async function importAccOrganogram(project){
     const companies = [...new Set(all.map(m => m.company || "(No company)"))].sort((a,b) => a.localeCompare(b));
     const selected = await new Promise(resolve => {
       openSheet(`
-        <h2>Import ACC staff by company</h2>
-        <p style="font-size:13px;color:var(--slate-500);margin-bottom:12px;">Found <strong>${all.length}</strong> members across <strong>${companies.length}</strong> companies. Tick companies to include. Members go to the <strong>ACC organogram</strong> snapshot only (settings stay open).</p>
+        <h2>Import FORMA staff by company</h2>
+        <p style="font-size:13px;color:var(--slate-500);margin-bottom:12px;">Found <strong>${all.length}</strong> members across <strong>${companies.length}</strong> companies. Tick companies to include. Members go to the <strong>FORMA organogram</strong> snapshot only (settings stay open).</p>
         <div style="display:flex;gap:8px;margin-bottom:8px;">
           <button type="button" class="btn btn-ghost btn-xs" id="acc-co-all">Tick all</button>
           <button type="button" class="btn btn-ghost btn-xs" id="acc-co-none">Untick all</button>
@@ -29162,7 +29447,7 @@ async function importAccOrganogram(project){
       companies: [...selected]
     };
     saveData(DATA);
-    showToast("ACC organogram: " + members.length + " role placements (multi-role expanded, capitalised)");
+    showToast("FORMA organogram: " + members.length + " role placements (multi-role expanded, capitalised)");
     try {
       window.__editProjectTab = "team";
       if(typeof openEditProjectSheet === "function") openEditProjectSheet(project);
@@ -29176,15 +29461,15 @@ async function importAccOrganogram(project){
     return members;
   } catch(e){
     console.error(e);
-    showToast("ACC members failed: " + (e.message || e));
+    showToast("FORMA members failed: " + (e.message || e));
     return null;
   }
 }
 function renderAccOrganogramBoard(project){
   const members = (project.accOrganogram && project.accOrganogram.members) || [];
   if(!members.length){
-    return `<div class="card" style="margin-top:12px;"><div class="chart-card-title">ACC organogram</div>
-      <p class="section-sub">No ACC snapshot yet. Use <strong>Import from ACC</strong> — review here before merging into the project organogram.</p></div>`;
+    return `<div class="card" style="margin-top:12px;"><div class="chart-card-title">FORMA organogram</div>
+      <p class="section-sub">No FORMA snapshot yet. Use <strong>Import from FORMA</strong> — review here before merging into the project organogram.</p></div>`;
   }
   const at = project.accOrganogram.importedAt ? new Date(project.accOrganogram.importedAt).toLocaleString() : "";
   const otherCount = members.filter(m => (m.func || "OTHER") === "OTHER").length;
@@ -29233,8 +29518,8 @@ function renderAccOrganogramBoard(project){
   }).join("");
   const others = byBucket("OTHER");
   return `<div class="card" style="margin-top:12px;">
-    <div class="chart-card-title">ACC organogram (snapshot)</div>
-    <p class="section-sub">Imported ${escapeHtml(at)} · <strong>${members.length}</strong> members · structured like the project organogram from <strong>first ACC role</strong>.</p>
+    <div class="chart-card-title">FORMA organogram (snapshot)</div>
+    <p class="section-sub">Imported ${escapeHtml(at)} · <strong>${members.length}</strong> members · structured like the project organogram from <strong>first FORMA role</strong>.</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
       <button type="button" class="btn btn-ghost btn-xs" id="acc-org-clear-other-top">Clear Other (${otherCount})</button>
       <button type="button" class="btn btn-primary btn-xs" id="acc-org-merge-btn">Merge into project organogram…</button>
@@ -29264,7 +29549,7 @@ function bindAccOrganogramBoard(project){
     project.accOrganogram.members = project.accOrganogram.members.filter(m => (m.func || "OTHER") !== "OTHER");
     const removed = before - project.accOrganogram.members.length;
     saveData(DATA);
-    showToast("Removed " + removed + " unmapped (Other) ACC members");
+    showToast("Removed " + removed + " unmapped (Other) FORMA members");
     if(typeof renderProjectTeamPanel === "function"){
       // re-render parent panel
       const host = document.getElementById("f-pt-acc-org");
@@ -29274,7 +29559,7 @@ function bindAccOrganogramBoard(project){
   const btn = document.getElementById("acc-org-clear-other") || document.getElementById("acc-org-clear-other-top");
   document.querySelectorAll("#acc-org-clear-other, #acc-org-clear-other-top").forEach(b => {
     b.onclick = () => {
-      if(!confirm("Remove all ACC members currently under Other (unmapped roles)?")) return;
+      if(!confirm("Remove all FORMA members currently under Other (unmapped roles)?")) return;
       clear();
     };
   });
@@ -29291,10 +29576,10 @@ function renderOrganogramCompare(project){
   const accAt = project.accOrganogram && project.accOrganogram.importedAt
     ? new Date(project.accOrganogram.importedAt).toLocaleString() : "never";
   let html = `<div class="card" style="margin-top:12px;">
-    <div class="chart-card-title">Organogram match · ACC vs app</div>
-    <p class="section-sub">ACC snapshot: ${escapeHtml(accAt)} · App ${cmp.appCount} · ACC ${cmp.accCount} · Matched ${cmp.matched.length}</p>`;
+    <div class="chart-card-title">Organogram match · FORMA vs app</div>
+    <p class="section-sub">FORMA snapshot: ${escapeHtml(accAt)} · App ${cmp.appCount} · FORMA ${cmp.accCount} · Matched ${cmp.matched.length}</p>`;
   if(!cmp.accCount){
-    html += `<p class="section-sub">Import ACC members to compare.</p></div>`;
+    html += `<p class="section-sub">Import FORMA members to compare.</p></div>`;
     return html;
   }
   if(cmp.onlyAcc.length){
@@ -29307,7 +29592,7 @@ function renderOrganogramCompare(project){
   }
   if(cmp.roleMismatch.length){
     html += `<div style="margin:8px 0;"><strong style="color:var(--purple-900);">Role mismatch (${cmp.roleMismatch.length})</strong>
-      <div style="font-size:12px;margin-top:4px;">${cmp.roleMismatch.slice(0,20).map(x => escapeHtml(x.app.name)+": app <strong>"+escapeHtml(x.appRole)+"</strong> vs ACC <strong>"+escapeHtml(x.accRole)+"</strong>").join("<br>")}</div></div>`;
+      <div style="font-size:12px;margin-top:4px;">${cmp.roleMismatch.slice(0,20).map(x => escapeHtml(x.app.name)+": app <strong>"+escapeHtml(x.appRole)+"</strong> vs FORMA <strong>"+escapeHtml(x.accRole)+"</strong>").join("<br>")}</div></div>`;
   }
   if(!cmp.onlyAcc.length && !cmp.onlyApp.length && !cmp.roleMismatch.length){
     html += `<p class="section-sub" style="color:var(--ok);">Organograms align on email and role codes.</p>`;
@@ -29317,7 +29602,7 @@ function renderOrganogramCompare(project){
 }
 async function mergeAccMembersIntoAppTeam(project){
   const acc = (project.accOrganogram && project.accOrganogram.members) || [];
-  if(!acc.length){ showToast("Import ACC organogram first"); return; }
+  if(!acc.length){ showToast("Import FORMA organogram first"); return; }
   const team = ensureProjectTeam(project);
   let added = 0;
   acc.forEach(m => {
@@ -29340,12 +29625,12 @@ async function mergeAccMembersIntoAppTeam(project){
   window.__projectTeamDraft = team;
   project.projectTeam = team;
   saveData(DATA);
-  showToast("Added " + added + " ACC members into app organogram");
+  showToast("Added " + added + " FORMA members into app organogram");
 }
 
 
 function openOrganogramPreview(project){
-  // also show compare when ACC org present
+  // also show compare when FORMA org present
 
   const team = window.__projectTeamDraft || ensureProjectTeam(project);
   const cat = normalizeMidpCatalog(window.__midpCatalogDraft || project.midpCatalog);
@@ -29643,15 +29928,15 @@ function openEditProjectSheet(project){
     </div>
 <div class="sheet-tab-panel" data-sptab-panel="acc">
       <div class="settings-section">
-        <h3>Integration — FORMA / ACC</h3>
-        <p class="section-sub">Link this Atana project to an ACC project, then choose Docs folders for DB sync and deliverable tracking.</p>
-        <div class="field"><label>ACC project</label>
+        <h3>Integration — FORMA / FORMA</h3>
+        <p class="section-sub">Link this Atana project to an FORMA project, then choose Docs folders for DB sync and deliverable tracking.</p>
+        <div class="field"><label>FORMA project</label>
           <div style="font-size:13px;font-weight:600;" id="f-acc-proj-label">${project.accProjectId ? escapeHtml((project.name||"") + " · " + (project.accProjectId||"")) : "Not linked"}</div>
           <input type="hidden" id="f-acc-project-id" value="${escapeHtml(project.accProjectId||"")}">
           <input type="hidden" id="f-acc-hub-id" value="${escapeHtml(project.accHubId||"")}">
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-          <button type="button" class="btn btn-primary btn-xs" id="f-acc-pick-project">Link ACC project</button>
+          <button type="button" class="btn btn-primary btn-xs" id="f-acc-pick-project">Link FORMA project</button>
           <button type="button" class="btn btn-ghost btn-xs" id="f-acc-unlink">Unlink</button>
         </div>
         <div class="field"><label>Root Docs folder <span style="font-weight:400;text-transform:none;">(deliverables tracking)</span></label>
@@ -29664,7 +29949,7 @@ function openEditProjectSheet(project){
             </label>
             <label class="settings-check" style="display:grid;grid-template-columns:18px 1fr;gap:10px;align-items:start;font-size:12px;line-height:1.4;text-transform:none;letter-spacing:0;font-weight:500;color:var(--slate-700);white-space:normal;">
               <input type="checkbox" id="f-acc-team-filter" ${project.accFilterByTaskTeams ? "checked" : ""} style="margin-top:3px;width:16px;height:16px;">
-              <span>Limit ACC sync to project task-team subfolders</span>
+              <span>Limit FORMA sync to project task-team subfolders</span>
             </label>
             <label class="settings-check" style="display:grid;grid-template-columns:18px 1fr;gap:10px;align-items:start;font-size:12px;line-height:1.4;text-transform:none;letter-spacing:0;font-weight:500;color:var(--slate-700);white-space:normal;">
               <input type="checkbox" id="f-acc-naming" ${project.accOnlyCompliantNames ? "checked" : ""} style="margin-top:3px;width:16px;height:16px;">
@@ -29691,7 +29976,7 @@ function openEditProjectSheet(project){
           <button type="button" class="btn btn-ghost btn-xs" id="f-acc-pick-db" style="margin-top:6px;">Browse DB folder</button>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
-          <button type="button" class="btn btn-gold btn-xs" id="f-acc-push-db">Push DB JSON to ACC</button>
+          <button type="button" class="btn btn-gold btn-xs" id="f-acc-push-db">Push DB JSON to FORMA</button>
           <button type="button" class="btn btn-primary btn-xs" id="f-acc-refresh-docs">Refresh deliverables list</button>
         </div>
         <p class="section-sub" style="margin-top:8px;">Push needs <code>data:write</code> scope (re-sign in after update). Deliverables under the root folder appear on the MIDP → CDE Docs tab.</p>
@@ -29772,6 +30057,7 @@ function openEditProjectSheet(project){
 
         <div class="sheet-actions" style="margin-top:16px;">
       <button class="btn btn-danger" id="f-p-delete">Delete</button>
+      <button class="btn btn-ghost" id="f-p-apply">Apply</button>
       <button class="btn btn-primary" id="f-p-save">Save</button>
     </div>
   `);
@@ -29891,6 +30177,8 @@ function openEditProjectSheet(project){
     closeWorkspace();
     showToast("Project deleted");
   };
+  const applyBtn = document.getElementById("f-p-apply");
+  if(applyBtn) applyBtn.onclick = function(){ window.__editApplyKeepOpen = true; const b=document.getElementById("f-p-save"); if(b) b.click(); };
   document.getElementById("f-p-save").onclick = () => {
     try {
     const nameEl = document.getElementById("f-p-name");
@@ -29935,6 +30223,10 @@ function openEditProjectSheet(project){
     const rootPath = document.getElementById("f-acc-root-path");
     if(rootId) project.accRootFolderId = rootId.value || "";
     if(rootPath) project.accRootFolderPath = rootPath.value || "";
+    const capF = document.getElementById("f-acc-folder-cap");
+    const capD = document.getElementById("f-acc-depth-cap");
+    if(capF) project.accScanMaxFolders = Math.max(20, Math.min(400, Number(capF.value)||150));
+    if(capD) project.accScanMaxDepth = Math.max(1, Math.min(8, Number(capD.value)||3));
     const teamFilt = document.getElementById("f-acc-team-filter");
     if(teamFilt) project.accFilterByTaskTeams = !!teamFilt.checked;
     const isoFilt = document.getElementById("f-acc-iso-gateways");
@@ -30004,6 +30296,12 @@ function openEditProjectSheet(project){
     }
     saveData(DATA);
     window.__editProjectDirty = false;
+    if(window.__editApplyKeepOpen){
+      window.__editApplyKeepOpen = false;
+      showToast("Settings applied");
+      try { if(typeof renderProjects === "function") renderProjects(); } catch(e){}
+      return;
+    }
     closeSheet();
     renderProjects();
     try { renderWorkspace(); } catch(e){ console.warn(e); }
@@ -30945,7 +31243,7 @@ function wireTaskListImportExport(){
     });
   }
   bind("btnClearLocalCaches", () => {
-    if(!confirm("Clear FORMA/ACC file cache and oversized images from this browser? Projects stay. You will need to sync FORMA again.")) return;
+    if(!confirm("Clear FORMA/FORMA file cache and oversized images from this browser? Projects stay. You will need to sync FORMA again.")) return;
     if(typeof clearAtanaBrowserCaches === "function") clearAtanaBrowserCaches();
   });
   // Settings: import single project JSON
@@ -31493,6 +31791,15 @@ document.addEventListener("DOMContentLoaded", () => {
     // (parent sync wired below when toggle runs)
     if(toggleBtn){
       if(toggleBtn.disabled) return;
+      try {
+        const vis = getVisibleTaskRoles(project);
+        const row = toggleBtn.closest(".task-row");
+        if(row && row.classList.contains("dep-locked")) return;
+        if(row && vis && vis.primary){
+          const pill = row.querySelector(".role-pill");
+          if(pill && pill.textContent && pill.textContent.trim() !== vis.primary && pill.textContent.trim() !== "") return;
+        }
+      } catch(e){}
       e.preventDefault();
       e.stopPropagation();
       const id = toggleBtn.dataset.toggleTask || toggleBtn.getAttribute("data-toggle-task");
@@ -32558,7 +32865,7 @@ function atnAgentRun(project, agentId, question){
     text = "Asset Agent — " + packs.length + " Ss production packages (procured assets in the federation).\n";
     packs.slice(0, 12).forEach(function(p){ text += "• " + (p.ss||"") + " " + (p.name||"") + " [" + (p.ro||"") + "] FB" + (p.fb||"") + "\n"; });
   } else if(agentId === "IDS"){
-    text = "IDS Agent — specifications live on the IDS engine. Export fail rows from ITE/IDS. No write-back to ACC in this build.";
+    text = "IDS Agent — specifications live on the IDS engine. Export fail rows from ITE/IDS. No write-back to FORMA in this build.";
   } else {
     text = "Information Manager Agent — chain is OIR → PIR → EIR → AIR → Template → IR → Package → Deliverable → IDS → AIM.\n";
     if(typeof atnAnswer === "function"){
