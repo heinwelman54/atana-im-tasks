@@ -1,8 +1,10 @@
 # Repo output
 
-**App version: 3.45.1**
+**App version: 3.45.2**
 **Pages file:** app.html
-Open app.html?v=3451 after push. Badge **v3.45.1**.
+Open app.html?v=3452 after push. Badge **v3.45.2**.
 
-Method steps: Atana purple/gold, gold step disc, larger centred title, selected fill #3e0b3b.
-Nav no longer rebuilds on every click.
+- Plan production submenus are now My Role / Tasks / WBS / Gantt / MIDP (third planner row hidden)
+- Gantt click actually opens Gantt
+- Selected tab 3D shadow
+- Settings → Customisation → Selected menu colour + gradients
