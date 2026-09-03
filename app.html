@@ -2189,7 +2189,6 @@
         <div id="scopeTeamRoot"></div>
       </div>
       <div class="ws-view" id="wsview-dpow">
-        <div id="atnRoleOsRootDpow"></div>
         <div class="card" style="margin-bottom:12px;">
           <div class="chart-card-title" style="margin-bottom:4px;">Digital Plan of Work</div>
           <p class="section-sub" style="margin:0 0 10px;"><strong>Ss systems</strong> encapsulate what is modelled (later: Revit families/models). Set <strong>LOD/LOI</strong> per stage. Contractual offtake is the <strong>imported MIDP plan</strong> (MIDP tracking); each task team <strong>TIDP</strong> is that plan filtered by role, tied to the <strong>end of the work stage</strong>.</p>
@@ -2580,9 +2579,9 @@ function resolveMemberFunctionalRoles(project, memberIdOrEmail){
   }));
 }
 
-const APP_VERSION = "3.48.2";
+const APP_VERSION = "3.48.4";
 window.APP_VERSION = APP_VERSION;
-const APP_BUILD = "2026-09-02-dpow-team-nav";
+const APP_BUILD = "2026-09-02-dpow-primary";
 
 /* ---- Header customisation (local) ---- */
 const HEADER_PALETTES = {
@@ -19952,20 +19951,25 @@ async function atnCreateFormaPackageFolders(project, pack, gateways, sel){
   showToast("Creating Docs package: " + name);
   let created = null;
   const raw = apsDocsProjectId(project);
-  const bodies = [
-    "https://developer.api.autodesk.com/construction/packages/v1/projects/" + encodeURIComponent(raw) + "/packages",
-    "https://developer.api.autodesk.com/construction/files/v1/projects/" + encodeURIComponent(raw) + "/packages"
-  ];
+  const withB = raw.indexOf("b.")===0 ? raw : ("b."+raw);
+  const ids = [raw, withB];
+  const regs = [apsPreferredRegion(), apsPreferredRegion()==="EMEA"?"US":"EMEA"];
+  const paths = ["/construction/packages/v1/projects/","/construction/files/v1/projects/"];
   let lastErr = "";
-  for(let u=0; u<bodies.length && !created; u++){
-    try {
-      created = await apsDmFetch(bodies[u], {
-        method: "POST",
-        region: apsPreferredRegion(),
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.slice(0,255), description: desc.slice(0,1000), versionType: "FIXED" })
-      });
-    } catch(e){ lastErr = e && e.message ? e.message : String(e); }
+  for(let r=0; r<regs.length && !created; r++){
+    for(let i=0; i<ids.length && !created; i++){
+      for(let p=0; p<paths.length && !created; p++){
+        const url = "https://developer.api.autodesk.com" + paths[p] + encodeURIComponent(ids[i]) + "/packages";
+        try {
+          created = await apsDmFetch(url, {
+            method: "POST",
+            region: regs[r],
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: name.slice(0,255), description: desc.slice(0,1000), versionType: "FIXED" })
+          });
+        } catch(e){ lastErr = (regs[r]+" "+(e && e.message ? e.message : String(e))); }
+      }
+    }
   }
   const id = created && (created.id || (created.data && created.data.id)) || "";
   if(!project.formaDocsPackages) project.formaDocsPackages = [];
@@ -19982,7 +19986,7 @@ async function atnCreateFormaPackageFolders(project, pack, gateways, sel){
   if(id){
     showToast("FORMA package created: " + name);
   } else {
-    showToast("API cannot create packages (" + lastErr.slice(0,80) + "). Opening FORMA Packages — paste the name.");
+    showToast("FORMA has no public Create Package API. Name copied (" + regs[0] + "). Open Packages and click Create package.");
     try { await navigator.clipboard.writeText(name); } catch(e){}
   }
   try { window.open(atnFormaDocsProjectUrl(project, id), "_blank"); } catch(e){}
@@ -22758,8 +22762,11 @@ function renderAtnMethodNav(activeView){
       setActiveWsView(v);
     };
   }
+  const mark = window.__wsNavView || view;
   sub.querySelectorAll("[data-wsview]").forEach(function(b){
-    b.classList.toggle("active", b.dataset.wsview === view);
+    const id = b.dataset.wsview;
+    const on = (id === mark) || (id === view) || (mark === "progress" && id === "progress") || (mark === "imtasks" && id === "imtasks" && mark !== "progress");
+    b.classList.toggle("active", on);
   });
 }
 
@@ -22772,7 +22779,8 @@ function setActiveWsView(view){
   if(view === "planner-gantt" || view === "gantt") window.__planSub = "gantt";
   if(view === "planner" && !window.__planSub) window.__planSub = "gantt";
   const main = map[view] || view || "imtasks";
-  const token = (view === "planner-wbs" || view === "planner-gantt") ? view : main;
+  const token = (view === "progress" || view === "planner-wbs" || view === "planner-gantt") ? view : main;
+  window.__wsNavView = view;
   const sig = main + ":" + (window.__planSub||"") + ":" + (window.__imSub||"");
   if(window.__wsSig === sig && document.querySelector("#wsview-"+main+".active")){
     if(typeof renderAtnMethodNav === "function") renderAtnMethodNav(token);
@@ -22858,13 +22866,10 @@ function setActiveWsView(view){
     if(main === "team"){
       const host = document.getElementById("scopeTeamRoot");
       if(host && typeof renderProjectTeamPanel === "function"){
+        host.setAttribute("data-sptab-panel","projectteam");
         host.innerHTML = renderProjectTeamPanel(project);
-        if(typeof bindProjectTeamPanel === "function") bindProjectTeamPanel(project);
+        if(typeof bindProjectTeamPanel === "function") bindProjectTeamPanel(project, host);
       }
-    }
-    if(main === "dpow" && typeof renderAtnRoleOs === "function"){
-      const dhost = document.getElementById("atnRoleOsRoot");
-      if(dhost) renderAtnRoleOs(project);
     }
     if(main === "roleos" && typeof renderAtnRoleOs === "function") renderAtnRoleOs(project);
     if(main === "prjtools" && typeof bindProjectTools === "function") bindProjectTools(project);
@@ -24461,12 +24466,37 @@ function renderDpow(project){
       const loiNum = String(st.loi||"").replace(/^LOI\s*/i,"") || "—";
       const params = (typeof LOI_PARAM_PRESETS!=="undefined" && LOI_PARAM_PRESETS[st.lod]) ? LOI_PARAM_PRESETS[st.lod] : [];
       const reqMap = st.params || {};
+      const stageCodes = [s.id];
+      if(typeof WORK_STAGES !== "undefined"){
+        const mi = getHierarchy().findIndex(h => h.id === s.id);
+        if(mi >= 0 && WORK_STAGES[mi]) stageCodes.push(WORK_STAGES[mi][0]);
+      }
+      const ssKey = String(sc.uniclass||sc.code||"").toLowerCase();
+      let delivN = importedAll.filter(function(r){
+        const stOk = stageCodes.indexOf(r.stage)>=0 || stageCodes.indexOf(r.stageId)>=0 || stageCodes.indexOf(r.stageWs)>=0;
+        if(!stOk) return false;
+        if(r.role && sc.role && r.role !== sc.role) return false;
+        const rowSs = String(r.uniclass||r.ss||r.code||r.system||"").toLowerCase();
+        if(ssKey && rowSs && rowSs.indexOf(ssKey)<0 && ssKey.indexOf(rowSs)<0) return false;
+        return true;
+      }).length;
+      if(!delivN){
+        delivN = importedAll.filter(function(r){
+          const stOk = stageCodes.indexOf(r.stage)>=0 || stageCodes.indexOf(r.stageId)>=0 || stageCodes.indexOf(r.stageWs)>=0;
+          return stOk && (!r.role || r.role === sc.role);
+        }).length;
+      }
+      const lodSvgN = (typeof atnLodRank === "function" ? atnLodRank(st.lod) : 0) || (typeof atnPlannedLodNum === "function" ? atnPlannedLodNum(s.id) : 2);
+      const fam = (typeof atnSsFamily === "function") ? atnSsFamily(sc.uniclass||sc.code, sc.name) : "generic";
+      const svg = (typeof atnLodSvg === "function") ? atnLodSvg(fam, lodSvgN) : "";
       return `<td>
-        <div class="asset-pill" data-asset-pill="${idx}|${s.id}" title="Click for LOI details">
+        <div class="asset-pill" data-asset-pill="${idx}|${s.id}" title="Click for LOI details" style="min-width:96px;">
           <div class="ap-code">${escapeHtml(sc.uniclass||sc.code)}</div>
+          <div style="display:flex;justify-content:center;margin:4px 0;">${svg}</div>
           <div class="ap-meta">
             <span class="ap-chip">LOD ${escapeHtml(lodNum)}</span>
             <span class="ap-chip">LOI ${escapeHtml(loiNum)}</span>
+            <span class="ap-chip">${delivN} deliv</span>
             ${dr ? `<span class="ap-chip">${escapeHtml(dr)}</span>` : ""}
           </div>
           ${(() => {
@@ -28871,21 +28901,25 @@ function renderProjectTeamPanel(project){
   html += `</div>`;
   return html;
 }
-function bindProjectTeamPanel(project){
-  const root = document.getElementById("sheet");
+function bindProjectTeamPanel(project, bindRoot){
+  const sheetPanel = document.querySelector('#sheet [data-sptab-panel="projectteam"]');
+  const overlayOpen = document.getElementById("overlay") && document.getElementById("overlay").classList.contains("open");
+  const root = bindRoot || (overlayOpen && sheetPanel) || document.getElementById("scopeTeamRoot") || sheetPanel || document.getElementById("sheet");
   if(!root) return;
+  const qid = function(id){ return (root && root.querySelector) ? root.querySelector("#"+id) : document.getElementById(id); };
   const team = window.__projectTeamDraft || ensureProjectTeam(project);
   window.__projectTeamDraft = team;
   const cat = normalizeMidpCatalog(window.__midpCatalogDraft || project.midpCatalog);
   const activeRoles = (cat.roles||[]).filter(r => r.selected !== false);
   const redraw = () => {
-    const host = document.querySelector('[data-sptab-panel="projectteam"]');
+    const host = root.getAttribute && root.getAttribute("data-sptab-panel")==="projectteam" ? root
+      : (root.id === "scopeTeamRoot" ? root : (root.querySelector('[data-sptab-panel="projectteam"]') || document.querySelector('[data-sptab-panel="projectteam"]')));
     if(!host) return;
     host.innerHTML = renderProjectTeamPanel(project);
-    bindProjectTeamPanel(project);
+    bindProjectTeamPanel(project, host);
   };
 
-  const matBtn = document.getElementById("f-pt-matrix-mode");
+  const matBtn = qid("f-pt-matrix-mode");
   if(matBtn && !matBtn._bound){
     matBtn._bound = true;
     matBtn.onclick = () => {
@@ -28918,8 +28952,8 @@ function bindProjectTeamPanel(project){
     redraw();
     showToast("Added " + src.name + " → " + func + (disc && !["DTL","PDM","IM","DM"].includes(func) ? " · " + disc : ""));
   };
-  const searchEl = document.getElementById("f-pt-search");
-  const results = document.getElementById("f-pt-search-results");
+  const searchEl = qid("f-pt-search");
+  const results = qid("f-pt-search-results");
   if(searchEl && results){
     searchEl.oninput = () => {
       const q = searchEl.value.trim().toLowerCase();
@@ -28944,22 +28978,22 @@ function bindProjectTeamPanel(project){
       });
     };
   }
-  const loadSeed = document.getElementById("f-pt-load-seed");
+  const loadSeed = qid("f-pt-load-seed");
   if(loadSeed) loadSeed.onclick = () => {
     showToast("Search a name to add — duplicates create extra placements");
     if(searchEl) searchEl.focus();
   };
 
   const paintAccOrg = (live) => {
-    const accHost = document.getElementById("f-pt-acc-org");
+    const accHost = qid("f-pt-acc-org");
     if(accHost){ accHost.innerHTML = renderAccOrganogramBoard(live); bindAccOrganogramBoard(live); }
-    const cmpHost = document.getElementById("f-pt-org-compare");
+    const cmpHost = qid("f-pt-org-compare");
     if(cmpHost) cmpHost.innerHTML = renderOrganogramCompare(live);
   };
   // Initial FORMA organogram snapshot (if already imported)
   try { paintAccOrg(projectById(project.id) || project); } catch(e){}
   
-  const clrOtherProj = document.getElementById("f-pt-clear-other");
+  const clrOtherProj = qid("f-pt-clear-other");
   if(clrOtherProj) clrOtherProj.onclick = () => {
     const team = window.__projectTeamDraft || ensureProjectTeam(project);
     const others = team.members.filter(m => (m.func || "OTHER") === "OTHER");
@@ -28971,13 +29005,13 @@ function bindProjectTeamPanel(project){
     redraw();
   };
 
-  const accImp = document.getElementById("f-pt-import-acc");
+  const accImp = qid("f-pt-import-acc");
   if(accImp) accImp.onclick = async () => {
     const live = projectById(project.id) || project;
     await importAccOrganogram(live);
     paintAccOrg(live);
   };
-  const accMerge = document.getElementById("f-pt-merge-acc");
+  const accMerge = qid("f-pt-merge-acc");
   if(accMerge) accMerge.onclick = async () => {
     const live = projectById(project.id) || project;
     if(!live.accOrganogram || !(live.accOrganogram.members||[]).length){
@@ -28990,14 +29024,14 @@ function bindProjectTeamPanel(project){
     redraw();
     paintAccOrg(live);
   };
-  const accCmp = document.getElementById("f-pt-compare-org");
+  const accCmp = qid("f-pt-compare-org");
   if(accCmp) accCmp.onclick = () => {
     const live = projectById(project.id) || project;
     paintAccOrg(live);
   };
 
-  const impBtn = document.getElementById("f-pt-import-hub");
-  const fileEl = document.getElementById("f-pt-file");
+  const impBtn = qid("f-pt-import-hub");
+  const fileEl = qid("f-pt-file");
   if(impBtn && fileEl){
     impBtn.onclick = () => fileEl.click();
     fileEl.onchange = async () => {
@@ -29068,7 +29102,7 @@ function bindProjectTeamPanel(project){
       redraw();
     });
   });
-  const prev = document.getElementById("f-pt-preview-org");
+  const prev = qid("f-pt-preview-org");
   if(prev) prev.onclick = () => openOrganogramPreview(project);
 }
 
@@ -29313,13 +29347,18 @@ async function apsListProjectUsers(projectId){
     "https://developer.api.autodesk.com/hq/v1/accounts/users" // fallback last
   ];
   let lastErr = null;
+  const regions = [apsPreferredRegion(), apsPreferredRegion()==="EMEA" ? "US" : "EMEA"];
   for(const url of urls){
-    try {
-      const data = await apsFetch(url);
-      const results = data.results || data.data || data;
-      if(Array.isArray(results)) return results;
-      if(results && Array.isArray(results.results)) return results.results;
-    } catch(e){ lastErr = e; }
+    for(const reg of regions){
+      try {
+        const data = (typeof apsDmFetch === "function")
+          ? await apsDmFetch(url, { region: reg })
+          : await apsFetch(url, { headers: apsRegionHeaders(reg) });
+        const results = data.results || data.data || data;
+        if(Array.isArray(results)) return results;
+        if(results && Array.isArray(results.results)) return results.results;
+      } catch(e){ lastErr = e; }
+    }
   }
   throw lastErr || new Error("Could not list FORMA project users (check Admin API scopes)");
 }
@@ -29415,6 +29454,22 @@ function normalizeAccUser(u){
     primaryRole: primaryRole
   };
 }
+function openNestedDialog(html){
+  let box = document.getElementById("atnNestedDlg");
+  if(!box){
+    box = document.createElement("div");
+    box.id = "atnNestedDlg";
+    box.style.cssText = "position:fixed;inset:0;z-index:12000;background:rgba(22,8,22,.45);display:flex;align-items:center;justify-content:center;padding:24px;";
+    document.body.appendChild(box);
+  }
+  box.innerHTML = '<div class="card" style="max-width:560px;width:100%;max-height:82vh;overflow:auto;padding:16px;box-shadow:0 12px 40px rgba(0,0,0,.25);">'+html+'</div>';
+  box.style.display = "flex";
+  return box;
+}
+function closeNestedDialog(){
+  const box = document.getElementById("atnNestedDlg");
+  if(box){ box.style.display = "none"; box.innerHTML = ""; }
+}
 async function importAccOrganogram(project){
   if(!project.accProjectId){ showToast("Link an FORMA project first (Edit project → FORMA)"); return; }
   showToast("Fetching FORMA project members…");
@@ -29425,7 +29480,7 @@ async function importAccOrganogram(project){
     // Ask which companies to keep
     const companies = [...new Set(all.map(m => m.company || "(No company)"))].sort((a,b) => a.localeCompare(b));
     const selected = await new Promise(resolve => {
-      openSheet(`
+      openNestedDialog(`
         <h2>Import FORMA staff by company</h2>
         <p style="font-size:13px;color:var(--slate-500);margin-bottom:12px;">Found <strong>${all.length}</strong> members across <strong>${companies.length}</strong> companies. Tick companies to include. Members go to the <strong>FORMA organogram</strong> snapshot only (settings stay open).</p>
         <div style="display:flex;gap:8px;margin-bottom:8px;">
@@ -29445,15 +29500,14 @@ async function importAccOrganogram(project){
       };
       document.getElementById("acc-co-all").onclick = () => setAll(true);
       document.getElementById("acc-co-none").onclick = () => setAll(false);
-      document.getElementById("acc-co-cancel").onclick = () => { closeSheet(); resolve(null); };
+      document.getElementById("acc-co-cancel").onclick = () => { closeNestedDialog(); resolve(null); };
       document.getElementById("acc-co-go").onclick = () => {
         const keep = new Set();
         companies.forEach((c,i) => {
           const el = document.querySelector(`[data-acc-co="${i}"]`);
           if(el && el.checked) keep.add(c);
         });
-        // Do not fully close settings — return companies; caller reopens project team tab
-        closeSheet();
+        closeNestedDialog();
         resolve(keep);
       };
     });
@@ -30146,7 +30200,7 @@ function openEditProjectSheet(project){
     _sheet.addEventListener("input", function(){ window.__editProjectDirty = true; });
     _sheet.addEventListener("change", function(){ window.__editProjectDirty = true; });
   }
-  bindProjectTeamPanel(project);
+  bindProjectTeamPanel(project, document.querySelector('#sheet [data-sptab-panel="projectteam"]') || document.getElementById("sheet"));
   bindAddressSearch();
   bindProjectImageFields(project);
   bindAccProjectSettings(project);
